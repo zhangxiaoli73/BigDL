@@ -54,7 +54,7 @@ object Train {
       val trainMaxLength = dataArray._3
       val valMaxLength = dataArray._4
 
-      val batchSize = 1
+      val batchSize = 3
 
       val trainSet = DataSet.array(trainData)
            .transform(LabeledSentenceToSample(dictionaryLength,
