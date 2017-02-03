@@ -139,7 +139,7 @@ object Test {
 
     val state = T("learningRate" -> 0.01, "learningRateDecay" -> 0.0002)
 
-    val criterion = new CrossEntropyCriterion[Double](squeezeFlag = true)
+    val criterion = new CrossEntropyCriterion[Double]()
     val optimizer = Optimizer(
       model = model_N,
       dataset = trainSet,
