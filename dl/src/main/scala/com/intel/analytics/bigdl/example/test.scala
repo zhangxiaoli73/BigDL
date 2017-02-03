@@ -22,14 +22,14 @@ import com.intel.analytics.bigdl.nn._
 import com.intel.analytics.bigdl.optim.{Adagrad, _}
 import com.intel.analytics.bigdl.utils.{Engine, T}
 import org.apache.spark.SparkContext
-import org.apache.spark.ml.feature.{StringIndexer, Word2Vec}
-import org.apache.spark.rdd._
+import org.apache.spark.ml.feature.StringIndexer
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.functions._
+
+import scala.collection.mutable
 // import org.apache.spark.ml.linalg.DenseVector
 import com.intel.analytics.bigdl.numeric.NumericDouble
 import com.intel.analytics.bigdl.{DataSet => _, _}
-import org.apache.spark.ml.linalg.DenseVector
 
 // PropertyConfigurator.configure("/PATH/log4j.properties")
 
@@ -102,7 +102,7 @@ object Test {
     data.printSchema()
     data.show()
 
-    val data_vectorized = data.withColumn("phraseArray", sqlfunc2(col("phrase"))).
+    val data_vectorized = data.withColumn("vectors", sqlfunc2(col("phrase"))).
       withColumn("level1", sqlfunc(col("cat")))
 
     data_vectorized.show()
@@ -110,29 +110,32 @@ object Test {
     val indexer = new StringIndexer().setInputCol("level1").setOutputCol("level1_labels")
     val labeled = indexer.fit(data_vectorized).transform(data_vectorized)
 
-    val embeddingDim = 300
-    val word2Vec = new Word2Vec().setSeed(32).setInputCol("phraseArray").
-      setOutputCol("vectors").setVectorSize(embeddingDim).setMinCount(0).setWindowSize(5)
-    val model_w2v = word2Vec.fit(labeled)
-    val result = model_w2v.transform(labeled)
-    val trainingSplit: Double = 0.8
-    val numClass = 34
+    val trainingSplit = 0.6
 
+    labeled.show()
 
-    val vectorizedRdd : RDD[(Array[Double], Double)] = result.select("level1_labels", "vectors").
-      rdd.map(r => (r(1).asInstanceOf[DenseVector].toArray, r(0).asInstanceOf[Double]))
+    val vectorizedRdd = labeled.select("level1_labels", "vectors").rdd.map(r =>
+      (r(1).asInstanceOf[mutable.WrappedArray[String]].toArray.map(_.toDouble),
+        r(0).asInstanceOf[Double] + 1.0))
+
     val Array(trainingRDD, valRDD) =
       vectorizedRdd.randomSplit(Array(trainingSplit, 1 - trainingSplit))
 
-    val batchSize = 9
-    val trainSet = DataSet.rdd(trainingRDD) -> ToSample(1, 2) -> SampleToBatch(batchSize)
-    val valSet = DataSet.rdd(valRDD) -> ToSample(1, 2) -> SampleToBatch(batchSize)
+    val batchSize = 1
+    val trainSet = DataSet.rdd(trainingRDD) -> ToSample(10, 100) -> SampleToBatch(batchSize)
+    val valSet = DataSet.rdd(valRDD) -> ToSample(10, 100) -> SampleToBatch(batchSize)
 
-    val classNum = 32
-    val model_N = Sequential()
-      .add(Reshape(Array(2)))
-      .add(Linear(2, classNum))
-      // .add(LogSoftMax())
+    val hiddenSize = 40
+    val bpttTruncate = 4
+    val inputSize = 100
+    val classNum = 34
+
+    val model_N = Sequential[Double]()
+      .add(Recurrent[Double](hiddenSize, bpttTruncate)
+        .add(RnnCell[Double](inputSize, hiddenSize))
+        .add(Tanh[Double]()))
+      //       .add(Linear(2, classNum))
+      .add(LogSoftMax())
 
     val state = T("learningRate" -> 0.01, "learningRateDecay" -> 0.0002)
 
