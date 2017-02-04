@@ -138,12 +138,14 @@ class LocalArrayDataSet[T] private[dataset](buffer: Array[T]) extends LocalDataS
         if (train) {
           true
         } else {
+          println(buffer.length + "hasNext " + index.get())
           index.get() < buffer.length
         }
       }
 
       override def next(): T = {
         val curIndex = index.getAndIncrement()
+        println(buffer.length + " curIndex: " + curIndex)
         if (train || curIndex < buffer.length) {
           buffer(if (train) (curIndex % buffer.length) else curIndex)
         } else {

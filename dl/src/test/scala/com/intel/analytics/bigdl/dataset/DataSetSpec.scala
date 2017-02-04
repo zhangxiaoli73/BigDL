@@ -244,6 +244,11 @@ class DataSetSpec extends FlatSpec with Matchers with BeforeAndAfter {
           var cc = 0
           while (iter.hasNext) {
             val img = iter.next()
+            if (img == null) {
+              println("111111111111111111111")
+            } else if (img.label() == null) {
+              println("222222222222222222222")
+            }
             cc += img.label().toInt
             Thread.sleep(1)
           }
@@ -252,6 +257,9 @@ class DataSetSpec extends FlatSpec with Matchers with BeforeAndAfter {
       })
     })
     val count = tasks.map(_.get()).reduce(_ + _)
+    if (count != 28) {
+      tasks.map(_.get()).foreach(println)
+    }
     count should be (28)
     syncPool.shutdown()
   }
