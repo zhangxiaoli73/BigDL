@@ -73,7 +73,7 @@ class ToSample(nRows: Int, nCols: Int)
       Array.copy(x._1, 0, featureBuffer, 0, length)
       labelBuffer(0) = x._2
 
-      buffer.copy(featureBuffer, labelBuffer,
+      buffer.set(featureBuffer, labelBuffer,
         Array(nRows, nCols), Array(1))
     })
   }
@@ -146,8 +146,9 @@ object Test {
        .add(Recurrent[Double](hiddenSize, bpttTruncate)
         .add(RnnCell[Double](inputSize, hiddenSize))
         .add(Tanh[Double]()))
-        .add(Reshape(Array(400)))
-        .add(Linear(400, classNum))
+        .add(Select(2, 10))
+        // .add(Reshape(Array(400)))
+        .add(Linear(40, classNum))
         .add(LogSoftMax())
 
     val learningRate: Double = 0.1
