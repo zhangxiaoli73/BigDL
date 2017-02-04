@@ -29,7 +29,6 @@ import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.functions._
 
 import scala.collection.mutable
-// import org.apache.spark.ml.linalg.DenseVector
 import com.intel.analytics.bigdl.numeric.NumericDouble
 import com.intel.analytics.bigdl.{DataSet => _, _}
 
@@ -57,15 +56,6 @@ class ToSample(nRows: Int, nCols: Int)
         labelBuffer = new Array[Double](1)
       }
 
-      /*
-      var i = 0
-      while (i < nRows) {
-        Array.copy(x._1, 0, featureBuffer, i * nCols, nCols)
-        labelBuffer(i) = x._2
-        i += 1
-      }
-      */
-
       // initialize featureBuffer to 0.0
       util.Arrays.fill(featureBuffer, 0, featureBuffer.length, 0.0f)
 
@@ -82,14 +72,11 @@ class ToSample(nRows: Int, nCols: Int)
 object Test {
 
   def wrapper(s: String): Seq[String] = {
-    var t = s.split(" ").toSeq
-    return t
+    s.split(" ").toSeq
   }
 
   def extractor(s: String): String = {
-    val tmp = s.split("~")
-    var t = tmp(1)
-    return t
+    s.split("~")(1)
   }
 
   def main(args: Array[String]): Unit = {
@@ -104,32 +91,25 @@ object Test {
       get.setMaster("local[1]").setAppName("W2V").set("spark.task.maxFailures", "1"))
     val sqlContext = new SQLContext(sc)
 
+    // DATA PREP
     val path = "PATH_TSV.tsv"
     val data = sqlContext.read.format("com.databricks.spark.csv").
       option("header", "true").option("delimiter", "\t").load(path)
-
-    data.printSchema()
-    data.show()
-
     val data_vectorized = data.withColumn("vectors", sqlfunc2(col("phrase"))).
       withColumn("level1", sqlfunc(col("cat")))
-
-    data_vectorized.show()
-
     val indexer = new StringIndexer().setInputCol("level1").setOutputCol("level1_labels")
     val labeled = indexer.fit(data_vectorized).transform(data_vectorized)
 
-    val trainingSplit = 0.6
-
-    labeled.show()
-
+    // labeled contains 2 columns "labels" and "vectors"
+    // labels are Double.
+    // vectors are 1000 in size array of Float
+    // row example: ([0.2 0.3 -0.2 .... 0.8], 3.0)
     val vectorizedRdd = labeled.select("level1_labels", "vectors").rdd.map(r =>
       (r(1).asInstanceOf[mutable.WrappedArray[String]].toArray.map(_.toDouble),
         r(0).asInstanceOf[Double] + 1.0))
-
+    val trainingSplit = 0.6
     val Array(trainingRDD, valRDD) =
       vectorizedRdd.randomSplit(Array(trainingSplit, 1 - trainingSplit))
-
 
     val nrows = 10
     val ncols = 100
@@ -143,75 +123,28 @@ object Test {
     val classNum = 34
 
     val model_N = Sequential[Double]()
-       .add(Recurrent[Double](hiddenSize, bpttTruncate)
-        .add(RnnCell[Double](inputSize, hiddenSize))
-        .add(Tanh[Double]()))
-        .add(Select(2, 10))
-        // .add(Reshape(Array(400)))
-        .add(Linear(40, classNum))
-        .add(LogSoftMax())
-
-    val learningRate: Double = 0.1
-    val momentum: Double = 0.0
-    val weightDecay: Double = 0.0
-    val dampening: Double = 0.0
-
-    val state = {
-      T("learningRate" -> learningRate,
-        "momentum" -> momentum,
-        "weightDecay" -> weightDecay,
-        "dampening" -> dampening)
-    }
-
-    val optimizer = Optimizer(
-      model = model_N,
-      dataset = trainSet,
-      criterion = new CrossEntropyCriterion[Double]()
-    ).asInstanceOf[DistriOptimizer[Double]].disableCheckSingleton()
-
-    val numEpochs = 5
-    optimizer
-      .setValidation(Trigger.everyEpoch, valSet, Array(new Loss[Double]))
-      .setState(state)
-      .setEndWhen(Trigger.maxEpoch(numEpochs))
-      .optimize()
-
-
-    /*
-    val batchSize = 1
-    val trainSet = DataSet.rdd(trainingRDD) -> ToSample(10, 100) -> SampleToBatch(batchSize)
-    val valSet = DataSet.rdd(valRDD) -> ToSample(10, 100) -> SampleToBatch(batchSize)
-
-    val hiddenSize = 40
-    val bpttTruncate = 4
-    val inputSize = 100
-    val classNum = 34
-
-    val model_N = Sequential[Double]()
       .add(Recurrent[Double](hiddenSize, bpttTruncate)
         .add(RnnCell[Double](inputSize, hiddenSize))
         .add(Tanh[Double]()))
-        .add(Linear(2, classNum))
+      .add(Select(2, 10))
+      // .add(Reshape(Array(400)))
+      .add(Linear(40, classNum))
       .add(LogSoftMax())
-
 
     val state = T("learningRate" -> 0.01, "learningRateDecay" -> 0.0002)
 
-    val criterion = new CrossEntropyCriterion[Double]()
     val optimizer = Optimizer(
       model = model_N,
       dataset = trainSet,
-      criterion = criterion.asInstanceOf[Criterion[Double]]
-    )
+      criterion = new ClassNLLCriterion[Double]()
+    ).asInstanceOf[DistriOptimizer[Double]].disableCheckSingleton()
 
+    val numEpochs = 5
     optimizer.
       setState(state).
-      setValidation(Trigger.everyEpoch,
-        valSet, Array(new Loss[Double])).
+      setValidation(Trigger.everyEpoch, valSet, Array(new Top1Accuracy[Double])).
       setOptimMethod(new Adagrad[Double]()).
+      setEndWhen(Trigger.maxEpoch(numEpochs)).
       optimize()
-      */
   }
 }
-
-
