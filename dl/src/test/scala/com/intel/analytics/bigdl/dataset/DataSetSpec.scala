@@ -249,7 +249,9 @@ class DataSetSpec extends FlatSpec with Matchers with BeforeAndAfter {
             } else if (img.label() == null) {
               println("222222222222222222222")
             }
-            cc += img.label().toInt
+            if (img != null) {
+              cc += img.label().toInt
+            }
             Thread.sleep(1)
           }
           cc
