@@ -17,9 +17,11 @@
 
 package com.intel.analytics.bigdl.example
 
+import java.util
+
 import com.intel.analytics.bigdl.dataset.{SampleToBatch, Transformer, _}
 import com.intel.analytics.bigdl.nn._
-import com.intel.analytics.bigdl.optim.{Adagrad, _}
+import com.intel.analytics.bigdl.optim._
 import com.intel.analytics.bigdl.utils.{Engine, T}
 import org.apache.spark.SparkContext
 import org.apache.spark.ml.feature.StringIndexer
@@ -30,8 +32,6 @@ import scala.collection.mutable
 // import org.apache.spark.ml.linalg.DenseVector
 import com.intel.analytics.bigdl.numeric.NumericDouble
 import com.intel.analytics.bigdl.{DataSet => _, _}
-
-// PropertyConfigurator.configure("/PATH/log4j.properties")
 
 object ToSample {
   def apply(nRows: Int, nCols: Int)
@@ -53,19 +53,28 @@ class ToSample(nRows: Int, nCols: Int)
       if (featureBuffer == null || featureBuffer.length < nRows * nCols) {
         featureBuffer = new Array[Double](nRows * nCols)
       }
-      if (labelBuffer == null || labelBuffer.length < nRows) {
-        labelBuffer = new Array[Double](nRows)
+      if (labelBuffer == null) {
+        labelBuffer = new Array[Double](1)
       }
 
+      /*
       var i = 0
       while (i < nRows) {
         Array.copy(x._1, 0, featureBuffer, i * nCols, nCols)
         labelBuffer(i) = x._2
         i += 1
       }
+      */
+
+      // initialize featureBuffer to 0.0
+      util.Arrays.fill(featureBuffer, 0, featureBuffer.length, 0.0f)
+
+      val length = math.min(x._1.length, nRows * nCols)
+      Array.copy(x._1, 0, featureBuffer, 0, length)
+      labelBuffer(0) = x._2
 
       buffer.copy(featureBuffer, labelBuffer,
-        Array(nRows, nCols), Array(nRows))
+        Array(nRows, nCols), Array(1))
     })
   }
 }
@@ -121,6 +130,53 @@ object Test {
     val Array(trainingRDD, valRDD) =
       vectorizedRdd.randomSplit(Array(trainingSplit, 1 - trainingSplit))
 
+
+    val nrows = 10
+    val ncols = 100
+    val batchSize = 1
+    val trainSet = DataSet.rdd(trainingRDD) -> ToSample(nrows, ncols) -> SampleToBatch(batchSize)
+    val valSet = DataSet.rdd(valRDD) -> ToSample(nrows, ncols) -> SampleToBatch(batchSize)
+
+    val hiddenSize = 40
+    val bpttTruncate = 4
+    val inputSize = 100
+    val classNum = 34
+
+    val model_N = Sequential[Double]()
+       .add(Recurrent[Double](hiddenSize, bpttTruncate)
+        .add(RnnCell[Double](inputSize, hiddenSize))
+        .add(Tanh[Double]()))
+        .add(Reshape(Array(400)))
+        .add(Linear(400, classNum))
+        .add(LogSoftMax())
+
+    val learningRate: Double = 0.1
+    val momentum: Double = 0.0
+    val weightDecay: Double = 0.0
+    val dampening: Double = 0.0
+
+    val state = {
+      T("learningRate" -> learningRate,
+        "momentum" -> momentum,
+        "weightDecay" -> weightDecay,
+        "dampening" -> dampening)
+    }
+
+    val optimizer = Optimizer(
+      model = model_N,
+      dataset = trainSet,
+      criterion = new CrossEntropyCriterion[Double]()
+    ).asInstanceOf[DistriOptimizer[Double]].disableCheckSingleton()
+
+    val numEpochs = 5
+    optimizer
+      .setValidation(Trigger.everyEpoch, valSet, Array(new Loss[Double]))
+      .setState(state)
+      .setEndWhen(Trigger.maxEpoch(numEpochs))
+      .optimize()
+
+
+    /*
     val batchSize = 1
     val trainSet = DataSet.rdd(trainingRDD) -> ToSample(10, 100) -> SampleToBatch(batchSize)
     val valSet = DataSet.rdd(valRDD) -> ToSample(10, 100) -> SampleToBatch(batchSize)
@@ -134,8 +190,9 @@ object Test {
       .add(Recurrent[Double](hiddenSize, bpttTruncate)
         .add(RnnCell[Double](inputSize, hiddenSize))
         .add(Tanh[Double]()))
-      //       .add(Linear(2, classNum))
+        .add(Linear(2, classNum))
       .add(LogSoftMax())
+
 
     val state = T("learningRate" -> 0.01, "learningRateDecay" -> 0.0002)
 
@@ -149,10 +206,10 @@ object Test {
     optimizer.
       setState(state).
       setValidation(Trigger.everyEpoch,
-        // valSet, Array(new Top1Accuracy[Double], new Top5Accuracy[Double])).
         valSet, Array(new Loss[Double])).
       setOptimMethod(new Adagrad[Double]()).
       optimize()
+      */
   }
 }
 

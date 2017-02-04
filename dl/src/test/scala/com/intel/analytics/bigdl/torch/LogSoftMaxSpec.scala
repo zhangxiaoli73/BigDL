@@ -36,15 +36,9 @@ class LogSoftMaxSpec extends FlatSpec with BeforeAndAfter with Matchers {
   "A LogSoftMax Module " should "generate correct output and grad with input 2D" in {
     val module = new LogSoftMax[Double]()
     Random.setSeed(100)
-    val input = Tensor[Double](4, 10).apply1(e => Random.nextDouble())
-    val data = Tensor[Double](4, 20).randn()
-    val gradOutput = data.narrow(2, 1, 10)
-
-    val start = System.nanoTime()
-    val output = module.forward(input)
-    val gradInput = module.backward(input, gradOutput)
-    val end = System.nanoTime()
-    val scalaTime = end - start
+    val input = Tensor[Double](10).apply1(e => Random.nextDouble())
+    val data = Tensor[Double](20).randn()
+    val gradOutput = data.narrow(1, 1, 10)
 
     val code = "module = nn.LogSoftMax()\n" +
       "output1 = module:forward(input)\n " +
@@ -54,6 +48,12 @@ class LogSoftMaxSpec extends FlatSpec with BeforeAndAfter with Matchers {
       Array("output1", "output2"))
     val luaOutput = torchResult("output1").asInstanceOf[Tensor[Double]]
     val luaGradInput = torchResult("output2").asInstanceOf[Tensor[Double]]
+
+    val start = System.nanoTime()
+    val output = module.forward(input)
+    val gradInput = module.backward(input, gradOutput)
+    val end = System.nanoTime()
+    val scalaTime = end - start
 
     luaOutput should be(output)
     luaGradInput should be(gradInput)
