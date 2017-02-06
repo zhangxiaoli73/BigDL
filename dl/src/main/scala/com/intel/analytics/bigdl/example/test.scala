@@ -21,16 +21,20 @@ import java.util
 
 import com.intel.analytics.bigdl.dataset.{SampleToBatch, Transformer, _}
 import com.intel.analytics.bigdl.nn._
+import com.intel.analytics.bigdl.numeric.NumericDouble
 import com.intel.analytics.bigdl.optim._
+import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.utils.{Engine, T}
+import com.intel.analytics.bigdl.{DataSet => _, _}
 import org.apache.spark.SparkContext
-import org.apache.spark.ml.feature.StringIndexer
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.functions._
+// import org.apache.spark.ml.linalg.DenseVector
+import org.apache.spark.mllib.linalg.DenseVector
+import org.apache.spark.mllib.regression.LabeledPoint
 
-import scala.collection.mutable
-import com.intel.analytics.bigdl.numeric.NumericDouble
-import com.intel.analytics.bigdl.{DataSet => _, _}
+import scala.collection.mutable.ArrayBuffer
+import scala.util.Random
 
 object ToSample {
   def apply(nRows: Int, nCols: Int)
@@ -86,26 +90,33 @@ object Test {
     val sqlfunc2 = udf(coder2)
 
     val nodeNum = 1
-    val coreNum = 1
+    val coreNum = 2
     val sc = new SparkContext(Engine.init(nodeNum, coreNum, true).
-      get.setMaster("local[1]").setAppName("W2V").set("spark.task.maxFailures", "1"))
+      get.setMaster("local[2]").setAppName("W2V").set("spark.task.maxFailures", "1"))
     val sqlContext = new SQLContext(sc)
 
     // DATA PREP
     val path = "PATH_TSV.tsv"
-    val data = sqlContext.read.format("com.databricks.spark.csv").
-      option("header", "true").option("delimiter", "\t").load(path)
-    val data_vectorized = data.withColumn("vectors", sqlfunc2(col("phrase"))).
-      withColumn("level1", sqlfunc(col("cat")))
-    val indexer = new StringIndexer().setInputCol("level1").setOutputCol("level1_labels")
-    val labeled = indexer.fit(data_vectorized).transform(data_vectorized)
+    val tensorBuffer = new ArrayBuffer[LabeledPoint]()
+    var i = 0
+    while (i < 1000) {
+      val input = Tensor[Float](1000).apply1(e => Random.nextFloat())
+      val inputArr = input.storage().array()
+      tensorBuffer.append(new LabeledPoint(Random.nextInt(10) + 1,
+        new DenseVector(inputArr.map(_.toDouble))))
+      i += 1
+    }
+    val rowRDD = sc.parallelize(tensorBuffer)
+    val labeled = sqlContext.createDataFrame(rowRDD)
+
+    labeled.show()
 
     // labeled contains 2 columns "labels" and "vectors"
     // labels are Double.
     // vectors are 1000 in size array of Float
     // row example: ([0.2 0.3 -0.2 .... 0.8], 3.0)
-    val vectorizedRdd = labeled.select("level1_labels", "vectors").rdd.map(r =>
-      (r(1).asInstanceOf[mutable.WrappedArray[String]].toArray.map(_.toDouble),
+    val vectorizedRdd = labeled.select("label", "features").rdd.map(r =>
+      (r(1).asInstanceOf[DenseVector].toArray,
         r(0).asInstanceOf[Double] + 1.0))
     val trainingSplit = 0.6
     val Array(trainingRDD, valRDD) =
@@ -113,7 +124,7 @@ object Test {
 
     val nrows = 10
     val ncols = 100
-    val batchSize = 1
+    val batchSize = 4
     val trainSet = DataSet.rdd(trainingRDD) -> ToSample(nrows, ncols) -> SampleToBatch(batchSize)
     val valSet = DataSet.rdd(valRDD) -> ToSample(nrows, ncols) -> SampleToBatch(batchSize)
 
