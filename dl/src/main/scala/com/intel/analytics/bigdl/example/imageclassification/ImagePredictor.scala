@@ -69,6 +69,8 @@ object ImagePredictor {
         sc.parallelize(imagesLoad(paths, 256), partitionNum)
       }
 
+      val start = System.nanoTime()
+
       val transf = RowToByteRecords() ->
           BytesToBGRImg() ->
           BGRImgCropper(imageSize, imageSize) ->
@@ -82,6 +84,12 @@ object ImagePredictor {
           .collect()
           .take(param.showNum)
           .foreach(println)
+
+      val end = System.nanoTime()
+      val scalaTime = end - start
+
+      println("Test time: " + scalaTime / 1e9 + " s")
+
       sc.stop()
     })
   }

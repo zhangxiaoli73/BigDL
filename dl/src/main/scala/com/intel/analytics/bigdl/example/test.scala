@@ -20,6 +20,7 @@ package com.intel.analytics.bigdl.example
 import java.util
 
 import com.intel.analytics.bigdl.dataset.{SampleToBatch, Transformer, _}
+import com.intel.analytics.bigdl.example.MlUtils.RNNParams
 import com.intel.analytics.bigdl.nn._
 import com.intel.analytics.bigdl.numeric.NumericDouble
 import com.intel.analytics.bigdl.optim._
@@ -27,8 +28,9 @@ import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.utils.{Engine, T}
 import com.intel.analytics.bigdl.{DataSet => _, _}
 import org.apache.spark.SparkContext
-import org.apache.spark.sql.SQLContext
+import org.apache.spark.sql._
 import org.apache.spark.sql.functions._
+import scopt.OptionParser
 // import org.apache.spark.ml.linalg.DenseVector
 import org.apache.spark.mllib.linalg.DenseVector
 import org.apache.spark.mllib.regression.LabeledPoint
@@ -73,89 +75,109 @@ class ToSample(nRows: Int, nCols: Int)
   }
 }
 
-object Test {
+object MlUtils {
+  case class RNNParams(
+                            coreNumber: Int = 4,
+                            nodeNumber: Int = 1,
+                            batchSize: Int = 448
+                          )
 
-  def wrapper(s: String): Seq[String] = {
-    s.split(" ").toSeq
+  val predictParser = new OptionParser[RNNParams]("rnn classification Example") {
+    opt[Int]('b', "batch")
+      .text("batchSize")
+      .action((x, c) => c.copy(batchSize = x))
+
+    opt[Int]('c', "core")
+      .text("cores number on each node")
+      .action((x, c) => c.copy(coreNumber = x))
+
+    opt[Int]('n', "node")
+      .text("nodes number to train the model")
+      .action((x, c) => c.copy(nodeNumber = x))
   }
+}
 
+object Test {
   def extractor(s: String): String = {
     s.split("~")(1)
   }
 
   def main(args: Array[String]): Unit = {
-    val coder: (String => String) = (arg: String) => {extractor(arg)}
-    val coder2: (String => Seq[String]) = (arg: String) => {wrapper(arg)}
-    val sqlfunc = udf(coder)
-    val sqlfunc2 = udf(coder2)
+    MlUtils.predictParser.parse(args, RNNParams()).map(param => {
 
-    val nodeNum = 1
-    val coreNum = 2
-    val sc = new SparkContext(Engine.init(nodeNum, coreNum, true).
-      get.setMaster("local[2]").setAppName("W2V").set("spark.task.maxFailures", "1"))
-    val sqlContext = new SQLContext(sc)
+      val coder: (String => String) = (arg: String) => {
+        extractor(arg)
+      }
+      val sqlfunc = udf(coder)
 
-    // DATA PREP
-    val path = "PATH_TSV.tsv"
-    val tensorBuffer = new ArrayBuffer[LabeledPoint]()
-    var i = 0
-    while (i < 1000) {
-      val input = Tensor[Float](1000).apply1(e => Random.nextFloat())
-      val inputArr = input.storage().array()
-      tensorBuffer.append(new LabeledPoint(Random.nextInt(10) + 1,
-        new DenseVector(inputArr.map(_.toDouble))))
-      i += 1
-    }
-    val rowRDD = sc.parallelize(tensorBuffer)
-    val labeled = sqlContext.createDataFrame(rowRDD)
+      val scc = Engine.init(param.nodeNumber, param.coreNumber, true).map(conf => {
+        conf.setAppName("Predict with trained model")
+          .set("spark.akka.frameSize", 64.toString)
+          .set("spark.task.maxFailures", "1")
+        new SparkContext(conf)
+      })
+      val sc = scc.get
+      val sqlContext = new SQLContext(sc)
 
-    labeled.show()
+      // DATA PREP
+      val tensorBuffer = new ArrayBuffer[LabeledPoint]()
+      var i = 0
+      while (i < 4 * 28 * 400) {
+        val input = Tensor[Float](1000).apply1(e => Random.nextFloat())
+        val inputArr = input.storage().array()
+        tensorBuffer.append(new LabeledPoint(Random.nextInt(10) + 1,
+          new DenseVector(inputArr.map(_.toDouble))))
+        i += 1
+      }
+      val rowRDD = sc.parallelize(tensorBuffer)
+      val labeled = sqlContext.createDataFrame(rowRDD)
 
-    // labeled contains 2 columns "labels" and "vectors"
-    // labels are Double.
-    // vectors are 1000 in size array of Float
-    // row example: ([0.2 0.3 -0.2 .... 0.8], 3.0)
-    val vectorizedRdd = labeled.select("label", "features").rdd.map(r =>
-      (r(1).asInstanceOf[DenseVector].toArray,
-        r(0).asInstanceOf[Double] + 1.0))
-    val trainingSplit = 0.6
-    val Array(trainingRDD, valRDD) =
-      vectorizedRdd.randomSplit(Array(trainingSplit, 1 - trainingSplit))
+      // labeled contains 2 columns "labels" and "vectors"
+      // labels are Double.
+      // vectors are 1000 in size array of Float
+      // row example: ([0.2 0.3 -0.2 .... 0.8], 3.0)
+      val vectorizedRdd = labeled.select("label", "features").rdd.map(r =>
+        (r(1).asInstanceOf[DenseVector].toArray,
+          r(0).asInstanceOf[Double] + 1.0))
+      val trainingSplit = 0.6
+      val Array(trainingRDD, valRDD) =
+        vectorizedRdd.randomSplit(Array(trainingSplit, 1 - trainingSplit))
 
-    val nrows = 10
-    val ncols = 100
-    val batchSize = 4
-    val trainSet = DataSet.rdd(trainingRDD) -> ToSample(nrows, ncols) -> SampleToBatch(batchSize)
-    val valSet = DataSet.rdd(valRDD) -> ToSample(nrows, ncols) -> SampleToBatch(batchSize)
+      val nrows = 10
+      val ncols = 100
+      val batchSize = param.batchSize
+      val trainSet = DataSet.rdd(trainingRDD) -> ToSample(nrows, ncols) -> SampleToBatch(batchSize)
+      val valSet = DataSet.rdd(valRDD) -> ToSample(nrows, ncols) -> SampleToBatch(batchSize)
 
-    val hiddenSize = 40
-    val bpttTruncate = 4
-    val inputSize = 100
-    val classNum = 34
+      val hiddenSize = 40
+      val bpttTruncate = 4
+      val inputSize = 100
+      val classNum = 34
 
-    val model_N = Sequential[Double]()
-      .add(Recurrent[Double](hiddenSize, bpttTruncate)
-        .add(RnnCell[Double](inputSize, hiddenSize))
-        .add(Tanh[Double]()))
-      .add(Select(2, 10))
-      // .add(Reshape(Array(400)))
-      .add(Linear(40, classNum))
-      .add(LogSoftMax())
+      val model_N = Sequential[Double]()
+        .add(Recurrent[Double](hiddenSize, bpttTruncate)
+          .add(RnnCell[Double](inputSize, hiddenSize))
+          .add(Tanh[Double]()))
+        .add(Select(2, 10))
+        // .add(Reshape(Array(400)))
+        .add(Linear(40, classNum))
+        .add(LogSoftMax())
 
-    val state = T("learningRate" -> 0.01, "learningRateDecay" -> 0.0002)
+      val state = T("learningRate" -> 0.01, "learningRateDecay" -> 0.0002)
 
-    val optimizer = Optimizer(
-      model = model_N,
-      dataset = trainSet,
-      criterion = new ClassNLLCriterion[Double]()
-    ).asInstanceOf[DistriOptimizer[Double]].disableCheckSingleton()
+      val optimizer = Optimizer(
+        model = model_N,
+        dataset = trainSet,
+        criterion = new ClassNLLCriterion[Double]()
+      ).asInstanceOf[DistriOptimizer[Double]].disableCheckSingleton()
 
-    val numEpochs = 5
-    optimizer.
-      setState(state).
-      setValidation(Trigger.everyEpoch, valSet, Array(new Top1Accuracy[Double])).
-      setOptimMethod(new Adagrad[Double]()).
-      setEndWhen(Trigger.maxEpoch(numEpochs)).
-      optimize()
+      val numEpochs = 5
+      optimizer.
+        setState(state).
+        setValidation(Trigger.everyEpoch, valSet, Array(new Top1Accuracy[Double])).
+        setOptimMethod(new Adagrad[Double]()).
+        setEndWhen(Trigger.maxEpoch(numEpochs)).
+        optimize()
+    })
   }
 }
