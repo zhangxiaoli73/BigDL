@@ -20,20 +20,30 @@ package com.intel.analytics.bigdl.models.rnn
 import java.io.File
 
 import com.intel.analytics.bigdl._
-import com.intel.analytics.bigdl.dataset.{DataSet, SampleToBatch}
-import com.intel.analytics.bigdl.dataset.text.LabeledSentenceToSample
+import com.intel.analytics.bigdl.dataset.DataSet
 import com.intel.analytics.bigdl.nn.{CrossEntropyCriterion, Module}
 import com.intel.analytics.bigdl.optim._
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric._
 import com.intel.analytics.bigdl.utils.{Engine, T}
 import org.apache.log4j.Logger
+import org.apache.spark.SparkContext
 
-object Train {
+object Train2 {
 
   import Utils._
   val logger = Logger.getLogger(getClass)
   def main(args: Array[String]): Unit = {
     trainParser.parse(args, new TrainParams()).map(param => {
+
+      val node = 1
+      val core = 1
+      val sc = Engine.init(node, core, true).map(conf => {
+        conf.setAppName("Predict with trained model")
+          .set("spark.akka.frameSize", 64.toString)
+          .set("spark.task.maxFailures", "1")
+          .setMaster("local[1]")
+        new SparkContext(conf)
+      })
 
       if (!new File(param.folder + "/input.txt").exists()) {
         throw new IllegalArgumentException("Input file not exists!")
@@ -51,20 +61,30 @@ object Train {
       val dataArray = loadInData(param.folder, dictionaryLength)
       val trainData = dataArray._1
       val valData = dataArray._2
+
       val trainMaxLength = dataArray._3
       val valMaxLegnth = dataArray._4
 
-      val batchSize = 10
+      val batchSize = 3
 
-      val trainSet = DataSet.array(trainData)
-        .transform(LabeledSentenceToSample(dictionaryLength,
-          Some(trainMaxLength), Some(trainMaxLength)))
-        .transform(SampleToBatch(batchSize = batchSize))
-      val validationSet = DataSet.array(valData)
-        .transform(LabeledSentenceToSample(dictionaryLength,
-          Some(valMaxLegnth), Some(valMaxLegnth)))
-        .transform(SampleToBatch(batchSize = batchSize))
+      val trainData1 = trainData.sortBy(_.labelLength())
+      val valData1 = valData.sortBy(_.labelLength())
+      val trainSet = DataSet.array(trainData1)
+           .transform(BatchPadding(batchSize = batchSize))
+      val validationSet = DataSet.array(valData1)
+           .transform(BatchPadding(batchSize = batchSize))
 
+      /*
+      val data = trainSet.toLocal().data(train = false)
+      while (data.hasNext) {
+        val batch = data.next()
+        val input = batch.data
+        val label = batch.labels
+        println("done")
+      }
+
+      sys.exit(1)
+      */
 
       val model = if (param.modelSnapshot.isDefined) {
         Module.load[Float](param.modelSnapshot.get)
