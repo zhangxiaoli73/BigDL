@@ -54,17 +54,18 @@ object Train {
       val trainMaxLength = dataArray._3
       val valMaxLegnth = dataArray._4
 
-      val batchSize = 3
+      val batchSize = 1
 
-      val trainSet = DataSet.array(trainData)
+      val trainData1 = trainData.sortBy(_.labelLength())
+      val valData1 = valData.sortBy(_.labelLength())
+      val trainSet = DataSet.array(trainData1)
         .transform(LabeledSentenceToSample(dictionaryLength,
           Some(trainMaxLength), Some(trainMaxLength)))
         .transform(SampleToBatch(batchSize = batchSize))
-      val validationSet = DataSet.array(valData)
+      val validationSet = DataSet.array(valData1)
         .transform(LabeledSentenceToSample(dictionaryLength,
           Some(valMaxLegnth), Some(valMaxLegnth)))
         .transform(SampleToBatch(batchSize = batchSize))
-
 
       val model = if (param.modelSnapshot.isDefined) {
         Module.load[Float](param.modelSnapshot.get)

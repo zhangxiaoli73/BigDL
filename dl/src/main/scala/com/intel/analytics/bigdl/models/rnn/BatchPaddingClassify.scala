@@ -27,17 +27,17 @@ import com.intel.analytics.bigdl.tensor.{DoubleType, FloatType, Storage, Tensor}
 import scala.collection.Iterator
 import scala.reflect.ClassTag
 
-object BatchPadding {
+object BatchPaddingClassify {
   def apply[T: ClassTag]
   (batchSize: Int,
    vocabLength: Int,
    fixDataLength: Option[Int] = None,
    fixLabelLength: Option[Int] = None)
-  (implicit ev: TensorNumeric[T]): BatchPadding[T]
-  = new BatchPadding[T](batchSize, vocabLength, fixDataLength, fixLabelLength)
+  (implicit ev: TensorNumeric[T]): BatchPaddingClassify[T]
+  = new BatchPaddingClassify[T](batchSize, vocabLength, fixDataLength, fixLabelLength)
 }
 
-class BatchPadding[T: ClassTag]
+class BatchPaddingClassify[T: ClassTag]
 (totalBatch: Int,
  vocabLength: Int,
  fixDataLength: Option[Int] = None,
@@ -45,6 +45,11 @@ class BatchPadding[T: ClassTag]
 (implicit ev: TensorNumeric[T])
   extends Transformer[LabeledSentence[T], MiniBatch[T]] {
 
+  /**
+   * only padding feature data, no label data
+   * @param prev
+   * @return
+   */
   override def apply(prev: Iterator[LabeledSentence[T]]): Iterator[MiniBatch[T]] = {
     new Iterator[MiniBatch[T]] {
       private var featureTensor: Tensor[T] = Tensor[T]()
@@ -56,8 +61,6 @@ class BatchPadding[T: ClassTag]
       private val batchSize = totalBatch // Utils.getBatchSize(totalBatch)
       private var featureSize: Array[Int] = null
       private var labelSize: Array[Int] = null
-      private var oneFeatureLength: Int = 0
-      private var oneLabelLength: Int = 0
       override def hasNext: Boolean = prev.hasNext
 
       override def next(): MiniBatch[T] = {
@@ -66,15 +69,13 @@ class BatchPadding[T: ClassTag]
           var maxLength = 0
           val batchLength = new Array[Int](batchSize)
           if (sentenceData == null) sentenceData = new Array[LabeledSentence[T]](batchSize)
-
           while (i < batchSize && prev.hasNext) {
             val sentence = prev.next()
             val dataLength = sentence.dataLength()
-            val labelLength = sentence.labelLength()
             sentenceData(i) = sentence
             // update length
-            if (labelLength > maxLength) maxLength = labelLength
-            batchLength(i) = labelLength
+            if (dataLength > maxLength) maxLength = dataLength
+            batchLength(i) = dataLength
             i += 1
           }
 
@@ -89,19 +90,20 @@ class BatchPadding[T: ClassTag]
           }
           featureSize = Array(i, maxLength, vocabLength)
           labelSize = Array(i, maxLength)
-          // padding
+          // init
           ev.getType() match {
             case DoubleType =>
               util.Arrays.fill(
                 featureData.asInstanceOf[Array[Double]], 0, featureData.length, 0.0)
-                util.Arrays.fill(labelData.asInstanceOf[Array[Double]], 0, labelData.length, 0.0)
+              util.Arrays.fill(labelData.asInstanceOf[Array[Double]], 0, labelData.length, 0.0)
             case FloatType =>
               util.Arrays.fill(
                 featureData.asInstanceOf[Array[Float]], 0, featureData.length, 0.0f)
-                util.Arrays.fill(labelData.asInstanceOf[Array[Float]], 0, labelData.length, 0.0f)
+              util.Arrays.fill(labelData.asInstanceOf[Array[Float]], 0, labelData.length, 0.0f)
             case _ => throw new UnsupportedOperationException(s"Only Float/Double supported")
           }
 
+          // padding
           i = 0
           while (i < batchLength.length) {
             val sentence = sentenceData(i)
@@ -111,14 +113,14 @@ class BatchPadding[T: ClassTag]
 
             var j = 0
             while (j < sentence.dataLength) {
-              featureData(i * maxLength + j*vocabLength + ev.toType[Int](sentence.getData(j)))
+              featureData(i * maxLength + j * vocabLength + ev.toType[Int](sentence.getData(j)))
                 = ev.fromType[Float](1.0f)
               labelData(i * maxLength + j) = ev.plus(sentence.label()(j), ev.fromType[Float](1.0f))
               j += 1
             }
             while (j < maxLength) {
-              featureData(i * maxLength + j*vocabLength + endTokenIndex) = ev.fromType[Float](1.0f)
-              labelData(i * maxLength + j) = ev.plus(startTokenIndex, ev.fromType[Float](1.0f))
+              featureData(i * maxLength + j * vocabLength + endTokenIndex) =
+                ev.fromType[Float](1.0f)
               j += 1
             }
             i += 1

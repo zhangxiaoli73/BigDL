@@ -64,15 +64,18 @@ object Train2 {
       val trainMaxLength = dataArray._3
       val valMaxLegnth = dataArray._4
 
-      val batchSize = 3
+      val batchSize = 1
 
       val trainData1 = trainData.sortBy(_.labelLength())
       val valData1 = valData.sortBy(_.labelLength())
+
+      // transform to group
+
       val trainSet = DataSet.array(trainData1)
-           .transform(BatchPadding(batchSize = batchSize, dictionaryLength,
+           .transform(BatchPaddingLM(batchSize = batchSize, dictionaryLength,
              Some(trainMaxLength), Some(trainMaxLength)))
       val validationSet = DataSet.array(valData1)
-           .transform(BatchPadding(batchSize = batchSize, dictionaryLength,
+           .transform(BatchPaddingLM(batchSize = batchSize, dictionaryLength,
              Some(trainMaxLength), Some(trainMaxLength)))
 
       /*
@@ -81,10 +84,9 @@ object Train2 {
         val batch = data.next()
         val input = batch.data
         val label = batch.labels
+        println(label.size(2))
         println("done")
       }
-
-      sys.exit(1)
       */
 
       val model = if (param.modelSnapshot.isDefined) {
