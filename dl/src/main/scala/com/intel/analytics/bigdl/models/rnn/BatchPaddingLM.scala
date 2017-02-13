@@ -71,7 +71,6 @@ class BatchPaddingLM[T: ClassTag]
         if (prev.hasNext) {
           var i = 0
           var maxLength = 0
-          val batchLength = new Array[Int](batchSize)
           if (sentenceData == null) sentenceData = new Array[LabeledSentence[T]](batchSize)
           while (i < batchSize && prev.hasNext) {
             val sentence = prev.next()
@@ -79,10 +78,10 @@ class BatchPaddingLM[T: ClassTag]
             sentenceData(i) = sentence
             // update length
             if (dataLength > maxLength) maxLength = dataLength
-            batchLength(i) = dataLength
-            // println("labelLength " + dataLength)
             i += 1
           }
+          val batchLength = i
+          sentenceData = sentenceData.sortBy(_.dataLength())
 
           val dataLength = fixDataLength.getOrElse(maxLength)
           val labelLength = fixLabelLength.getOrElse(maxLength)
@@ -93,8 +92,8 @@ class BatchPaddingLM[T: ClassTag]
           if (labelData == null || labelData.length < labelLength) {
             labelData = new Array[T](batchSize * labelLength)
           }
-          featureSize = Array(i, maxLength, vocabLength)
-          labelSize = Array(i, maxLength)
+          featureSize = Array(batchLength, maxLength, vocabLength)
+          labelSize = Array(batchLength, maxLength)
           // init
           ev.getType() match {
             case DoubleType =>
@@ -110,7 +109,7 @@ class BatchPaddingLM[T: ClassTag]
 
           // padding
           i = 0
-          while (i < batchLength.length) {
+          while (i < batchLength) {
             val sentence = sentenceData(i)
             val startTokenIndex = sentence.getData(0)
             val endTokenIndex = if (labelLength == 1) 0

@@ -64,11 +64,10 @@ object Train2 {
       val trainMaxLength = dataArray._3
       val valMaxLegnth = dataArray._4
 
-      val batchSize = 1
+      val batchSize = 4
 
-      val trainData1 = trainData.sortBy(_.labelLength())
-      val valData1 = valData.sortBy(_.labelLength())
-
+      val trainData1 = trainData.sortBy(_.dataLength())
+      val valData1 = valData.sortBy(_.dataLength())
       // transform to group
 
       val trainSet = DataSet.array(trainData1)
