@@ -61,7 +61,6 @@ object Train2 {
       val dataArray = loadInData(param.folder, dictionaryLength)
       val trainData = dataArray._1
       val valData = dataArray._2
-
       val trainMaxLength = dataArray._3
       val valMaxLegnth = dataArray._4
 
@@ -70,9 +69,11 @@ object Train2 {
       val trainData1 = trainData.sortBy(_.labelLength())
       val valData1 = valData.sortBy(_.labelLength())
       val trainSet = DataSet.array(trainData1)
-           .transform(BatchPadding(batchSize = batchSize))
+           .transform(BatchPadding(batchSize = batchSize, dictionaryLength,
+             Some(trainMaxLength), Some(trainMaxLength)))
       val validationSet = DataSet.array(valData1)
-           .transform(BatchPadding(batchSize = batchSize))
+           .transform(BatchPadding(batchSize = batchSize, dictionaryLength,
+             Some(trainMaxLength), Some(trainMaxLength)))
 
       /*
       val data = trainSet.toLocal().data(train = false)
