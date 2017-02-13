@@ -15,42 +15,36 @@
  * limitations under the License.
  */
 
-package com.intel.analytics.bigdl.models.rnn
+package com.intel.analytics.bigdl.dataset.text
 
 import java.util
 
 import com.intel.analytics.bigdl.dataset._
-import com.intel.analytics.bigdl.dataset.text.LabeledSentence
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
 import com.intel.analytics.bigdl.tensor.{DoubleType, FloatType, Storage, Tensor}
 
 import scala.collection.Iterator
 import scala.reflect.ClassTag
 
-object BatchPaddingClassify {
+object BatchPaddingLM {
   def apply[T: ClassTag]
   (batchSize: Int,
    vocabLength: Int,
    fixDataLength: Option[Int] = None,
    fixLabelLength: Option[Int] = None)
-  (implicit ev: TensorNumeric[T]): BatchPaddingClassify[T]
-  = new BatchPaddingClassify[T](batchSize, vocabLength, fixDataLength, fixLabelLength)
+  (implicit ev: TensorNumeric[T]): BatchPaddingLM[T]
+  = new BatchPaddingLM[T](batchSize, vocabLength, fixDataLength, fixLabelLength)
 }
 
-class BatchPaddingClassify[T: ClassTag]
+class BatchPaddingLM[T: ClassTag]
 (totalBatch: Int,
  vocabLength: Int,
  fixDataLength: Option[Int] = None,
  fixLabelLength: Option[Int] = None)
 (implicit ev: TensorNumeric[T])
-  extends Transformer[LabeledSentence[T], MiniBatch[T]] {
+  extends Transformer[Array[LabeledSentence[T]], MiniBatch[T]] {
 
-  /**
-   * only padding feature data, no label data
-   * @param prev
-   * @return
-   */
-  override def apply(prev: Iterator[LabeledSentence[T]]): Iterator[MiniBatch[T]] = {
+  override def apply(prev: Iterator[Array[LabeledSentence[T]]]): Iterator[MiniBatch[T]] = {
     new Iterator[MiniBatch[T]] {
       private var featureTensor: Tensor[T] = Tensor[T]()
       private var labelTensor: Tensor[T] = Tensor[T]()
@@ -58,7 +52,7 @@ class BatchPaddingClassify[T: ClassTag]
       private var featureData: Array[T] = null
       private var labelData: Array[T] = null
 
-      private val batchSize = totalBatch // Utils.getBatchSize(totalBatch)
+      private val batchSize = Utils.getBatchSize(totalBatch)
       private var featureSize: Array[Int] = null
       private var labelSize: Array[Int] = null
       override def hasNext: Boolean = prev.hasNext
@@ -66,18 +60,10 @@ class BatchPaddingClassify[T: ClassTag]
       override def next(): MiniBatch[T] = {
         if (prev.hasNext) {
           var i = 0
-          var maxLength = 0
-          val batchLength = new Array[Int](batchSize)
-          if (sentenceData == null) sentenceData = new Array[LabeledSentence[T]](batchSize)
-          while (i < batchSize && prev.hasNext) {
-            val sentence = prev.next()
-            val dataLength = sentence.dataLength()
-            sentenceData(i) = sentence
-            // update length
-            if (dataLength > maxLength) maxLength = dataLength
-            batchLength(i) = dataLength
-            i += 1
-          }
+          val sentence = prev.next()
+          val batchLength = sentence.length
+          sentenceData = sentence.sortBy(_.dataLength())
+          val maxLength = sentenceData(batchLength - 1).dataLength()
 
           val dataLength = fixDataLength.getOrElse(maxLength)
           val labelLength = fixLabelLength.getOrElse(maxLength)
@@ -88,24 +74,24 @@ class BatchPaddingClassify[T: ClassTag]
           if (labelData == null || labelData.length < labelLength) {
             labelData = new Array[T](batchSize * labelLength)
           }
-          featureSize = Array(i, maxLength, vocabLength)
-          labelSize = Array(i, maxLength)
+          featureSize = Array(batchLength, maxLength, vocabLength)
+          labelSize = Array(batchLength, maxLength)
           // init
           ev.getType() match {
             case DoubleType =>
               util.Arrays.fill(
                 featureData.asInstanceOf[Array[Double]], 0, featureData.length, 0.0)
-              util.Arrays.fill(labelData.asInstanceOf[Array[Double]], 0, labelData.length, 0.0)
+                util.Arrays.fill(labelData.asInstanceOf[Array[Double]], 0, labelData.length, 0.0)
             case FloatType =>
               util.Arrays.fill(
                 featureData.asInstanceOf[Array[Float]], 0, featureData.length, 0.0f)
-              util.Arrays.fill(labelData.asInstanceOf[Array[Float]], 0, labelData.length, 0.0f)
+                util.Arrays.fill(labelData.asInstanceOf[Array[Float]], 0, labelData.length, 0.0f)
             case _ => throw new UnsupportedOperationException(s"Only Float/Double supported")
           }
 
           // padding
           i = 0
-          while (i < batchLength.length) {
+          while (i < batchLength) {
             val sentence = sentenceData(i)
             val startTokenIndex = sentence.getData(0)
             val endTokenIndex = if (labelLength == 1) 0
@@ -121,6 +107,7 @@ class BatchPaddingClassify[T: ClassTag]
             while (j < maxLength) {
               featureData(i * maxLength + j * vocabLength + endTokenIndex) =
                 ev.fromType[Float](1.0f)
+              labelData(i * maxLength + j) = ev.plus(startTokenIndex, ev.fromType[Float](1.0f))
               j += 1
             }
             i += 1

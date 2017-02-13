@@ -17,79 +17,62 @@
 
 package com.intel.analytics.bigdl.dataset
 
-import com.intel.analytics.bigdl.dataset.text.LabeledSentenceToSample
-import com.intel.analytics.bigdl.models.rnn.Utils._
+import com.intel.analytics.bigdl.dataset.text.{BatchPaddingLM, GroupSentence, LabeledSentence, LabeledSentenceToSample}
 import org.scalatest.{BeforeAndAfter, FlatSpec, Matchers}
 
 class BatchPaddingSpec extends FlatSpec with Matchers with BeforeAndAfter {
 
-  "BatchPadding with Float Array input and Array label" should "be good in copyToData" +
-    "and copyToLabel" in {
+  "BatchPadding " should "be good" in {
+    val trainData = new Array[LabeledSentence[Float]](4)
+    var i = 0
+    var base = Array(1.0f)
+    while (i < 4) {
+      val input = Array(0.0f) ++ base ++ Array(100.0f)
+      val label = Array(1.0f) ++ base ++ Array(100.0f)
+      trainData(i) = new LabeledSentence[Float](input, label)
+      i += 1
+      base = base ++ Array(i.toFloat)
+    }
 
-    val folder = "/home/zhangli/CodeSpace/forTrain/rnn/test"
-    val dictionaryLength = 4001
-    val wt = new WordTokenizer(folder + "/input1.txt",
-      folder, dictionaryLength = dictionaryLength)
-    wt.process()
-
-    val dataArray = loadInData(folder, dictionaryLength)
-    val trainData = dataArray._1
-    val valData = dataArray._2
-    val trainMaxLength = dataArray._3
-    val valMaxLegnth = dataArray._4
-
+    val trainMaxLength = 20
     val batchSize = 1
-
-    val trainData1 = trainData.sortBy(_.labelLength())
-    val valData1 = valData.sortBy(_.labelLength())
-
-    val trainSet1 = DataSet.array(trainData1)
+    val dictionaryLength = 4001
+    val trainSet1 = DataSet.array(trainData.sortBy(_.dataLength()))
       .transform(LabeledSentenceToSample(dictionaryLength,
         Some(trainMaxLength), Some(trainMaxLength)))
       .transform(SampleToBatch(batchSize = batchSize))
 
-    /*
-    val trainSet2 = DataSet.array(trainData1)
+    val trainSet2 = DataSet.array(GroupSentence(batchSize, trainData))
       .transform(BatchPaddingLM(batchSize = batchSize, dictionaryLength,
         Some(trainMaxLength), Some(trainMaxLength)))
 
     val data1 = trainSet1.toLocal().data(train = false)
     val data2 = trainSet2.toLocal().data(train = false)
+
     while (data1.hasNext && data2.hasNext) {
       val batch1 = data1.next()
-      val input1 = batch1.data
-      val label1 = batch1.labels
+      val input1 = batch1.data.storage().array()
+      val label1 = batch1.labels.storage().array()
 
       val batch2 = data2.next()
-      val input2 = batch2.data
-      val label2 = batch2.labels
-      val length = label2.size(2)
+      val input2 = batch2.data.storage().array()
+      val label2 = batch2.labels.storage().array()
+      val length = batch2.labels.size().product
 
-      val arrLabel1 = input1.storage()
-      val arrLabel2 = input2.storage()
-
-      val arr1 = input1.storage()
-      val arr2 = input2.storage()
-
-      arr1.length() should be(arr2.length())
       var i = 0
-      while (i < dictionaryLength * length) {
-        arr1(i) should be (arr2(i))
+      while (i < length) {
+        label1(i) should be (label2(i))
         i += 1
       }
 
+      input1.length should be(input2.length)
       i = 0
-      while (i < length) {
-        arrLabel1(i) should be (arrLabel2(i))
+      while (i < dictionaryLength * length) {
+        input1(i) should be (input2(i))
         i += 1
       }
     }
-    while (data1.hasNext) {
-      println("dataset to sample")
-    }
-    while (data2.hasNext) {
-      println("dataset to batch padding")
-    }
-    */
+    data1.hasNext should be (false)
+    data2.hasNext should be (false)
   }
 }
