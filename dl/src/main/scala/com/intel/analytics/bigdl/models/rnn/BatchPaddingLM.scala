@@ -41,8 +41,7 @@ class GroupSentence[T: ClassTag]()
   (implicit ev: TensorNumeric[T]) {
   def apply(groupSize: Int, data: Array[LabeledSentence[T]])(implicit ev: TensorNumeric[T]):
   Array[Array[LabeledSentence[T]]] = {
-    val tmp = data.grouped(groupSize).toArray
-    tmp
+    data.sortBy(_.dataLength()).grouped(groupSize).toArray
   }
 }
 
@@ -52,9 +51,9 @@ class BatchPaddingLM[T: ClassTag]
  fixDataLength: Option[Int] = None,
  fixLabelLength: Option[Int] = None)
 (implicit ev: TensorNumeric[T])
-  extends Transformer[LabeledSentence[T], MiniBatch[T]] {
+  extends Transformer[Array[LabeledSentence[T]], MiniBatch[T]] {
 
-  override def apply(prev: Iterator[LabeledSentence[T]]): Iterator[MiniBatch[T]] = {
+  override def apply(prev: Iterator[Array[LabeledSentence[T]]]): Iterator[MiniBatch[T]] = {
     new Iterator[MiniBatch[T]] {
       private var featureTensor: Tensor[T] = Tensor[T]()
       private var labelTensor: Tensor[T] = Tensor[T]()
@@ -72,16 +71,10 @@ class BatchPaddingLM[T: ClassTag]
           var i = 0
           var maxLength = 0
           if (sentenceData == null) sentenceData = new Array[LabeledSentence[T]](batchSize)
-          while (i < batchSize && prev.hasNext) {
-            val sentence = prev.next()
-            val dataLength = sentence.dataLength()
-            sentenceData(i) = sentence
-            // update length
-            if (dataLength > maxLength) maxLength = dataLength
-            i += 1
-          }
-          val batchLength = i
-          sentenceData = sentenceData.sortBy(_.dataLength())
+          val sentence = prev.next()
+          val batchLength = sentence.length
+          sentenceData = sentence.sortBy(_.dataLength())
+          maxLength = sentenceData(batchLength - 1).dataLength()
 
           val dataLength = fixDataLength.getOrElse(maxLength)
           val labelLength = fixLabelLength.getOrElse(maxLength)

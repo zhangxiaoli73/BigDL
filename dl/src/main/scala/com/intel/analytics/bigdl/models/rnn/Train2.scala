@@ -58,22 +58,20 @@ object Train2 {
       wt.process()
 
       logger.info("loading the training and testing data ..")
-      val dataArray = loadInData(param.folder, dictionaryLength)
-      val trainData = dataArray._1
-      val valData = dataArray._2
-      val trainMaxLength = dataArray._3
-      val valMaxLegnth = dataArray._4
-
       val batchSize = 4
 
-      val trainData1 = trainData.sortBy(_.dataLength())
-      val valData1 = valData.sortBy(_.dataLength())
+      val groupSentence = new GroupSentence[Float]()
+      val dataArray = loadInData(param.folder, dictionaryLength)
+      val trainData = groupSentence(batchSize, dataArray._1)
+      val valData = groupSentence(batchSize, dataArray._2)
+      val trainMaxLength = dataArray._3
+      val valMaxLegnth = dataArray._4
       // transform to group
 
-      val trainSet = DataSet.array(trainData1)
+      val trainSet = DataSet.array(trainData)
            .transform(BatchPaddingLM(batchSize = batchSize, dictionaryLength,
              Some(trainMaxLength), Some(trainMaxLength)))
-      val validationSet = DataSet.array(valData1)
+      val validationSet = DataSet.array(valData)
            .transform(BatchPaddingLM(batchSize = batchSize, dictionaryLength,
              Some(trainMaxLength), Some(trainMaxLength)))
 

@@ -18,7 +18,6 @@
 package com.intel.analytics.bigdl.dataset
 
 import com.intel.analytics.bigdl.dataset.text.LabeledSentenceToSample
-import com.intel.analytics.bigdl.models.rnn.BatchPaddingLM
 import com.intel.analytics.bigdl.models.rnn.Utils._
 import org.scalatest.{BeforeAndAfter, FlatSpec, Matchers}
 
@@ -49,6 +48,7 @@ class BatchPaddingSpec extends FlatSpec with Matchers with BeforeAndAfter {
         Some(trainMaxLength), Some(trainMaxLength)))
       .transform(SampleToBatch(batchSize = batchSize))
 
+    /*
     val trainSet2 = DataSet.array(trainData1)
       .transform(BatchPaddingLM(batchSize = batchSize, dictionaryLength,
         Some(trainMaxLength), Some(trainMaxLength)))
@@ -90,5 +90,6 @@ class BatchPaddingSpec extends FlatSpec with Matchers with BeforeAndAfter {
     while (data2.hasNext) {
       println("dataset to batch padding")
     }
+    */
   }
 }
