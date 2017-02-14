@@ -61,9 +61,10 @@ class BatchPaddingLM[T: ClassTag]
           var i = 0
           val sentenceData = prev.next()
           val batchLength = sentenceData.length
-          val maxLength = sentenceData(batchLength - 1).dataLength()
+          var maxLength = sentenceData(batchLength - 1).dataLength()
           val dataLength = fixDataLength.getOrElse(maxLength)
           val labelLength = fixLabelLength.getOrElse(maxLength)
+          maxLength = dataLength
 
           // init
           if (featureData == null || featureData.length < dataLength * vocabLength) {

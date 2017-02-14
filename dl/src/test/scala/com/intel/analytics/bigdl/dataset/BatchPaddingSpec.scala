@@ -18,6 +18,7 @@
 package com.intel.analytics.bigdl.dataset
 
 import com.intel.analytics.bigdl.dataset.text.{BatchPaddingLM, GroupSentence, LabeledSentence, LabeledSentenceToSample}
+import com.intel.analytics.bigdl.models.rnn.Utils._
 import com.intel.analytics.bigdl.tensor.{Storage, Tensor}
 import org.scalatest.{BeforeAndAfter, FlatSpec, Matchers}
 
@@ -115,6 +116,114 @@ class BatchPaddingSpec extends FlatSpec with Matchers with BeforeAndAfter {
         input1(i) should be (input2(i))
         i += 1
       }
+    }
+    data1.hasNext should be (false)
+    data2.hasNext should be (false)
+  }
+  "BatchPadding test" should "be good when batchsize = 1" in {
+    val vocabSize = 4000
+    val folder = "/home/zhangli/CodeSpace/forTrain/rnn"
+    val dictionaryLength = vocabSize + 1
+    val wt = new WordTokenizer(
+      folder + "/input.txt",
+      folder,
+      dictionaryLength = dictionaryLength
+    )
+    wt.process()
+
+    val batchSize = 1
+    val dataArray = loadInData(folder, dictionaryLength)
+    val trainData = dataArray._1
+    val trainMaxLength = dataArray._3
+    val valMaxLength = dataArray._4
+
+    val trainSet1 = DataSet.array(trainData.sortBy(_.dataLength()))
+      .transform(LabeledSentenceToSample(dictionaryLength,
+        Some(trainMaxLength), Some(trainMaxLength)))
+      .transform(SampleToBatch(batchSize = batchSize))
+
+    val trainSet2 = DataSet.array(GroupSentence(batchSize, trainData))
+      .transform(BatchPaddingLM(batchSize = batchSize, dictionaryLength,
+        Some(trainMaxLength), Some(trainMaxLength)))
+
+    val data1 = trainSet1.toLocal().data(train = false)
+    val data2 = trainSet2.toLocal().data(train = false)
+
+    var count = 0
+    while (data1.hasNext && data2.hasNext) {
+      val batch1 = data1.next()
+      val input1 = batch1.data.storage().array()
+      val label1 = batch1.labels.storage().array()
+
+      val batch2 = data2.next()
+      val input2 = batch2.data.storage().array()
+      val label2 = batch2.labels.storage().array()
+      val length = batch2.labels.size().product
+
+      var i = 0
+      while (i < length) {
+        label1(i) should be (label2(i))
+        i += 1
+      }
+
+      input1.length should be(input2.length)
+      i = 0
+      while (i < dictionaryLength * length) {
+        input1(i) should be (input2(i))
+        i += 1
+      }
+      count += 1
+    }
+    data1.hasNext should be (false)
+    data2.hasNext should be (false)
+  }
+
+  "BatchPadding test2" should "be good when batchsize = 1" in {
+    val vocabSize = 4000
+    val folder = "/home/zhangli/CodeSpace/forTrain/rnn"
+    val dictionaryLength = vocabSize + 1
+    val wt = new WordTokenizer(
+      folder + "/input.txt",
+      folder,
+      dictionaryLength = dictionaryLength
+    )
+    wt.process()
+
+    val batchSize = 1
+    val dataArray = loadInData(folder, dictionaryLength)
+    val trainData = dataArray._1
+    val trainMaxLength = dataArray._3
+    val valMaxLength = dataArray._4
+
+    val trainSet1 = DataSet.array(trainData.sortBy(_.dataLength()))
+      .transform(LabeledSentenceToSample(dictionaryLength,
+        Some(trainMaxLength), Some(trainMaxLength)))
+      .transform(SampleToBatch(batchSize = batchSize))
+
+    val trainSet2 = DataSet.array(GroupSentence(batchSize, trainData))
+      .transform(BatchPaddingLM(batchSize = batchSize, dictionaryLength,
+        Some(trainMaxLength), Some(trainMaxLength)))
+
+    val data1 = trainSet1.toLocal().data(train = false)
+    val data2 = trainSet2.toLocal().data(train = false)
+
+    var count = 0
+    while (data1.hasNext && data2.hasNext) {
+      val batch1 = data1.next()
+      val batch2 = data2.next()
+
+      batch1.data should be (batch2.data)
+      batch1.labels should be (batch2.labels)
+
+      val input1 = batch1.data.storage().array()
+      val label1 = batch1.labels.storage().array()
+
+
+      val input2 = batch2.data.storage().array()
+      val label2 = batch2.labels.storage().array()
+      val length = batch2.labels.size().product
+
+      count += 1
     }
     data1.hasNext should be (false)
     data2.hasNext should be (false)
