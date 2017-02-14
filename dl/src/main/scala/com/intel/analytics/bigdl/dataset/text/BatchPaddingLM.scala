@@ -52,7 +52,7 @@ class BatchPaddingLM[T: ClassTag]
       private var featureData: Array[T] = null
       private var labelData: Array[T] = null
 
-      private val batchSize = Utils.getBatchSize(totalBatch)
+      private val batchSize = totalBatch // Utils.getBatchSize(totalBatch)
       private var featureSize: Array[Int] = null
       private var labelSize: Array[Int] = null
       override def hasNext: Boolean = prev.hasNext

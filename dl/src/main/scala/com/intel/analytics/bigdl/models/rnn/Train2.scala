@@ -27,7 +27,6 @@ import com.intel.analytics.bigdl.optim._
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric._
 import com.intel.analytics.bigdl.utils.{Engine, T}
 import org.apache.log4j.Logger
-import org.apache.spark.SparkContext
 
 object Train2 {
 
@@ -35,17 +34,6 @@ object Train2 {
   val logger = Logger.getLogger(getClass)
   def main(args: Array[String]): Unit = {
     trainParser.parse(args, new TrainParams()).map(param => {
-
-      val node = 1
-      val core = 1
-      val sc = Engine.init(node, core, true).map(conf => {
-        conf.setAppName("Predict with trained model")
-          .set("spark.akka.frameSize", 64.toString)
-          .set("spark.task.maxFailures", "1")
-          .setMaster("local[1]")
-        new SparkContext(conf)
-      })
-
       if (!new File(param.folder + "/input.txt").exists()) {
         throw new IllegalArgumentException("Input file not exists!")
       }
@@ -59,13 +47,13 @@ object Train2 {
       wt.process()
 
       logger.info("loading the training and testing data ..")
-      val batchSize = 4
+      val batchSize = 1
 
       val dataArray = loadInData(param.folder, dictionaryLength)
       val trainData = GroupSentence(batchSize, dataArray._1)
       val valData = GroupSentence(batchSize, dataArray._2)
       val trainMaxLength = dataArray._3
-      val valMaxLegnth = dataArray._4
+      val valMaxLength = dataArray._4
       // transform to group
 
       val trainSet = DataSet.array(trainData)
@@ -73,7 +61,7 @@ object Train2 {
              Some(trainMaxLength), Some(trainMaxLength)))
       val validationSet = DataSet.array(valData)
            .transform(BatchPaddingLM(batchSize = batchSize, dictionaryLength,
-             Some(trainMaxLength), Some(trainMaxLength)))
+             Some(valMaxLength), Some(valMaxLength)))
 
       /*
       val data = trainSet.toLocal().data(train = false)
