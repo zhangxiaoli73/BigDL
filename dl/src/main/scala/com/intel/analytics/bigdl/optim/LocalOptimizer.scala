@@ -85,6 +85,7 @@ class LocalOptimizer[T: ClassTag] private[optim](
     dataset.shuffle()
     var iter = dataset.data(train = true)
     logger.info("model thread pool size is " + Engine.model.getPoolSize)
+    var m = 0
     while (!endWhen(state)) {
       val start = System.nanoTime()
 
@@ -165,6 +166,8 @@ class LocalOptimizer[T: ClassTag] private[optim](
 
       validate(wallClockTime)
       checkpoint(wallClockTime)
+
+      m += 1
     }
 
     model

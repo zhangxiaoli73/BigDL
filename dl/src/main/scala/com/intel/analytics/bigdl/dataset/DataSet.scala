@@ -22,6 +22,7 @@ import java.util.concurrent.atomic.AtomicInteger
 
 import com.intel.analytics.bigdl.DataSet
 import com.intel.analytics.bigdl.dataset.image.{LabeledBGRImage, _}
+import com.intel.analytics.bigdl.dataset.text.LabeledSentence
 import com.intel.analytics.bigdl.utils.{Engine, RandomGenerator}
 import org.apache.hadoop.io.Text
 import org.apache.log4j.Logger
@@ -125,29 +126,43 @@ trait LocalDataSet[T] extends AbstractDataSet[T, Iterator[T]] {
  * Wrap an array as a DataSet.
  * @tparam T
  */
-class LocalArrayDataSet[T] private[dataset](buffer: Array[T]) extends LocalDataSet[T] {
+class LocalArrayDataSet[T] private[dataset](buffer: Array[T],
+                                            isSort: Boolean = false) extends LocalDataSet[T] {
+
+  protected var indexes = (0 until buffer.length).toArray
+
   override def shuffle(): Unit = {
-    RandomGenerator.shuffle(buffer)
+    RandomGenerator.shuffle(indexes)
   }
 
   override def data(train: Boolean): Iterator[T] = {
+    var offset = 0
     new Iterator[T] {
-      private val index = new AtomicInteger()
+      private val _offset = new AtomicInteger
 
       override def hasNext: Boolean = {
-        if (train) {
-          true
-        } else {
-          index.get() < buffer.length
-        }
+        if (train) true else _offset.get() < buffer.length
       }
 
       override def next(): T = {
-        val curIndex = index.getAndIncrement()
-        if (train || curIndex < buffer.length) {
-          buffer(if (train) (curIndex % buffer.length) else curIndex)
+        if (train) {
+          if (isSort) offset += 1
+          val res = if (offset > 0 && offset < 100) {
+            val i = _offset.get()
+            buffer(indexes(i % buffer.length) + offset - 1)
+          } else if (offset >= 100) {
+            val i = _offset.getAndIncrement()
+            offset = 0
+            buffer(indexes(i % buffer.length))
+          }
+          res.asInstanceOf[T]
         } else {
-          null.asInstanceOf[T]
+          val i = _offset.getAndIncrement()
+          if (i < buffer.length) {
+            buffer(indexes(i))
+          } else {
+            null.asInstanceOf[T]
+          }
         }
       }
     }
@@ -268,8 +283,20 @@ object DataSet {
   /**
    * Wrap an array as a DataSet.
    */
-  def array[T](data: Array[T]): LocalArrayDataSet[T] = {
-    new LocalArrayDataSet[T](data)
+  def array[T](data: Array[T], isSort: Boolean = false): LocalArrayDataSet[T] = {
+    // if (isSort) require(data.isInstanceOf[Sample],
+    //  "DataSet.array: Only support sort for sample input")
+    var tmp: Array[T] = null
+    if (data.isInstanceOf[LabeledSentence[Float]]) {
+      tmp = data.sortBy(_.asInstanceOf[LabeledSentence[Float]].dataLength())
+    } else if (data.isInstanceOf[Sample[Float]]) {
+      tmp = data.sortBy(_.asInstanceOf[Sample[Float]].feature().nElement())
+    } else {
+      tmp = data
+    }
+    implicit val ord = Ordering.fromLessThan[Int]((e1, e2) => (e1 > e2))
+    tmp = data.sortBy(_.asInstanceOf[LabeledSentence[Float]].dataLength())
+    new LocalArrayDataSet[T](tmp, isSort)
   }
 
   /**
