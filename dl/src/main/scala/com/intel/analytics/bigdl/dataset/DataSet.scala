@@ -125,31 +125,39 @@ trait LocalDataSet[T] extends AbstractDataSet[T, Iterator[T]] {
  * Wrap an array as a DataSet.
  * @tparam T
  */
-class LocalArrayDataSet[T] private[dataset](buffer: Array[T]) extends LocalDataSet[T] {
-
-  protected var indexes = (0 until buffer.length).toArray
+class LocalArrayDataSet[T] private[dataset](
+  buffer: Array[T],
+  isSort: Boolean = false,
+  groupSize: Int = 1) extends LocalDataSet[T] {
+  protected val indexLength = math.max(1, buffer.length - (groupSize -1))
+  protected var indexes = (0 until indexLength).toArray
 
   override def shuffle(): Unit = {
-    RandomGenerator.shuffle(indexes)
+    if (!isSort) RandomGenerator.shuffle(indexes)
   }
 
   override def data(train: Boolean): Iterator[T] = {
     new Iterator[T] {
-      private val offset = 0
+      private val offset = if (train) {
+        RandomGenerator.RNG.uniform(0, indexLength).toInt
+      } else {
+        0
+      }
+
       private val index = new AtomicInteger(offset)
 
       override def hasNext: Boolean = {
         if (train) {
           true
         } else {
-          index.get() < buffer.length
+          index.get() < indexLength
         }
       }
 
       override def next(): T = {
         val curIndex = index.getAndIncrement()
-        if (train || curIndex < buffer.length) {
-          buffer(if (train) indexes(curIndex % buffer.length) else indexes(curIndex))
+        if (train || curIndex < indexLength) {
+          buffer(if (train) indexes(curIndex % indexLength) else indexes(curIndex))
         } else {
           null.asInstanceOf[T]
         }
@@ -204,7 +212,8 @@ trait DistributedDataSet[T] extends AbstractDataSet[T, RDD[T]] {
  * @param buffer
  * @tparam T
  */
-class CachedDistriDataSet[T: ClassTag] private[dataset] (buffer: RDD[Array[T]])
+class CachedDistriDataSet[T: ClassTag] private[dataset]
+(buffer: RDD[Array[T]], isSort: Boolean = false, groupSize: Int = 1)
   extends DistributedDataSet[T] {
 
   protected lazy val count: Long = buffer.mapPartitions(iter => {
@@ -215,16 +224,18 @@ class CachedDistriDataSet[T: ClassTag] private[dataset] (buffer: RDD[Array[T]])
   }).reduce(_ + _)
 
   protected var indexes: RDD[Array[Int]] = buffer.mapPartitions(iter => {
-    Iterator.single(RandomGenerator.shuffle((0 until iter.next().length).toArray))
+    Iterator.single((0 until iter.next().length).toArray)
   }).setName("shuffled index").cache()
 
   override def data(train: Boolean): RDD[T] = {
     val _train = train
+    val _groupSize = groupSize
     buffer.zipPartitions(indexes)((dataIter, indexIter) => {
       val indexes = indexIter.next()
+      val indexLength = indexes.length - _groupSize + 1
       val localData = dataIter.next()
       val offset = if (_train) {
-        RandomGenerator.RNG.uniform(0, localData.length).toInt
+        RandomGenerator.RNG.uniform(0, indexLength).toInt
       } else {
         0
       }
@@ -232,15 +243,15 @@ class CachedDistriDataSet[T: ClassTag] private[dataset] (buffer: RDD[Array[T]])
         private val _offset = new AtomicInteger(offset)
 
         override def hasNext: Boolean = {
-          if (_train) true else _offset.get() < localData.length
+          if (_train) true else _offset.get() < indexLength
         }
 
         override def next(): T = {
           val i = _offset.getAndIncrement()
           if (_train) {
-            localData(indexes(i % localData.length))
+            localData(indexes(i % indexLength))
           } else {
-            if (i < localData.length) {
+            if (i < indexLength) {
               localData(indexes(i))
             } else {
               null.asInstanceOf[T]
@@ -254,10 +265,12 @@ class CachedDistriDataSet[T: ClassTag] private[dataset] (buffer: RDD[Array[T]])
   override def size(): Long = count
 
   override def shuffle(): Unit = {
-    indexes.unpersist()
-    indexes = buffer.mapPartitions(iter => {
-      Iterator.single(RandomGenerator.shuffle((0 until iter.next().length).toArray))
-    }).setName("shuffled index").cache()
+    if (!isSort) {
+      indexes.unpersist()
+      indexes = buffer.mapPartitions(iter => {
+        Iterator.single(RandomGenerator.shuffle((0 until iter.next().length).toArray))
+      }).setName("shuffled index").cache()
+    }
   }
 
   override def originRDD(): RDD[_] = buffer
@@ -272,8 +285,9 @@ object DataSet {
   /**
    * Wrap an array as a DataSet.
    */
-  def array[T](data: Array[T]): LocalArrayDataSet[T] = {
-    new LocalArrayDataSet[T](data)
+  def array[T: ClassTag](data: Array[T], isSort: Boolean = false,
+                         groupSize: Int = 1): LocalArrayDataSet[T] = {
+    new LocalArrayDataSet[T](sortData(data, isSort), isSort, groupSize)
   }
 
   /**
@@ -284,6 +298,10 @@ object DataSet {
    * @return
    */
   def array[T: ClassTag](localData: Array[T], sc: SparkContext): DistributedDataSet[T] = {
+    // test
+    val isSort: Boolean = false
+    val groupSize: Int = 1
+
     val nodeNumber = Engine.nodeNumber()
       .getOrElse(throw new RuntimeException("can't get node number? Have you initialized?"))
     val coreNumber = Engine.coreNumber()
@@ -292,9 +310,11 @@ object DataSet {
         // Keep this line, or the array will be send to worker every time
         .coalesce(nodeNumber, true)
         .mapPartitions(iter => {
-          Iterator.single(iter.toArray)
+          Iterator.single(sortData(iter.toArray, isSort))
         }).setName("cached dataset")
-        .cache()
+        .cache(),
+      isSort,
+      groupSize
     )
   }
 
@@ -304,17 +324,36 @@ object DataSet {
    * @tparam T
    * @return
    */
-  def rdd[T: ClassTag](data: RDD[T]): DistributedDataSet[T] = {
+  def rdd[T: ClassTag](data: RDD[T], isSort: Boolean = false,
+                       groupSize: Int = 1): DistributedDataSet[T] = {
     val nodeNumber = Engine.nodeNumber()
       .getOrElse(throw new RuntimeException("can't get node number? Have you initialized?"))
     val coreNumber = Engine.coreNumber()
     new CachedDistriDataSet[T](
       data.coalesce(nodeNumber, true)
         .mapPartitions(iter => {
-          Iterator.single(iter.toArray)
+          Iterator.single(sortData(iter.toArray, isSort))
         }).setName("cached dataset")
-        .cache()
+        .cache(),
+      isSort,
+      groupSize
     )
+  }
+
+  def sortData[T: ClassTag](data: Array[T], isSort: Boolean): Array[T] = {
+    if (isSort) {
+      implicit val ord = Ordering.fromLessThan[Int]((e1, e2) => (e1 > e2))
+      classTag[T] match {
+        case _: Sample[Float] =>
+          data.sortBy(_.asInstanceOf[Sample[Float]].feature().nElement())
+        case _: Sample[Double] =>
+          data.sortBy(_.asInstanceOf[Sample[Double]].feature().nElement())
+        case _ =>
+          throw new IllegalArgumentException("DataSet.sortData: Only support sort for sample input")
+      }
+    } else {
+      data
+    }
   }
 
   /**
