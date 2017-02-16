@@ -126,13 +126,17 @@ trait LocalDataSet[T] extends AbstractDataSet[T, Iterator[T]] {
  * @tparam T
  */
 class LocalArrayDataSet[T] private[dataset](buffer: Array[T]) extends LocalDataSet[T] {
+
+  protected var indexes = (0 until buffer.length).toArray
+
   override def shuffle(): Unit = {
-    RandomGenerator.shuffle(buffer)
+    RandomGenerator.shuffle(indexes)
   }
 
   override def data(train: Boolean): Iterator[T] = {
     new Iterator[T] {
-      private val index = new AtomicInteger()
+      private val offset = 0
+      private val index = new AtomicInteger(offset)
 
       override def hasNext: Boolean = {
         if (train) {
@@ -145,7 +149,7 @@ class LocalArrayDataSet[T] private[dataset](buffer: Array[T]) extends LocalDataS
       override def next(): T = {
         val curIndex = index.getAndIncrement()
         if (train || curIndex < buffer.length) {
-          buffer(if (train) (curIndex % buffer.length) else curIndex)
+          buffer(if (train) indexes(curIndex % buffer.length) else indexes(curIndex))
         } else {
           null.asInstanceOf[T]
         }
