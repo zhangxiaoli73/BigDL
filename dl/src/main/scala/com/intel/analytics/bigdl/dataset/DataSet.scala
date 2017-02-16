@@ -226,7 +226,11 @@ class CachedDistriDataSet[T: ClassTag] private[dataset] (buffer: RDD[Array[T]])
   }).reduce(_ + _)
 
   protected var indexes: RDD[Array[Int]] = buffer.mapPartitions(iter => {
-    Iterator.single(RandomGenerator.shuffle((0 until iter.next().length).toArray))
+
+    val arr = (0 until (iter.next().length - 4)).toArray
+    Iterator.single(Array(1))
+
+    // Iterator.single(RandomGenerator.shuffle((0 until iter.next().length).toArray))
   }).setName("shuffled index").cache()
 
   override def data(train: Boolean): RDD[T] = {
@@ -267,7 +271,9 @@ class CachedDistriDataSet[T: ClassTag] private[dataset] (buffer: RDD[Array[T]])
   override def shuffle(): Unit = {
     indexes.unpersist()
     indexes = buffer.mapPartitions(iter => {
-      Iterator.single(RandomGenerator.shuffle((0 until iter.next().length).toArray))
+      val arr = (0 until (iter.next().length - 4)).toArray
+      Iterator.single(arr)
+      // Iterator.single(RandomGenerator.shuffle(arr))
     }).setName("shuffled index").cache()
   }
 
@@ -310,8 +316,11 @@ object DataSet {
     val nodeNumber = Engine.nodeNumber()
       .getOrElse(throw new RuntimeException("can't get node number? Have you initialized?"))
     val coreNumber = Engine.coreNumber()
+
+    implicit val ord = Ordering.fromLessThan[Int]((e1, e2) => (e1 > e2))
+    val tmp = localData.sortBy(_.asInstanceOf[LabeledSentence[Float]].dataLength())
     new CachedDistriDataSet[T](
-      sc.parallelize(localData, nodeNumber * coreNumber)
+      sc.parallelize(tmp, nodeNumber * coreNumber)
         // Keep this line, or the array will be send to worker every time
         .coalesce(nodeNumber, true)
         .mapPartitions(iter => {
