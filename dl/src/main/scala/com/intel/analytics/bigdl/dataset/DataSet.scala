@@ -22,6 +22,7 @@ import java.util.concurrent.atomic.AtomicInteger
 
 import com.intel.analytics.bigdl.DataSet
 import com.intel.analytics.bigdl.dataset.image.{LabeledBGRImage, _}
+import com.intel.analytics.bigdl.dataset.text.LabeledSentence
 import com.intel.analytics.bigdl.utils.{Engine, RandomGenerator}
 import org.apache.hadoop.io.Text
 import org.apache.log4j.Logger
@@ -212,7 +213,7 @@ trait DistributedDataSet[T] extends AbstractDataSet[T, RDD[T]] {
  * @param buffer
  * @tparam T
  */
-class CachedDistriDataSet[T: ClassTag] private[dataset]
+class CachedDistriDataSet[T: ClassTag]
 (buffer: RDD[Array[T]], isSort: Boolean = false, groupSize: Int = 1)
   extends DistributedDataSet[T] {
 
@@ -230,9 +231,10 @@ class CachedDistriDataSet[T: ClassTag] private[dataset]
   override def data(train: Boolean): RDD[T] = {
     val _train = train
     val _groupSize = groupSize
+
     buffer.zipPartitions(indexes)((dataIter, indexIter) => {
       val indexes = indexIter.next()
-      val indexLength = indexes.length - _groupSize + 1
+      val indexLength = math.max(1, indexes.length - (_groupSize -1))
       val localData = dataIter.next()
       val offset = if (_train) {
         RandomGenerator.RNG.uniform(0, indexLength).toInt
@@ -298,10 +300,6 @@ object DataSet {
    * @return
    */
   def array[T: ClassTag](localData: Array[T], sc: SparkContext): DistributedDataSet[T] = {
-    // test
-    val isSort: Boolean = false
-    val groupSize: Int = 1
-
     val nodeNumber = Engine.nodeNumber()
       .getOrElse(throw new RuntimeException("can't get node number? Have you initialized?"))
     val coreNumber = Engine.coreNumber()
@@ -310,11 +308,9 @@ object DataSet {
         // Keep this line, or the array will be send to worker every time
         .coalesce(nodeNumber, true)
         .mapPartitions(iter => {
-          Iterator.single(sortData(iter.toArray, isSort))
+          Iterator.single(iter.toArray)
         }).setName("cached dataset")
-        .cache(),
-      isSort,
-      groupSize
+        .cache()
     )
   }
 
@@ -343,13 +339,16 @@ object DataSet {
   def sortData[T: ClassTag](data: Array[T], isSort: Boolean): Array[T] = {
     if (isSort) {
       implicit val ord = Ordering.fromLessThan[Int]((e1, e2) => (e1 > e2))
-      classTag[T] match {
-        case _: Sample[Float] =>
-          data.sortBy(_.asInstanceOf[Sample[Float]].feature().nElement())
-        case _: Sample[Double] =>
-          data.sortBy(_.asInstanceOf[Sample[Double]].feature().nElement())
-        case _ =>
-          throw new IllegalArgumentException("DataSet.sortData: Only support sort for sample input")
+      if (classTag[T] == classTag[Sample[Float]]) {
+        data.sortBy(_.asInstanceOf[Sample[Float]].feature().nElement())
+      } else if (classTag[T] == classTag[Sample[Double]]) {
+        data.sortBy(_.asInstanceOf[Sample[Double]].feature().nElement())
+      } else if (classTag[T] == classTag[LabeledSentence[Float]]) {
+        data.sortBy(_.asInstanceOf[LabeledSentence[Float]].dataLength())
+      } else if (classTag[T] == classTag[LabeledSentence[Double]]) {
+        data.sortBy(_.asInstanceOf[LabeledSentence[Double]].dataLength())
+      } else {
+        throw new IllegalArgumentException("DataSet.sortData: Only support sort for sample input")
       }
     } else {
       data
