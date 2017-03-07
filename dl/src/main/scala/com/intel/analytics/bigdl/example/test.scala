@@ -52,6 +52,7 @@ object Test {
         conf.setAppName("Predict with trained model")
           .set("spark.akka.frameSize", 64.toString)
           .set("spark.task.maxFailures", "1")
+          .setMaster("local[1]")
         new SparkContext(conf)
       })
       val sc = scc.get

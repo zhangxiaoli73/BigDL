@@ -114,6 +114,7 @@ object Train {
         conf.setAppName("Predict with trained model")
           .set("spark.akka.frameSize", 64.toString)
           .set("spark.task.maxFailures", "1")
+          .setMaster("local[2]")
         new SparkContext(conf)
       })
       val sc = scc.get
@@ -174,12 +175,10 @@ object Train {
       val numEpochs = 5
       optimizer.
         setState(state).
-        setValidation(Trigger.everyEpoch, valSet, Array(new Top1Accuracy[Double])).
+        setValidation(Trigger.everyEpoch, valSet, Array(new Loss[Double])).
         setOptimMethod(new Adagrad[Double]()).
         setEndWhen(Trigger.maxEpoch(numEpochs)).
         optimize()
-
-      model_N.save("model_test")
     })
   }
 }
