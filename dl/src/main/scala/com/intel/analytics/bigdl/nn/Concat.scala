@@ -17,16 +17,13 @@
 
 package com.intel.analytics.bigdl.nn
 
-import com.intel.analytics.bigdl.nn.abstractnn.{Activity, AbstractModule}
+import com.intel.analytics.bigdl.nn.abstractnn.{AbstractModule, Activity}
 import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
-
-import scala.concurrent.duration.Duration
-import scala.concurrent.{Await, Future}
-import scala.reflect.ClassTag
 import com.intel.analytics.bigdl.utils.Engine
 
-import scala.collection.mutable.ArrayBuffer
+import scala.concurrent.Future
+import scala.reflect.ClassTag
 
 @SerialVersionUID(- 5218461876031660707L)
 class Concat[T: ClassTag](val dimension: Int)(
@@ -124,7 +121,7 @@ class Concat[T: ClassTag](val dimension: Int)(
       i += 1
       offset += currentOutput.size(dimension)
     }
-
+    require(gradInput.isContiguous())
     this.gradInput
   }
 

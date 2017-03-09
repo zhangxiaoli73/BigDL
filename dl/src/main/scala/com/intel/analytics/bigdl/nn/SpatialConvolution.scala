@@ -20,11 +20,10 @@ package com.intel.analytics.bigdl.nn
 import com.intel.analytics.bigdl.nn.abstractnn.TensorModule
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
 import com.intel.analytics.bigdl.tensor._
-import com.intel.analytics.bigdl.utils._
 import com.intel.analytics.bigdl.utils.RandomGenerator._
+import com.intel.analytics.bigdl.utils._
 
-import scala.concurrent.duration.Duration
-import scala.concurrent.{Await, Future}
+import scala.concurrent.Future
 import scala.reflect.ClassTag
 
 @SerialVersionUID(- 8446523046224797382L)
@@ -197,10 +196,12 @@ class SpatialConvolution[T: ClassTag](
       }
       Engine.model.sync(results)
     }
+
     output
   }
 
   override def updateGradInput(input: Tensor[T], gradOutput: Tensor[T]): Tensor[T] = {
+    require(gradOutput.isContiguous())
     if (!propagateBack) {
       return gradInput
     }
@@ -252,6 +253,7 @@ class SpatialConvolution[T: ClassTag](
       Engine.model.sync(results)
     }
 
+    require(gradInput.isContiguous(), this.getClass.getName)
     return gradInput
   }
 

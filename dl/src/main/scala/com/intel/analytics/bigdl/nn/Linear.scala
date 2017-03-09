@@ -120,6 +120,7 @@ class Linear[T: ClassTag](
     } else if (input.dim() == 2) {
       gradInput.addmm(ev.fromType[Int](0), ev.fromType[Int](1), gradOutput, weight)
     }
+    require(gradInput.isContiguous(), this.getClass.getName)
     gradInput
   }
 

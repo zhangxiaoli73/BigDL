@@ -20,12 +20,11 @@ package com.intel.analytics.bigdl.nn
 import com.intel.analytics.bigdl.nn.abstractnn.TensorModule
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
 import com.intel.analytics.bigdl.tensor._
+import com.intel.analytics.bigdl.utils.Engine
 
 import scala.collection.mutable.ArrayBuffer
-import scala.concurrent.duration.Duration
-import scala.concurrent.{Await, Future}
+import scala.concurrent.Future
 import scala.reflect.ClassTag
-import com.intel.analytics.bigdl.utils.Engine
 
 @SerialVersionUID(3953292249027271493L)
 class Threshold[@specialized(Float, Double) T: ClassTag](
@@ -171,6 +170,7 @@ class Threshold[@specialized(Float, Double) T: ClassTag](
       }
     }
     Engine.model.sync(results)
+    require(output.isContiguous(), this.getClass.getName)
     output
   }
 
@@ -202,12 +202,14 @@ class Threshold[@specialized(Float, Double) T: ClassTag](
         case _ => throw new UnsupportedOperationException(s"Only Float/Double supported")
       }
     }
+//    require(gradInput.isContiguous(), this.getClass.getName)
     gradInput
   }
 
   override def updateGradInput(input: Tensor[T], gradOutput: Tensor[T]): Tensor[T] = {
     validateParameters()
-
+//    require(input.isContiguous(), this.getClass.getName)
+//    require(gradOutput.isContiguous(), this.getClass.getName)
     var i = 1
     while (i <= input.nDimension()) {
       if (input.stride(i) != gradOutput.stride(i)) {
@@ -352,6 +354,7 @@ class Threshold[@specialized(Float, Double) T: ClassTag](
     }
 
     Engine.model.sync(results)
+    require(gradInput.isContiguous(), this.getClass.getName)
     gradInput
   }
 

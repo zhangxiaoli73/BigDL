@@ -65,6 +65,11 @@ class ModelGraientCheckSpec extends FlatSpec with BeforeAndAfter with Matchers {
     val model = GoogleNet_v2_test(1000)
     model.zeroGradParameters()
 
+    val output = Tensor[Double](4, 3000).apply1(e => Random.nextDouble())
+
+    val tmp1 = model.forward(input)
+    val tmp2 = model.backward(input, output)
+
     val checker = new GradientChecker(1e-4).setType(checkModel)
     checker.checkLayer(model, input, 1e-2) should be(true)
     val scalaTime = System.nanoTime() - start
@@ -78,6 +83,9 @@ class ModelGraientCheckSpec extends FlatSpec with BeforeAndAfter with Matchers {
     val input = Tensor[Double](4, 3, 224, 224).apply1(e => Random.nextDouble())
     val model = GoogleNet_v2_test.applyNoBn(1000)
     model.zeroGradParameters()
+
+    // val output = model.forward(input)
+    // val grad1 = model.backward(input, output)
 
     val checker = new GradientChecker(1e-4).setType(checkModel)
     checker.checkWeight(model, input, 1e-2) should be(true)

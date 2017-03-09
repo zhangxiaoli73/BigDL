@@ -103,7 +103,8 @@ class BatchNormalizationSpec extends FlatSpec with BeforeAndAfter with Matchers 
 
     val output = sbn.forward(input)
 
-    val gradInput = sbn.backward(input, gradOutput2)
+    val gradInput = sbn.updateGradInput(input, gradOutput2)
+    sbn.accGradParameters(input, gradOutput2, 1)
 
     outputTorch.map(output, (v1, v2) => {
       assert(abs(v1 - v2) == 0)

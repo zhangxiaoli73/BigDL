@@ -114,7 +114,7 @@ class LogSoftMax[T: ClassTag](
       t += 1
     }
     Engine.model.sync(results)
-
+    require(gradInput.isContiguous(), this.getClass.getName)
     gradInput
   }
 

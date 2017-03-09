@@ -39,6 +39,7 @@ class NarrowTable[T: ClassTag](val offset: Int, val length: Int = 1)
   override def updateOutput(input: Table): Table = {
     var i = 1
     while (i <= length) {
+      println(offset + i -1)
       output.insert(i, input(offset + i -1))
       i += 1
     }

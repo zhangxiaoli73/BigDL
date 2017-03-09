@@ -29,11 +29,11 @@ import scala.reflect.ClassTag
 
 @SerialVersionUID(- 3181824540272906068L)
 class BatchNormalization[@specialized(Float, Double) T: ClassTag](
-  val nOutput: Int, // output feature map number
-  val eps: Double = 1e-5, // avoid divde zero
-  val momentum: Double = 0.1, // momentum for weight update
-  val affine: Boolean = true // affine operation on output or not
-)(implicit ev: TensorNumeric[T]) extends TensorModule[T] {
+                                                                   val nOutput: Int, // output feature map number
+                                                                   val eps: Double = 1e-5, // avoid divde zero
+                                                                   val momentum: Double = 0.1, // momentum for weight update
+                                                                   val affine: Boolean = true // affine operation on output or not
+                                                                 )(implicit ev: TensorNumeric[T]) extends TensorModule[T] {
 
   require(nOutput > 0)
 
@@ -143,9 +143,9 @@ class BatchNormalization[@specialized(Float, Double) T: ClassTag](
   }
 
   private def updateOutputDouble(input: Array[Double], inputOffset: Int, inputStride: Int,
-    output: Array[Double], outputOffset: Int, outputStride: Int,
-    nInput: Int, n: Int, stride2: Int
-  ): Unit = {
+                                 output: Array[Double], outputOffset: Int, outputStride: Int,
+                                 nInput: Int, n: Int, stride2: Int
+                                ): Unit = {
     var f = 0
     while (f < nInput) {
       val _f = f + 1
@@ -212,9 +212,9 @@ class BatchNormalization[@specialized(Float, Double) T: ClassTag](
   }
 
   private def updateOutputFloat(input: Array[Float], inputOffset: Int, inputStride: Int,
-    output: Array[Float], outputOffset: Int, outputStride: Int,
-    nInput: Int, n: Int, stride2: Int
-  ): Unit = {
+                                output: Array[Float], outputOffset: Int, outputStride: Int,
+                                nInput: Int, n: Int, stride2: Int
+                               ): Unit = {
     var f = 0
     while (f < nInput) {
       val _f = f + 1
@@ -300,8 +300,8 @@ class BatchNormalization[@specialized(Float, Double) T: ClassTag](
   }
 
   def backward(input: Tensor[T], gradOutput: Tensor[T], scale: T = ev.fromType[Int](1),
-    theGradInput: Tensor[T] = null, theGradWeight: Tensor[T] = null,
-    theGradBias: Tensor[T] = null): Tensor[T] = {
+               theGradInput: Tensor[T] = null, theGradWeight: Tensor[T] = null,
+               theGradBias: Tensor[T] = null): Tensor[T] = {
     require(train, "should be in training mode when this.train is true")
     require(null != saveMean && null != saveStd, "must call updateOutput() first")
 
@@ -328,22 +328,35 @@ class BatchNormalization[@specialized(Float, Double) T: ClassTag](
         val gradOutputStride = gradOutputDouble.stride(1)
         val gradOutputStride2 = gradOutputDouble.stride(2)
         if (affine) {
-          val gradInputDouble = theGradInput.asInstanceOf[Tensor[Double]]
-          val gradInputData = gradInputDouble.storage().array()
-          val gradInputOffset = gradInputDouble.storageOffset() - 1
-          val gradInputStride = gradInputDouble.stride(1)
-          val gradInputStride2 = gradInputDouble.stride(2)
-          val gradWeightDouble = gradWeight.asInstanceOf[Tensor[Double]]
-          val gradWeightData = gradWeightDouble.storage().array()
-          val gradWeightOffset = gradWeightDouble.storageOffset() - 1
-          val gradBiasDouble = gradBias.asInstanceOf[Tensor[Double]]
-          val gradBiasData = gradBiasDouble.storage().array()
-          val gradBiasOffset = gradBiasDouble.storageOffset() - 1
-          backwardDouble(inputData, inputOffset, inputStride, inputStride2, gradOutputData,
-            gradOutputOffset, gradOutputStride, gradOutputStride2,
-            gradInputData, gradInputOffset, gradInputStride, gradInputStride2, nInput, n,
-            ev.toType[Double](scale), gradWeightData, gradWeightOffset, gradBiasData,
-            gradBiasOffset)
+          if (null != theGradInput) {
+            val gradInputDouble = theGradInput.asInstanceOf[Tensor[Double]]
+            val gradInputData = gradInputDouble.storage().array()
+            val gradInputOffset = gradInputDouble.storageOffset() - 1
+            val gradInputStride = gradInputDouble.stride(1)
+            val gradInputStride2 = gradInputDouble.stride(2)
+            val gradWeightDouble = gradWeight.asInstanceOf[Tensor[Double]]
+            val gradWeightData = gradWeightDouble.storage().array()
+            val gradWeightOffset = gradWeightDouble.storageOffset() - 1
+            val gradBiasDouble = gradBias.asInstanceOf[Tensor[Double]]
+            val gradBiasData = gradBiasDouble.storage().array()
+            val gradBiasOffset = gradBiasDouble.storageOffset() - 1
+            backwardDouble(inputData, inputOffset, inputStride, inputStride2, gradOutputData,
+              gradOutputOffset, gradOutputStride, gradOutputStride2,
+              gradInputData, gradInputOffset, gradInputStride, gradInputStride2, nInput, n,
+              ev.toType[Double](scale), gradWeightData, gradWeightOffset, gradBiasData,
+              gradBiasOffset)
+          } else {
+            val gradWeightDouble = gradWeight.asInstanceOf[Tensor[Double]]
+            val gradWeightData = gradWeightDouble.storage().array()
+            val gradWeightOffset = gradWeightDouble.storageOffset() - 1
+            val gradBiasDouble = gradBias.asInstanceOf[Tensor[Double]]
+            val gradBiasData = gradBiasDouble.storage().array()
+            val gradBiasOffset = gradBiasDouble.storageOffset() - 1
+            backwardDouble(inputData, inputOffset, inputStride, inputStride2, gradOutputData,
+              gradOutputOffset, gradOutputStride, gradOutputStride2,
+              null, 0, 0, 0, nInput, n, ev.toType[Double](scale), gradWeightData, gradWeightOffset,
+              gradBiasData, gradBiasOffset)
+          }
         } else if (null != theGradInput) {
           val gradInputDouble = theGradInput.asInstanceOf[Tensor[Double]]
           val gradInputData = gradInputDouble.storage().array()
@@ -354,18 +367,6 @@ class BatchNormalization[@specialized(Float, Double) T: ClassTag](
             gradOutputOffset, gradOutputStride, gradOutputStride2,
             gradInputData, gradInputOffset, gradInputStride, gradInputStride2, nInput, n,
             ev.toType[Double](scale), null, 0, null, 0)
-        } else {
-          val gradWeightDouble = gradWeight.asInstanceOf[Tensor[Double]]
-          val gradWeightData = gradWeightDouble.storage().array()
-          val gradWeightOffset = gradWeightDouble.storageOffset() - 1
-          val gradBiasDouble = gradBias.asInstanceOf[Tensor[Double]]
-          val gradBiasData = gradBiasDouble.storage().array()
-          val gradBiasOffset = gradBiasDouble.storageOffset() - 1
-          backwardDouble(inputData, inputOffset, inputStride, inputStride2, gradOutputData,
-            gradOutputOffset, gradOutputStride, gradOutputStride2,
-            null, 0, 0, 0, nInput, n, ev.toType[Double](scale), gradWeightData, gradWeightOffset,
-            gradBiasData, gradBiasOffset)
-
         }
 
       case FloatType =>
@@ -380,22 +381,35 @@ class BatchNormalization[@specialized(Float, Double) T: ClassTag](
         val gradOutputStride = gradOutputFloat.stride(1)
         val gradOutputStride2 = gradOutputFloat.stride(2)
         if (affine) {
-          val gradInputFloat = theGradInput.asInstanceOf[Tensor[Float]]
-          val gradInputData = gradInputFloat.storage().array()
-          val gradInputOffset = gradInputFloat.storageOffset() - 1
-          val gradInputStride = gradInputFloat.stride(1)
-          val gradInputStride2 = gradInputFloat.stride(2)
-          val gradWeightFloat = gradWeight.asInstanceOf[Tensor[Float]]
-          val gradWeightData = gradWeightFloat.storage().array()
-          val gradWeightOffset = gradWeightFloat.storageOffset() - 1
-          val gradBiasFloat = gradBias.asInstanceOf[Tensor[Float]]
-          val gradBiasData = gradBiasFloat.storage().array()
-          val gradBiasOffset = gradBiasFloat.storageOffset() - 1
-          backwardFloat(inputData, inputOffset, inputStride, inputStride2, gradOutputData,
-            gradOutputOffset, gradOutputStride, gradOutputStride2,
-            gradInputData, gradInputOffset, gradInputStride, gradInputStride2, nInput, n,
-            ev.toType[Float](scale), gradWeightData, gradWeightOffset, gradBiasData,
-            gradBiasOffset)
+          if (null != theGradInput) {
+            val gradInputFloat = theGradInput.asInstanceOf[Tensor[Float]]
+            val gradInputData = gradInputFloat.storage().array()
+            val gradInputOffset = gradInputFloat.storageOffset() - 1
+            val gradInputStride = gradInputFloat.stride(1)
+            val gradInputStride2 = gradInputFloat.stride(2)
+            val gradWeightFloat = gradWeight.asInstanceOf[Tensor[Float]]
+            val gradWeightData = gradWeightFloat.storage().array()
+            val gradWeightOffset = gradWeightFloat.storageOffset() - 1
+            val gradBiasFloat = gradBias.asInstanceOf[Tensor[Float]]
+            val gradBiasData = gradBiasFloat.storage().array()
+            val gradBiasOffset = gradBiasFloat.storageOffset() - 1
+            backwardFloat(inputData, inputOffset, inputStride, inputStride2, gradOutputData,
+              gradOutputOffset, gradOutputStride, gradOutputStride2,
+              gradInputData, gradInputOffset, gradInputStride, gradInputStride2, nInput, n,
+              ev.toType[Float](scale), gradWeightData, gradWeightOffset, gradBiasData,
+              gradBiasOffset)
+          } else {
+            val gradWeightFloat = gradWeight.asInstanceOf[Tensor[Float]]
+            val gradWeightData = gradWeightFloat.storage().array()
+            val gradWeightOffset = gradWeightFloat.storageOffset() - 1
+            val gradBiasFloat = gradBias.asInstanceOf[Tensor[Float]]
+            val gradBiasData = gradBiasFloat.storage().array()
+            val gradBiasOffset = gradBiasFloat.storageOffset() - 1
+            backwardFloat(inputData, inputOffset, inputStride, inputStride2, gradOutputData,
+              gradOutputOffset, gradOutputStride, gradOutputStride2,
+              null, 0, 0, 0, nInput, n, ev.toType[Float](scale), gradWeightData, gradWeightOffset,
+              gradBiasData, gradBiasOffset)
+          }
         } else if (null != theGradInput) {
           val gradInputFloat = theGradInput.asInstanceOf[Tensor[Float]]
           val gradInputData = gradInputFloat.storage().array()
@@ -406,18 +420,6 @@ class BatchNormalization[@specialized(Float, Double) T: ClassTag](
             gradOutputOffset, gradOutputStride, gradOutputStride2,
             gradInputData, gradInputOffset, gradInputStride, gradInputStride2, nInput, n,
             ev.toType[Float](scale), null, 0, null, 0)
-        } else {
-          val gradWeightFloat = gradWeight.asInstanceOf[Tensor[Float]]
-          val gradWeightData = gradWeightFloat.storage().array()
-          val gradWeightOffset = gradWeightFloat.storageOffset() - 1
-          val gradBiasFloat = gradBias.asInstanceOf[Tensor[Float]]
-          val gradBiasData = gradBiasFloat.storage().array()
-          val gradBiasOffset = gradBiasFloat.storageOffset() - 1
-          backwardFloat(inputData, inputOffset, inputStride, inputStride2, gradOutputData,
-            gradOutputOffset, gradOutputStride, gradOutputStride2,
-            null, 0, 0, 0, nInput, n, ev.toType[Float](scale), gradWeightData, gradWeightOffset,
-            gradBiasData, gradBiasOffset)
-
         }
     }
 
@@ -425,11 +427,11 @@ class BatchNormalization[@specialized(Float, Double) T: ClassTag](
   }
 
   private def backwardDouble(input: Array[Double], inputOffset: Int, inputStride: Int,
-    inputStride2: Int, gradOutput: Array[Double], gradOutputOffset: Int, gradOutputStride: Int,
-    gradOutputStride2: Int, gradInput: Array[Double], gradInputOffset: Int, gradInputStride: Int,
-    gradInputStride2: Int, nInput: Int, n: Int, scale: Double, gradWeight: Array[Double],
-    gradWeightOffset: Int, gradBias: Array[Double], gradBiasOffset: Int
-  ): Unit = {
+                             inputStride2: Int, gradOutput: Array[Double], gradOutputOffset: Int, gradOutputStride: Int,
+                             gradOutputStride2: Int, gradInput: Array[Double], gradInputOffset: Int, gradInputStride: Int,
+                             gradInputStride2: Int, nInput: Int, n: Int, scale: Double, gradWeight: Array[Double],
+                             gradWeightOffset: Int, gradBias: Array[Double], gradBiasOffset: Int
+                            ): Unit = {
     var f = 0
     while (f < nInput) {
       val _f = f + 1
@@ -513,11 +515,11 @@ class BatchNormalization[@specialized(Float, Double) T: ClassTag](
   }
 
   private def backwardFloat(input: Array[Float], inputOffset: Int, inputStride: Int,
-    inputStride2: Int, gradOutput: Array[Float], gradOutputOffset: Int, gradOutputStride: Int,
-    gradOutputStride2: Int, gradInput: Array[Float], gradInputOffset: Int, gradInputStride: Int,
-    gradInputStride2: Int, nInput: Int, n: Int, scale: Float, gradWeight: Array[Float],
-    gradWeightOffset: Int, gradBias: Array[Float], gradBiasOffset: Int
-  ): Unit = {
+                            inputStride2: Int, gradOutput: Array[Float], gradOutputOffset: Int, gradOutputStride: Int,
+                            gradOutputStride2: Int, gradInput: Array[Float], gradInputOffset: Int, gradInputStride: Int,
+                            gradInputStride2: Int, nInput: Int, n: Int, scale: Float, gradWeight: Array[Float],
+                            gradWeightOffset: Int, gradBias: Array[Float], gradBiasOffset: Int
+                           ): Unit = {
     var f = 0
     while (f < nInput) {
       val _f = f + 1
@@ -664,10 +666,10 @@ class BatchNormalization[@specialized(Float, Double) T: ClassTag](
 
 object BatchNormalization {
   def apply[@specialized(Float, Double) T: ClassTag](
-    nOutput: Int,
-    eps: Double = 1e-5,
-    momentum: Double = 0.1,
-    affine: Boolean = true)(implicit ev: TensorNumeric[T]): BatchNormalization[T] = {
+                                                      nOutput: Int,
+                                                      eps: Double = 1e-5,
+                                                      momentum: Double = 0.1,
+                                                      affine: Boolean = true)(implicit ev: TensorNumeric[T]): BatchNormalization[T] = {
     new BatchNormalization[T](nOutput, eps, momentum, affine)
   }
 }

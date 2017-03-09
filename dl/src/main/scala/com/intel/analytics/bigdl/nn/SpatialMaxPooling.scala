@@ -18,13 +18,10 @@
 package com.intel.analytics.bigdl.nn
 
 import com.intel.analytics.bigdl.nn.abstractnn.TensorModule
-import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
 import com.intel.analytics.bigdl.tensor.Tensor
+import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
 import com.intel.analytics.bigdl.utils.Engine
 
-import scala.collection.mutable.ArrayBuffer
-import scala.concurrent.duration.Duration
-import scala.concurrent.{Await, Future}
 import scala.reflect._
 
 @SerialVersionUID(2277597677473874749L)
@@ -213,6 +210,7 @@ class SpatialMaxPooling[T: ClassTag](
         throw new IllegalArgumentException
       }
     }
+    require(gradInput.isContiguous(), this.getClass.getName)
     gradInput
   }
 
