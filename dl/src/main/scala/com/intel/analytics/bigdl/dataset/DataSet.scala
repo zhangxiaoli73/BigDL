@@ -284,7 +284,7 @@ object DataSet {
       .getOrElse(throw new RuntimeException("can't get node number? Have you initialized?"))
     val coreNumber = Engine.coreNumber()
     new CachedDistriDataSet[T](
-      sc.parallelize(localData, nodeNumber * coreNumber)
+      sc.parallelize(localData, nodeNumber * coreNumber * 2)
         // Keep this line, or the array will be send to worker every time
         .coalesce(nodeNumber, true)
         .mapPartitions(iter => {
