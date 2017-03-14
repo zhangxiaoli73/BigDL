@@ -19,16 +19,15 @@ package com.intel.analytics.bigdl.example
 
 import java.nio.ByteBuffer
 
-import org.apache.spark.{SparkConf, SparkContext}
-import com.intel.analytics.bigdl.{DataSet, Module}
-import com.intel.analytics.bigdl.dataset.{ByteRecord, DataSet, MiniBatch}
 import com.intel.analytics.bigdl.dataset.image.{BytesToGreyImg, GreyImgNormalizer, GreyImgToBatch}
+import com.intel.analytics.bigdl.dataset.{ByteRecord, DataSet, MiniBatch}
 import com.intel.analytics.bigdl.models.lenet.LeNet5
 import com.intel.analytics.bigdl.nn.ClassNLLCriterion
-import com.intel.analytics.bigdl.optim.{Optimizer, Trigger}
+import com.intel.analytics.bigdl.optim.{Optimizer, Top1Accuracy, Trigger, Validator}
 import com.intel.analytics.bigdl.utils.{Engine, T}
-import com.intel.analytics.bigdl.optim.{Top1Accuracy, Validator}
+import com.intel.analytics.bigdl.{DataSet, Module}
 import org.apache.log4j.{Level, Logger}
+import org.apache.spark.SparkContext
 
 object BigDLSample {
   Logger.getLogger("org").setLevel(Level.INFO)
@@ -59,18 +58,16 @@ object BigDLSample {
   val testStd = 0.31048024
 
 
-  lazy val sc = {
-    val conf = new SparkConf()
-    conf.setAppName(this.getClass.getSimpleName)
-    val sc = new SparkContext(conf)
-    sc
-  }
-
+  var sc : SparkContext = null
 
   def execute(): Unit = {
     println(s"nodeNumber: $nodeNumber coreNumber: $coreNumber mult: $mult")
-    Engine.init(nodeNumber, coreNumber, true /* env == "spark" */)
-
+    // Engine.init(nodeNumber, coreNumber, true /* env == "spark" */)
+	  val scc = Engine.init(nodeNumber, coreNumber, true).map(conf => {
+        conf.setAppName(this.getClass.getSimpleName)
+        new SparkContext(conf)
+     })
+	  sc = scc.get
     val trainSet = DataSet.array(load(trainData, trainLabel), sc) ->
       BytesToGreyImg(28, 28) -> GreyImgNormalizer(trainMean, trainStd) -> GreyImgToBatch(batchSize)
 
