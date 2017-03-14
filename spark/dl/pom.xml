@@ -159,7 +159,7 @@
                         <id>python</id>
                         <configuration>
                             <descriptors>
-                                <descriptor>${project.basedir}/src/assembly/python-zip.xml</descriptor>
+                                <descriptor>${project.basedir}/../../pyspark/assembly/python-zip.xml</descriptor>
                             </descriptors>
                         </configuration>
                         <phase>package</phase>
