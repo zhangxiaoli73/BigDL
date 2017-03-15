@@ -20,14 +20,15 @@
 
 DL_PYTHON_HOME="$(cd "`dirname $0`"/..; pwd)"
 
-DL_HOME="$(cd "`dirname $0`"/../../../../../; pwd)"
+DL_HOME="$(cd "`dirname $0`"/../..; pwd)"
 
 echo "DL_HOME: $DL_HOME"
 echo "SPARK_HOME": $SPARK_HOME
+echo "DL_PYTHON_HOME": $DL_PYTHON_HOME
 
 if [ -z ${SPARK_HOME+x} ]; then echo "SPARK_HOME is unset"; exit 1; else echo "SPARK_HOME is set to '$SPARK_HOME'"; fi
 
-export PYTHONPATH=$SPARK_HOME/python:$DL_PYTHON_HOME;
+export PYTHONPATH=$SPARK_HOME/python:$DL_PYTHON_HOME/bigdl:$DL_PYTHON_HOME/test:$DL_PYTHON_HOME/dev;
 
 export SPARK_CLASSPATH=$DL_HOME/dl/target/bigdl-0.1.0-SNAPSHOT-jar-with-dependencies.jar
 
