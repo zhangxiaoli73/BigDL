@@ -27,7 +27,8 @@ object SimpleRNN {
   : Module[Float] = {
     val model = Sequential[Float]()
     model.add(Recurrent[Float](hiddenSize)
-      .add(RnnCell[Float](inputSize, hiddenSize, Tanh[Float]())))
+      // .add(RnnCell[Float](inputSize, hiddenSize, Tanh[Float]())))
+        .add(LSTM[Float](inputSize, hiddenSize)))
       .add(TimeDistributed[Float](Linear[Float](hiddenSize, outputSize)))
     model
   }
