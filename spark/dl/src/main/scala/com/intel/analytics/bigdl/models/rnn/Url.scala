@@ -41,7 +41,12 @@ object Url {
     val sc = new SparkContext(conf)
     Engine.init
 
-    val totalLength = 6784
+    val batchSize = if (args.length > 0) {
+      args(0).toInt
+    } else {
+      32 * 28 * 4
+    }
+    val totalLength = 6784 * 2
     val node = 4
     var i = 0
     val data = Array.tabulate(totalLength)(_ => Sample[Float]())
@@ -54,15 +59,19 @@ object Url {
       i += 1
     }
 
-    val training_split = 0.8
-    val batchSize = 32 * 28 * node
     val max_epoch = 20
     val state = T("learningRate" -> 0.01,
       "learningRateDecay" -> 0.0002)
 
     val trainSet = sc.parallelize(data)
+    val model = if (args.length > 1) {
+      println("use cnn")
+      buildCNN()
+    } else {
+      println("use lstm")
+      buildModel()
+    }
 
-    val model = buildModel()
     val optimizer = Optimizer(
       model = model,
       sampleRDD = trainSet,
@@ -85,4 +94,22 @@ object Url {
     .add(LogSoftMax[Float]())
     model
   }
+
+  def buildCNN(class_num: Int = 2): Module[Float] = {
+    val model = Sequential[Float]()
+    model.add(Reshape[Float](Array(36, 1, 200)))
+    model.add(SpatialConvolution(36, 128, 5, 1))
+    model.add(ReLU())
+    model.add(SpatialMaxPooling(5, 1, 5, 1))
+    model.add(SpatialConvolution(128, 128, 5, 1))
+    model.add(ReLU())
+    model.add(SpatialMaxPooling(5, 1, 5, 1))
+    model.add(Reshape(Array(128 * 7)))
+    model.add(Linear(128 * 7, 100))
+    model.add(Linear(100, class_num))
+    model.add(LogSoftMax())
+    model
+  }
+
+
 }

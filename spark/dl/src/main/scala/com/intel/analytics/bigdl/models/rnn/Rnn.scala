@@ -44,12 +44,17 @@ object Rnn {
     val sc = new SparkContext(conf)
     Engine.init
 
+    val batchSize = if (args.length > 0) {
+      args(0).toInt
+    } else {
+      4 * 28 * 4
+    }
+    val totalLength = 27869 * 2
+
     val model = SimpleRNN(inputSize = 4001,
       hiddenSize = 40,
       outputSize = 4001)
 
-    val batchSize = 4 * 28 * 4
-    val totalLength = 27869
     var i = 0
     val data = new Array[Sample[Float]](totalLength)
     var feature = Tensor[Float](22, 4001)
