@@ -40,7 +40,7 @@ class Threshold[@specialized(Float, Double) T: ClassTag](
   implicit ev: TensorNumeric[T]) extends TensorModule[T] {
   var threshold = th
   var value = v
-  var inPlace = ip
+  var inPlace = false // ip
   validateParameters()
 
   override def updateOutput(input: Tensor[T]): Tensor[T] = {

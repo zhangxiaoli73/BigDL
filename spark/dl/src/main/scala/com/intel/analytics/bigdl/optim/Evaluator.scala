@@ -20,6 +20,8 @@ import com.intel.analytics.bigdl._
 import com.intel.analytics.bigdl.dataset.{Sample, SampleToBatch}
 import com.intel.analytics.bigdl.models.utils.ModelBroadcast
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
+import org.apache.spark
+import org.apache.spark.rdd
 import org.apache.spark.rdd.RDD
 
 import scala.reflect.ClassTag
@@ -49,7 +51,9 @@ class Evaluator[T: ClassTag] private[optim](model: Module[T])(implicit ev: Tenso
    vMethods: Array[ValidationMethod[T]],
    batchSize: Option[Int] = None): Array[(ValidationResult, ValidationMethod[T])] = {
 
-    val modelBroad = ModelBroadcast[T].broadcast(dataset.sparkContext, model.evaluate())
+    // val modelBroad = ModelBroadcast[T].broadcast(dataset.sparkContext, model.evaluate())
+    val modelBroad = dataset.sparkContext.broadcast(model.evaluate())
+
     val partitionNum = dataset.partitions.length
 
     val totalBatch = batchSize.getOrElse(batchPerPartition * partitionNum)
@@ -57,7 +61,7 @@ class Evaluator[T: ClassTag] private[optim](model: Module[T])(implicit ev: Tenso
       batchSize = totalBatch, None, None, None, partitionNum = Some(partitionNum)))
 
     dataset.mapPartitions(partition => {
-      val localModel = modelBroad.value()
+      val localModel = modelBroad.value
       val localMethod = otherBroad.value._1.map(_.clone())
       val localTransformer = otherBroad.value._2.cloneTransformer()
       val miniBatch = localTransformer(partition)

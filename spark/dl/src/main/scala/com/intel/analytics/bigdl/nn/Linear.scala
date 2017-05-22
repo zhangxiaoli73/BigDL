@@ -85,6 +85,7 @@ class Linear[T: ClassTag](
   }
 
   override def updateOutput(input: Tensor[T]): Tensor[T] = {
+    val time1 = System.nanoTime()
     require(input.dim() == 1 || input.dim() == 2,
       "Linear: " + ErrorInfo.constrainInputAsVectorOrBatch)
 
@@ -109,6 +110,8 @@ class Linear[T: ClassTag](
       output.addmm(ev.fromType[Int](0), output, ev.fromType[Int](1), input, weight.t)
       if (withBias) output.addr(ev.fromType[Int](1), addBuffer, bias)
     }
+    val time3 = System.nanoTime() - time1
+    println("Linear.update " + time3 / 1e9 + " s")
     output
   }
 

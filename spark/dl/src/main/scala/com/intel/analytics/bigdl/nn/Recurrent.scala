@@ -149,6 +149,7 @@ class Recurrent[T : ClassTag]()
   }
 
   override def updateOutput(input: Tensor[T]): Tensor[T] = {
+    val time1 = System.nanoTime()
     require(input.dim == 3,
       "Recurrent: input should be a 3D Tensor, e.g [batch, times, nDim], " +
         s"current input.dim = ${input.dim}")
@@ -178,11 +179,15 @@ class Recurrent[T : ClassTag]()
       currentInput(hidDim) = cells(i - 1).output.toTable(hidDim)
       i += 1
     }
+
+    val time3 = System.nanoTime() - time1
+    println("Recurrent: accGradParameters " + time3/1e9 + " s")
     output
   }
 
   override def accGradParameters(input: Tensor[T], gradOutput: Tensor[T],
                                  scale: Double = 1.0): Unit = {
+    val time1 = System.nanoTime()
     currentGradOutput(hidDim) = gradHidden
     /**
      * Since we clone module along the time dimension, the output of each
@@ -209,9 +214,14 @@ class Recurrent[T : ClassTag]()
       currentGradOutput(hidDim) = cells(i - 1).gradInput.toTable(hidDim)
       i -= 1
     }
+
+    val time2 = System.nanoTime() - time1
+    println("Recurrent: accGradParameters " + time2/1e9 + " s")
   }
 
   override def updateGradInput(input: Tensor[T], gradOutput: Tensor[T]): Tensor[T] = {
+    val time1 = System.nanoTime()
+
     gradInput.resizeAs(input)
     currentGradOutput(hidDim) = gradHidden
     var i = times
@@ -225,6 +235,8 @@ class Recurrent[T : ClassTag]()
       currentGradOutput(hidDim) = cells(i - 1).gradInput.toTable(hidDim)
       i -= 1
     }
+    val time2 = System.nanoTime() - time1
+    println("Recurrent: updateGradInput " + time2/1e9 + " s")
     gradInput
   }
 

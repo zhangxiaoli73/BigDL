@@ -45,7 +45,7 @@ object Test {
       val transformer = BytesToBGRImg() -> BGRImgNormalizer(testMean, testStd) -> BGRImgToSample()
       val evaluationSet = transformer(rddData)
 
-      val model = Module.load[Float](param.model)
+      val model = VggForCifar10(classNum = 10) // Module.load[Float](param.model)
       val result = model.evaluate(evaluationSet,
         Array(new Top1Accuracy[Float]), Some(param.batchSize))
       result.foreach(r => println(s"${r._2} is ${r._1}"))

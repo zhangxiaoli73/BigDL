@@ -20,7 +20,7 @@ import breeze.linalg.*
 import com.intel.analytics.bigdl._
 import com.intel.analytics.bigdl.dataset.{DataSet, MiniBatch, Sample, SampleToBatch}
 import com.intel.analytics.bigdl.nn._
-import com.intel.analytics.bigdl.optim.{Adagrad, Loss, Optimizer, Trigger}
+import com.intel.analytics.bigdl.optim._
 import com.intel.analytics.bigdl.tensor.{Storage, Tensor}
 import com.intel.analytics.bigdl.utils.{Engine, T}
 import org.apache.log4j.{Level, Logger}
@@ -29,7 +29,7 @@ import org.apache.spark.mllib.tree.model.Split
 
 import scala.util.Random
 
-object Url {
+object UrlEvaluate {
   Logger.getLogger("org").setLevel(Level.ERROR)
   Logger.getLogger("akka").setLevel(Level.ERROR)
   Logger.getLogger("breeze").setLevel(Level.ERROR)
@@ -47,20 +47,15 @@ object Url {
     } else {
       32 * 28 * 4
     }
-    val totalLength = 13568
+    val totalLength = 6784 * 2
+    val node = 4
     var i = 0
-    val times = if (args.length > 2) {
-      args(2).toInt
-    } else {
-      200
-    }
-
     val data = Array.tabulate(totalLength)(_ => Sample[Float]())
-    val featureSize = Array(times, 36)
+    val featureSize = Array(200, 36)
     val labelSize = Array(1)
     val label = Array(2.0f)
     while (i < totalLength) {
-      val feature = Tensor[Float](times, 36).apply1(e => Random.nextFloat())
+      val feature = Tensor[Float](200, 36).apply1(e => Random.nextFloat())
       data(i).set(feature.storage().array(), label, featureSize, labelSize)
       i += 1
     }
@@ -104,26 +99,16 @@ object Url {
       buildModel()
     }
 
-    val optimizer = Optimizer(
-      model = model,
-      sampleRDD = trainSet,
-      criterion = ClassNLLCriterion[Float](),
-      batchSize
-    )
-
-    optimizer.setState(state)
-      .setOptimMethod(new Adagrad())
-      .setEndWhen(Trigger.maxEpoch(max_epoch))
-      .optimize()
+    model.evaluate(trainSet, Array(new Top1Accuracy[Float]), Some(batchSize))
   }
 
   def buildModel(class_num: Int = 2, vec_dim: Int = 36): Module[Float] = {
     val model = Sequential[Float]()
     model.add(Recurrent[Float]()
       .add(LSTM[Float](36, 20)))
-    .add(Select[Float](2, -1))
-    .add(Linear[Float](20, class_num))
-    .add(LogSoftMax[Float]())
+      .add(Select[Float](2, -1))
+      .add(Linear[Float](20, class_num))
+      .add(LogSoftMax[Float]())
     model
   }
 
