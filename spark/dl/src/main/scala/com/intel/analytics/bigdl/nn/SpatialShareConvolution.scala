@@ -59,11 +59,14 @@ class SpatialShareConvolution[T: ClassTag](
       require(input.size(1) == nInputPlane)
       require(input.isContiguous())
       output.resize(Array(nOutputPlane, outputHeight, outputWidth))
+      if (_1x1) {
+        fInput.set(input)
+      }
       fInput.resize(Array(nGroup, kernelW * kernelH * nInputPlane / nGroup,
         outputHeight * outputWidth))
       var g = 0
       while (g < nGroup) {
-        updateOutputFrame(
+        super.updateOutputFrame(
           input.narrow(1, g * nInputPlane / nGroup + 1, nInputPlane / nGroup),
           output.narrow(1, g * nOutputPlane / nGroup + 1, nOutputPlane / nGroup),
           weightMM.select(1, g + 1),
@@ -137,11 +140,14 @@ class SpatialShareConvolution[T: ClassTag](
     if (input.nDimension() == 3) {
       require(gradOutput.isContiguous())
       val (outputWidth, outputHeight, _, _) = calcOutputWH(input)
+      if (_1x1) {
+        fGradInput.set(gradInput)
+      }
       fGradInput.resize(Array(nGroup,
         kernelW * kernelH * nInputPlane / nGroup, outputHeight * outputWidth))
       var g = 0
       while (g < nGroup) {
-        updateGradInputFrame(
+        super.updateGradInputFrame(
           gradInput.narrow(1, g * nInputPlane / nGroup + 1, nInputPlane / nGroup),
           gradOutput.narrow(1, g * nOutputPlane / nGroup + 1, nOutputPlane / nGroup),
           weightMM.select(1, g + 1).transpose(1, 2),
@@ -334,6 +340,68 @@ class SpatialShareConvolution[T: ClassTag](
   override def toString(): String = {
     s"${getPrintName}($nInputPlane -> $nOutputPlane, $kernelW x" +
       s" $kernelH, $strideW, $strideH, $padW, $padH)"
+  }
+
+
+  override protected def updateOutputFrame(input: Tensor[T], output: Tensor[T], weight: Tensor[T],
+                                  bias: Tensor[T], fInput: Tensor[T],
+                                  kW: Int, kH: Int, dW: Int, dH: Int, padW: Int, padH: Int,
+                                  nInputPlane: Int, inputWidth: Int, inputHeight: Int,
+                                  nOutputPlane: Int, outputWidth: Int, outputHeight: Int)(
+                                   implicit ev: TensorNumeric[T]): Unit = {
+
+    val output2d = output.view(nOutputPlane, outputHeight * outputWidth)
+    ev.getType() match {
+      case DoubleType =>
+        val before = System.nanoTime()
+        NNPrimitive.im2colDouble(fInput.asInstanceOf[Tensor[Double]],
+          input.asInstanceOf[Tensor[Double]], kW, kH, dW, dH, padW, padH, nInputPlane,
+          inputWidth, inputHeight, outputWidth, outputHeight)
+        im2colTime += System.nanoTime() - before
+      case FloatType =>
+        val before = System.nanoTime()
+        NNPrimitive.im2colFloat(fInput.asInstanceOf[Tensor[Float]],
+          input.asInstanceOf[Tensor[Float]], kW, kH, dW, dH, padW, padH, nInputPlane,
+          inputWidth, inputHeight, outputWidth, outputHeight)
+        im2colTime += System.nanoTime() - before
+      case _ => throw new UnsupportedOperationException(s"Only Float/Double supported")
+    }
+    output2d.addmm(ev.fromType[Int](0), output2d, ev.fromType[Int](1), weight, fInput)
+    output2d.addr(ev.fromType(1), bias, onesBias)
+  }
+
+  override protected def updateGradInputFrame(gradInput: Tensor[T], gradOutput: Tensor[T],
+                                     weight: Tensor[T], fgradInput: Tensor[T], kW: Int, kH: Int, dW: Int, dH: Int,
+                                     padW: Int, padH: Int)(implicit ev: TensorNumeric[T]): Unit = {
+    ev.getType() match {
+      case DoubleType =>
+        val gradOutput2d = Tensor(gradOutput.storage().asInstanceOf[Storage[Double]],
+          gradOutput.storageOffset(), Array(gradOutput.size(1),
+            gradOutput.size(2) * gradOutput.size(3)))
+        fgradInput.asInstanceOf[Tensor[Double]].addmm(0.0, fgradInput.asInstanceOf[Tensor[Double]],
+          1.0, weight.asInstanceOf[Tensor[Double]], gradOutput2d)
+        gradInput.asInstanceOf[Tensor[Double]].zero()
+        val before = System.nanoTime()
+        NNPrimitive.col2imDouble(fgradInput.asInstanceOf[Tensor[Double]],
+          gradInput.asInstanceOf[Tensor[Double]], kW, kH, dW, dH, padW, padH, gradInput.size(1),
+          gradInput.size(3),
+          gradInput.size(2), gradOutput.size(3), gradOutput.size(2))
+        col2imTime += System.nanoTime() - before
+      case FloatType =>
+        val gradOutput2d = Tensor(gradOutput.storage().asInstanceOf[Storage[Float]],
+          gradOutput.storageOffset(),
+          Array(gradOutput.size(1), gradOutput.size(2) * gradOutput.size(3)))
+        fgradInput.asInstanceOf[Tensor[Float]].addmm(0.0f, fgradInput.asInstanceOf[Tensor[Float]],
+          1.0f, weight.asInstanceOf[Tensor[Float]], gradOutput2d)
+        gradInput.asInstanceOf[Tensor[Float]].zero()
+        val before = System.nanoTime()
+        NNPrimitive.col2imFloat(fgradInput.asInstanceOf[Tensor[Float]],
+          gradInput.asInstanceOf[Tensor[Float]], kW, kH, dW, dH, padW, padH, gradInput.size(1),
+          gradInput.size(3),
+          gradInput.size(2), gradOutput.size(3), gradOutput.size(2))
+        col2imTime += System.nanoTime() - before
+      case _ => throw new UnsupportedOperationException(s"Only Float/Double supported")
+    }
   }
 
   @inline
