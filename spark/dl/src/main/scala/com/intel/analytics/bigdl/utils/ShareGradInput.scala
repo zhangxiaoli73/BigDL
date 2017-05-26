@@ -16,12 +16,13 @@
 
 package com.intel.analytics.bigdl.utils
 
-import com.intel.analytics.bigdl.{Module, _}
 import com.intel.analytics.bigdl.nn._
 import com.intel.analytics.bigdl.nn.abstractnn.Activity
-import com.intel.analytics.bigdl.tensor.{Tensor, Storage}
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
+import com.intel.analytics.bigdl.tensor.{Storage, Tensor}
+import com.intel.analytics.bigdl.{Module, _}
 import org.apache.log4j.Logger
+
 import scala.collection.mutable
 import scala.reflect.ClassTag
 
