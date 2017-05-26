@@ -14,16 +14,15 @@
  * limitations under the License.
  */
 
-package com.intel.analytics.bigdl.models
+package com.intel.analytics.bigdl.utils
 
-import com.intel.analytics.bigdl.Module
-import com.intel.analytics.bigdl._
+import com.intel.analytics.bigdl.{Module, _}
 import com.intel.analytics.bigdl.nn._
 import com.intel.analytics.bigdl.nn.abstractnn.Activity
+import com.intel.analytics.bigdl.tensor.{Tensor, Storage}
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
-import com.intel.analytics.bigdl.tensor.{Storage, Tensor}
 import org.apache.log4j.Logger
-
+import scala.collection.mutable
 import scala.reflect.ClassTag
 
 object ShareGradInput {
@@ -104,6 +103,39 @@ object ShareGradInput {
         }
       case _ => Unit
     }
+
+  }
+
+
+  def shareGradInputByName[T: ClassTag](model: Module[T])
+  (implicit ev: TensorNumeric[T]): Unit = {
+
+    def sharingKey(m: Module[T]) = m.getClass.getName
+
+    val cache = mutable.Map[Any, Storage[T]]()
+
+    def modelMatch(model: Module[T])(implicit ev: TensorNumeric[T]): Unit = {
+      model match {
+        case container: Container[Activity, Activity, T] =>
+          container.modules.foreach(m => {
+            if (m.gradInput.isInstanceOf[Tensor[_]] &&
+              !m.isInstanceOf[Container[Activity, Activity, T]] &&
+              !m.getClass.getName.endsWith("ConcatTable") &&
+              !m.getClass.getName.endsWith("SpatialConvolution")
+            ) {
+              val key = sharingKey(m)
+              if (!cache.contains(key)) {
+                cache.put(key, Storage(Array(ev.fromType[Double](1.0))))
+              }
+              m.gradInput = Tensor(cache.get(key).get, 1, Array(0))
+            }
+            modelMatch(m)
+          })
+        case _ => Unit
+      }
+    }
+
+    modelMatch(model)
 
   }
 }
