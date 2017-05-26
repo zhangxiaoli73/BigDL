@@ -465,4 +465,16 @@ object SpatialShareConvolution {
       strideW, strideH, padW, padH, nGroup,
       propagateBack)
   }
+
+  def apply[@specialized(Float, Double) T: ClassTag](
+        conv: SpatialConvolution[T])(implicit ev: TensorNumeric[T]): SpatialShareConvolution[T] = {
+    val sConv = new SpatialShareConvolution[T](conv.nInputPlane, conv.nOutputPlane,
+      conv.kernelW, conv.kernelH,
+      conv.strideW, conv.strideH,
+      conv.padW, conv.padH,
+      conv.nGroup, conv.propagateBack)
+    sConv.weight.copy(conv.weight)
+    sConv.bias.copy(conv.bias)
+    sConv
+  }
 }

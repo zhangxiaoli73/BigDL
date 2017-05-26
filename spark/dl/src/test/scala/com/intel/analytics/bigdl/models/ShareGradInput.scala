@@ -17,108 +17,93 @@
 package com.intel.analytics.bigdl.models
 
 import com.intel.analytics.bigdl.Module
-import com.intel.analytics.bigdl.models.resnet.ResNet.getClass
+import com.intel.analytics.bigdl._
 import com.intel.analytics.bigdl.nn._
 import com.intel.analytics.bigdl.nn.abstractnn.Activity
+import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
 import com.intel.analytics.bigdl.tensor.{Storage, Tensor}
-import com.intel.analytics.bigdl.utils.RandomGenerator.RNG
 import org.apache.log4j.Logger
 
-import scala.collection.mutable
+import scala.reflect.ClassTag
 
 object ShareGradInput {
   val logger = Logger.getLogger(getClass)
 
-  def shareGradInput(model: Module[Double]): Unit = {
-    logger.info("Share gradients in ResNet")
-
-    def sharingKey(m: Module[Double]) = m.getClass.getName
-
-    val cache = mutable.Map[Any, Storage[Double]]()
-    val packageName: String = model.getName().stripSuffix("Sequential")
-    cache.put("fInput", Storage(Array(1.0)))
-    cache.put("fGradInput", Storage(Array(1.0)))
-
-    var index = 0
-
-    def matchModels(model: Module[Double]): Unit = {
-      model match {
-        case container: Container[Activity, Activity, Double] =>
-          container.modules.foreach(m => {
-            if (m.gradInput.isInstanceOf[Tensor[_]] &&
-               !m.getClass.getName.endsWith("ConcatTable")
-//            && !m.getClass.getName.endsWith("Dropout")
-//            && !m.getClass.getName.endsWith("LogSoftMax")
-//            && !m.getClass.getName.endsWith("SpatialCrossMapLRN")
-//            && !m.getClass.getName.endsWith("SpatialAveragePooling")
-//            && !m.getClass.getName.endsWith("CAddTable")
-//            && !m.getClass.getName.endsWith("SpatialBatchNormalization")
-//            && !m.getClass.getName.endsWith("BatchNormalization")
-//            && !m.getClass.getName.endsWith("Linear")
-//            && !m.getClass.getName.endsWith("SpatialMaxPooling")
-//            && !m.getClass.getName.endsWith("View")
-//            && !m.getClass.getName.endsWith("ReLU")
-//            && !m.getClass.getName.endsWith("Concat")
-            && !m.getClass.getName.endsWith("SpatialConvolution")
-//              && !m.getClass.getName.endsWith("SpatialShareConvolution")
-//              && !m.getClass.getName.endsWith("SpatialShareConvolution")
-//              && !m.getClass.getName.endsWith("SpatialZeroPadding")
-            ) {
-              val key = sharingKey(m)
-              if (!cache.contains(key)) {
-                cache.put(key, Storage(Array(1.0)))
-              }
-
-              m.gradInput = Tensor(cache.get(key).get, 1, Array(0))
-            }
-            matchModels(m)
-          })
-        case concatTable if (concatTable.isInstanceOf[ConcatTable[Double]]) =>
-          if (!cache.contains(index % 2)) {
-            cache.put(index % 2, Storage(Array(1.0)))
-          }
-          concatTable.gradInput = Tensor[Double](cache.get(index % 2).get, 1, Array(0))
-          index = index + 1
-        case spatialShareConvolution
-          if (spatialShareConvolution.isInstanceOf[SpatialShareConvolution[Double]]) =>
-          val curModel = spatialShareConvolution.asInstanceOf[SpatialShareConvolution[Double]]
-          curModel.fInput = Tensor[Double](cache.get("fInput").get)
-          curModel.fGradInput = Tensor[Double](cache.get("fGradInput").get)
-        case _ => Unit
-      }
-    }
-
-    matchModels(model)
+  def shareConvolution[T: ClassTag](model: Module[T])(implicit ev: TensorNumeric[T]): Module[T] = {
+    val fInputCache = Tensor[T](1)
+    val fGradInputCache = Tensor[T](1)
+    shareConvolution(model, fInputCache, fGradInputCache)
+    model
   }
 
-  def modelInit(model: Module[Double]): Unit = {
-    logger.info("Initialize ResNet")
-    def initModules(model: Module[Double]): Unit = {
-      model match {
-        case container: Container[Activity, Activity, Double]
-        => container.modules.foreach(m => initModules(m))
-        case spatialShareConvolution
-          if (spatialShareConvolution.isInstanceOf[SpatialShareConvolution[Double]]) =>
-          val curModel = spatialShareConvolution.asInstanceOf[SpatialShareConvolution[Double]]
-          val n: Double = curModel.kernelW * curModel.kernelW * curModel.nOutputPlane
-          curModel.weight.apply1(_ => RNG.normal(0, Math.sqrt(2.0f / n)).toDouble)
-          curModel.bias.apply1(_ => 0.0f)
-        case spatialConvolution
-          if (spatialConvolution.isInstanceOf[SpatialConvolution[Double]]) =>
-          val curModel = spatialConvolution.asInstanceOf[SpatialConvolution[Double]]
-          val n: Double = curModel.kernelW * curModel.kernelW * curModel.nOutputPlane
-          curModel.weight.apply1(_ => RNG.normal(0, Math.sqrt(2.0f / n)).toDouble)
-          curModel.bias.apply1(_ => 0.0f)
-        case spatialBatchNormalization
-          if (spatialBatchNormalization.isInstanceOf[SpatialBatchNormalization[Double]]) =>
-          val curModel = spatialBatchNormalization.asInstanceOf[SpatialBatchNormalization[Double]]
-          curModel.weight.apply1(_ => 1.0f)
-          curModel.bias.apply1(_ => 0.0f)
-        case linear if (linear.isInstanceOf[Linear[Double]]) =>
-          linear.asInstanceOf[Linear[Double]].bias.apply1(_ => 0.0f)
-        case _ => Unit
-      }
+  def shareConvolution[T: ClassTag](
+        model: Module[T],
+        fInputCache: Tensor[T],
+        fGradInputCache: Tensor[T])(implicit ev: TensorNumeric[T]): Unit = {
+    model match {
+      case container: Container[Activity, Activity, T] =>
+        var i = 0
+        while (i < container.modules.length) {
+          val m = container.modules(i)
+          if (m.isInstanceOf[SpatialConvolution[T]]) {
+            val curModel = if (!m.isInstanceOf[SpatialShareConvolution[T]]) {
+              SpatialShareConvolution(
+                m.asInstanceOf[SpatialConvolution[T]])
+            } else {
+              m.asInstanceOf[SpatialShareConvolution[T]]
+            }
+            curModel.fInput.set(fInputCache)
+            curModel.fGradInput.set(fGradInputCache)
+            container.modules(i) = curModel
+          } else {
+            shareConvolution(m, fInputCache, fGradInputCache)
+          }
+          i += 1
+        }
+      case _ => Unit
     }
-    initModules(model)
+  }
+
+  def shareGradInput[T: ClassTag](model: Module[T])(implicit ev: TensorNumeric[T]): Module[T] = {
+    val gradInputCache1 = Tensor[T](1)
+    val gradInputCache2 = Tensor[T](1)
+    shareGradInput(model, gradInputCache1, gradInputCache2)
+    model
+  }
+
+  def shareGradInput[T: ClassTag](
+      model: Module[T],
+      gradInputCache1: Tensor[T],
+      gradInputCache2: Tensor[T])(implicit ev: TensorNumeric[T]): Unit = {
+    model match {
+      case container: Sequential[T] =>
+        var i = 0
+        while (i < container.modules.length) {
+          val m = container.modules(i)
+          if (
+             !m.isInstanceOf[SpatialConvolution[T]] &&
+            !m.isInstanceOf[Container[Activity, Activity, T]] &&
+            !m.isInstanceOf[SpatialAveragePooling[T]] &&
+            !m.isInstanceOf[SpatialMaxPooling[T]] &&
+            m.gradInput.isInstanceOf[Tensor[T]]) {
+            if (i % 2 == 1) {
+              m.gradInput.toTensor.set(gradInputCache1)
+            } else {
+              m.gradInput.toTensor.set(gradInputCache2)
+            }
+          }
+          shareGradInput(m, gradInputCache1, gradInputCache2)
+          i += 1
+        }
+      case container: Container[Activity, Activity, T] =>
+        var i = 0
+        while (i < container.modules.length) {
+          val m = container.modules(i)
+          shareGradInput(m, gradInputCache1, gradInputCache2)
+          i += 1
+        }
+      case _ => Unit
+    }
+
   }
 }
