@@ -20,7 +20,7 @@ import com.intel.analytics.bigdl._
 import com.intel.analytics.bigdl.tensor.{Tensor, TensorDataType}
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
 import com.intel.analytics.bigdl.utils._
-import com.intel.analytics.bigdl.nn.{InitializationMethod, Module, Zeros}
+import com.intel.analytics.bigdl.nn.{Graph, InitializationMethod, Module, Zeros}
 import com.intel.analytics.bigdl.utils.TorchObject.TYPE_MODULE
 import org.apache.commons.lang3.SerializationUtils
 import org.apache.spark.rdd.RDD
@@ -473,5 +473,11 @@ abstract class AbstractModule[A <: Activity: ClassTag, B <: Activity: ClassTag,
    batchSize: Option[Int] = None): Array[(ValidationResult, ValidationMethod[T])] = {
     Evaluator(this).test(dataset, vMethods, batchSize)
   }
+
+  def toGraphNodes(inputNodes: Array[ModuleNode[T]]): Array[ModuleNode[T]] = {
+    this.apply(inputNodes: _*)
+  }
+
+
 }
 
