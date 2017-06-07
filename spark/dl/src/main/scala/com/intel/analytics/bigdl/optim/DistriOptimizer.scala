@@ -256,7 +256,8 @@ object DistriOptimizer {
       dropModelNumBatch += (driverSubModelNum - finishedModelNum)
       if (dropPercentage == 0 || finishedModelNum >= driverSubModelNum * (1-maxDropPercentage)) {
         val value = lossSum.value / finishedModelNum
-        models.mapPartitions(modelIter => {
+        val tmpTime = models.mapPartitions(modelIter => {
+          var time = System.nanoTime()
           val modelCache = modelIter.next()
           parameters.aggregrateGradientPartition()
           parameters.gradientPartition.div(ev.fromType(finishedModelNum))
@@ -266,8 +267,12 @@ object DistriOptimizer {
             parameters.weightPartition)
 
           parameters.sendWeightPartition()
-          Iterator.empty
-        }).count()
+          val tmp = (System.nanoTime() - time)/1e9
+          Iterator(tmp)
+        }).sum()
+        val tt = tmpTime.take(1)
+
+        println("optimMethod weight: " + tmpTime)
 
         accumulateCount += recordsNum.value
         val end = System.nanoTime()
