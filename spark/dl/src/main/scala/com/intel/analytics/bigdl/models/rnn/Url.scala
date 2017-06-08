@@ -47,37 +47,18 @@ object Url {
     } else {
       32 * 28 * 4
     }
-    val totalLength = 2560
-    val node = 4
+    val totalLength = 13568
     var i = 0
-    val times = if (args.length > 2) {
-      args(2).toInt
-    } else {
-      200
-    }
-
-    val data = Array.tabulate(totalLength)(_ => Sample[Float]())
-    val featureSize = Array(times, 36)
-    val labelSize = Array(1)
-    val label = Array(2.0f)
-    while (i < totalLength) {
-      val feature = Tensor[Float](times, 36).apply1(e => Random.nextFloat())
-      data(i).set(feature.storage().array(), label, featureSize, labelSize)
-      i += 1
-    }
-
-    val max_epoch = 20
-    val state = T("learningRate" -> 0.01,
-      "learningRateDecay" -> 0.0002)
-
-    val trainSet = sc.parallelize(data)
     var model = if (args.length > 1) {
       if (args(1) == "cnn") {
         println("use buildCNN")
         buildCNN()
-      } else if (args(1) == "rnn") {
+      } else if (args(1) == "rnn1") {
         println("use buildRNN")
         buildRNN()
+      } else if (args(1) == "rnn2") {
+        println("use buildRNN")
+        buildRNN(2, 20)
       } else if (args(1) == "without") {
         buildWithout()
       } else if (args(1) == "linearRepeat") {
@@ -96,9 +77,31 @@ object Url {
       }
     } else {
       println("use lstm")
-      buildModel()
+      buildModel(2, 20)
     }
 
+    val inputSize = 20
+    val times = if (args.length > 2) {
+      args(2).toInt
+    } else {
+      200
+    }
+
+    val data = Array.tabulate(totalLength)(_ => Sample[Float]())
+    val featureSize = Array(times, inputSize)
+    val labelSize = Array(1)
+    val label = Array(2.0f)
+    while (i < totalLength) {
+      val feature = Tensor[Float](times, inputSize).apply1(e => Random.nextFloat())
+      data(i).set(feature.storage().array(), label, featureSize, labelSize)
+      i += 1
+    }
+
+    val max_epoch = 20
+    val state = T("learningRate" -> 0.01,
+      "learningRateDecay" -> 0.0002)
+
+    val trainSet = sc.parallelize(data, Engine.nodeNumber())
     val optimizer = Optimizer(
       model = model,
       sampleRDD = trainSet,
@@ -112,38 +115,38 @@ object Url {
       .optimize()
   }
 
-  def buildModel(class_num: Int = 2, vec_dim: Int = 36): Module[Float] = {
+  def buildModel(class_num: Int = 2, vec_dim: Int = 20): Module[Float] = {
     val model = Sequential[Float]()
     model.add(Recurrent[Float]()
-      .add(LSTM[Float](36, 20)))
+      .add(LSTM[Float](vec_dim, 20)))
     .add(Select[Float](2, -1))
     .add(Linear[Float](20, class_num))
     .add(LogSoftMax[Float]())
     model
   }
 
-  def buildRNN(class_num: Int = 2, vec_dim: Int = 36): Module[Float] = {
+  def buildRNN(class_num: Int = 2, vec_dim: Int = 20): Module[Float] = {
     val model = Sequential[Float]()
     model.add(Recurrent[Float]()
-      .add(RnnCell[Float](36, 20, Tanh())))
+      .add(RnnCell[Float](vec_dim, 20, Tanh())))
       .add(Select[Float](2, -1))
       .add(Linear[Float](20, class_num))
       .add(LogSoftMax[Float]())
     model
   }
 
-  def buildWithout(class_num: Int = 2, vec_dim: Int = 36): Module[Float] = {
+  def buildWithout(class_num: Int = 2, vec_dim: Int = 20): Module[Float] = {
     val model = Sequential[Float]()
-    model.add(Reshape[Float](Array(200*36)))
-      .add(Linear[Float](200 * 36, class_num))
+    model.add(Reshape[Float](Array(200*vec_dim)))
+      .add(Linear[Float](200 * vec_dim, class_num))
       .add(LogSoftMax[Float]())
     model
   }
 
   def buildCNN(class_num: Int = 2): Module[Float] = {
     val model = Sequential[Float]()
-    model.add(Reshape[Float](Array(36, 1, 200)))
-    model.add(SpatialConvolution(36, 128, 5, 1))
+    model.add(Reshape[Float](Array(20, 1, 200)))
+    model.add(SpatialConvolution(20, 128, 5, 1))
     model.add(ReLU())
     model.add(SpatialMaxPooling(5, 1, 5, 1))
     model.add(SpatialConvolution(128, 128, 5, 1))

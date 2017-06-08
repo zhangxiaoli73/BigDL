@@ -269,10 +269,16 @@ object DistriOptimizer {
           parameters.sendWeightPartition()
           val tmp = (System.nanoTime() - time)/1e9
           Iterator(tmp)
-        }).sum()
-        val tt = tmpTime.take(1)
+        })
 
-        println("optimMethod weight: " + tmpTime)
+        val tt = tmpTime.take(100)
+        var mm = 0
+        var ss = ""
+        while (mm < tt.length) {
+          ss = ss + " " + tt(mm).toString
+          mm += 1
+        }
+        println("optimMethod weight: " + ss)
 
         accumulateCount += recordsNum.value
         val end = System.nanoTime()
@@ -286,7 +292,8 @@ object DistriOptimizer {
         logger.info(s"${_header} Train ${recordsNum.value} in ${(end - start) / 1e9}seconds. " +
           s"Throughput is ${driverState("Throughput")} records/second. Loss is ${
             driverState("Loss")}. ${optimMethod.getHyperParameter()}")
-        logger.debug("\n" + metrics.summary())
+        // logger.debug("\n" + metrics.summary())
+        logger.info("\n" + metrics.summary())
         logger.debug("Dropped modules: " + (driverSubModelNum - finishedModelNum))
         lossArray = new Array[Double](_subModelNumber)
 
