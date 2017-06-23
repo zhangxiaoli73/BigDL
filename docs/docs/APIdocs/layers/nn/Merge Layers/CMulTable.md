@@ -1,15 +1,15 @@
-## CSubTable ##
+## CMulTable ##
 
 **Scala:**
 ```scala
-val model = CSubTable[T]()
+val model = CMulTable[T]()
 ```
 **Python:**
 ```python
-model = CSubTable()
+model = CMulTable()
 ```
 
-Takes a table with two Tensor and returns the component-wise subtraction between them.
+Takes a sequence of Tensors and outputs the multiplication of all of them.
 
 **Scala example:**
 ```scala
@@ -17,7 +17,7 @@ import com.intel.analytics.bigdl.nn._
 import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.utils.T
 
-val model = CSubTable[Float]()
+val model = CMulTable[Float]()
 
 val input1 = Tensor[Float](5).rand()
 val input2 = Tensor[Float](5).rand()
@@ -27,17 +27,17 @@ val output = model.forward(input)
 output is
 ```
 output: com.intel.analytics.bigdl.tensor.Tensor[Float] = 
-0.18143779
--0.24954873
--0.42380047
-0.083815336
--0.10043772
+0.45114923
+0.04661638
+0.31990767
+0.24304615
+0.56568104
 [com.intel.analytics.bigdl.tensor.DenseTensor of size 5]
 ```
 
 **Python example:**
 ```python
-model = CSubTable()
+model = CMulTable()
 input1 = np.random.randn(5)
 input2 = np.random.randn(5)
 input = [input1, input2]
@@ -45,5 +45,5 @@ output = model.forward(input)
 ```
 output is
 ```
-array([-1.15087152,  0.6169951 ,  2.41840839,  1.34374809,  1.39436531], dtype=float32)
+array([ 3.83480358, -1.08372796,  0.08163583, -1.92096496,  0.39564416], dtype=float32)
 ```

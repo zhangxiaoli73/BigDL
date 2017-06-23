@@ -2,14 +2,14 @@
 
 **Scala:**
 ```scala
-val criterion = AbsCriterion[Float]()
+val criterion = AbsCriterion[T]()
 ```
 **Python:**
 ```python
 criterion = AbsCriterion()
 ```
 
-measures the mean absolute value of the element-wise difference between input
+Measures the mean absolute value of the element-wise difference between input and target
 
 **Scala example:**
 ```scala

@@ -9,7 +9,7 @@ val model = LogSoftMax[T]()
 model = LogSoftMax()
 ```
 
-The [[LogSoftMax]] module applies a LogSoftMax transformation to the input data
+The LogSoftMax module applies a LogSoftMax transformation to the input data
 which is defined as:
 ```
 f_i(x) = log(1 / a exp(x_i))

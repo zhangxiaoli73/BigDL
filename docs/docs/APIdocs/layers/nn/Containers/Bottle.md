@@ -17,7 +17,6 @@ import com.intel.analytics.bigdl.nn._
 import com.intel.analytics.bigdl.tensor.Tensor
 
 val model = Bottle[Float](Linear[Float](10, 2), 2, 2)
-model.add(Linear(10, 2))
 val input = Tensor[Float](4, 5, 10).rand()
 val output = model.forward(input)
 ```
@@ -58,7 +57,6 @@ output: com.intel.analytics.bigdl.tensor.Tensor[Float] =
 **Python example:**
 ```python
 model = Bottle(Linear(10, 2), 2, 2)
-model.add(Linear(10, 2))
 
 input = np.random.randn(4, 5, 10)
 output = model.forward(input)
