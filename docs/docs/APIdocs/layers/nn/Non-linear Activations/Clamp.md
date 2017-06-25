@@ -2,7 +2,7 @@
 
 **Scala:**
 ```scala
-val model = Clamp[T](min, max)
+val model = Clamp(min, max)
 ```
 **Python:**
 ```python
@@ -15,25 +15,36 @@ A kind of hard tanh activition function with integer min and max
 
 **Scala example:**
 ```scala
+import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric.NumericFloat
 import com.intel.analytics.bigdl.nn._
 import com.intel.analytics.bigdl.tensor.Tensor
 
-val model = Clamp[Float](-10, 10)
-val input = Tensor[Float](2, 2, 2).rand()
+val model = Clamp(-10, 10)
+val input = Tensor(2, 2, 2).rand()
 val output = model.forward(input)
-```
-output is
-```
-output: com.intel.analytics.bigdl.tensor.Tensor[Float] = 
+
+scala> print(input)
 (1,.,.) =
-0.19594982	0.1558478	
-0.23255411	0.8538258	
+0.95979714	0.27654588	
+0.35592428	0.49355772	
 
 (2,.,.) =
-0.76815903	0.0132634975	
-0.33081427	0.5836359	
+0.2624511	0.78833413	
+0.967827	0.59160346	
+
+[com.intel.analytics.bigdl.tensor.DenseTensor$mcF$sp of size 2x2x2]
+
+scala> print(output)
+(1,.,.) =
+0.95979714	0.27654588	
+0.35592428	0.49355772	
+
+(2,.,.) =
+0.2624511	0.78833413	
+0.967827	0.59160346	
 
 [com.intel.analytics.bigdl.tensor.DenseTensor of size 2x2x2]
+
 ```
 
 **Python example:**
@@ -41,12 +52,18 @@ output: com.intel.analytics.bigdl.tensor.Tensor[Float] =
 model = Clamp(-10, 10)
 input = np.random.randn(2, 2, 2)
 output = model.forward(input)
-```
-output is
-```
-array([[[ 0.01126319,  0.02390726],
-        [-1.15782905, -0.36142176]],
 
-       [[-2.31166029,  1.21416366],
-        [-0.28188094, -0.24606584]]], dtype=float32)
+>>> print(input)
+[[[-0.66763755  1.15392566]
+  [-2.10846048  0.46931736]]
+
+ [[ 1.74174638 -1.04323311]
+  [-1.91858729  0.12624046]]]
+  
+>>> print(output)
+[[[-0.66763753  1.15392566]
+  [-2.10846043  0.46931735]]
+
+ [[ 1.74174643 -1.04323316]
+  [-1.91858733  0.12624046]]
 ```

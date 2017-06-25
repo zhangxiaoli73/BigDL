@@ -2,7 +2,7 @@
 
 **Scala:**
 ```scala
-val model = L1HingeEmbeddingCriterion[T](margin)
+val model = L1HingeEmbeddingCriterion(margin)
 ```
 **Python:**
 ```python
@@ -23,32 +23,31 @@ The margin has a default value of 1, or can be set in the constructor.
 import com.intel.analytics.bigdl.nn._
 import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.utils.T
+import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric.NumericFloat
 
-val model = L1HingeEmbeddingCriterion[Float](0.6)
-val input1 = Tensor[Float](2).rand()
-val input2 = Tensor[Float](2).rand()
+val model = L1HingeEmbeddingCriterion(0.6)
+val input1 = Tensor(T(1.0f, -0.1f))
+val input2 = Tensor(T(2.0f, -0.2f))
 val input = T(input1, input2)
-val target = Tensor[Float](1)
+val target = Tensor(1)
 target(Array(1)) = 1.0f
 
 val output = model.forward(input, target)
-```
-output is
-```
-output: Float = 0.84714425
+
+scala> print(output)
+1.1
 ```
 
 **Python example:**
 ```python
 model = L1HingeEmbeddingCriterion(0.6)
-input1 = np.random.randn(2)
-input2 = np.random.randn(2)
+input1 = np.array(1.0, -0.1)
+input2 = np.array(2.0, -0.2)
 input = [input1, input2]
 target = np.array([1.0])
 
 output = model.forward(input, target)
-```
-output is
-```
-1.3705695
+
+>>> print output
+1.1
 ```

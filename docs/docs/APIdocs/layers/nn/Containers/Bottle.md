@@ -2,7 +2,7 @@
 
 **Scala:**
 ```scala
-val model = Bottle[T](module, nInputDim, nOutputDim)
+val model = Bottle(module, nInputDim, nOutputDim)
 ```
 **Python:**
 ```python
@@ -15,75 +15,61 @@ Bottle allows varying dimensionality input to be forwarded through any module th
 ```scala
 import com.intel.analytics.bigdl.nn._
 import com.intel.analytics.bigdl.tensor.Tensor
+import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric.NumericFloat
 
-val model = Bottle[Float](Linear[Float](10, 2), 2, 2)
-val input = Tensor[Float](4, 5, 10).rand()
-val output = model.forward(input)
-```
-output is
-```
-output: com.intel.analytics.bigdl.tensor.Tensor[Float] = 
+val model = Bottle(Linear[Float](3, 2), 2, 2)
+val input = Tensor(2, 3, 3).rand()
+
+scala> print(input)
 (1,.,.) =
-0.6945294	-0.27953064	
-0.6268389	-0.7294409	
-0.69834805	-0.42664433	
-0.70373046	-0.4026499	
-0.66308194	-0.6336497	
+0.7843752	0.17286697	0.20767091	
+0.8594811	0.9100018	0.8448141	
+0.7683892	0.36661968	0.76637685	
 
 (2,.,.) =
-0.76823425	-0.57179654	
-0.54741347	-0.5171715	
-0.6170485	-0.48814133	
-0.89729875	-0.5363091	
-0.9383141	-0.63053	
+0.7163263	0.083962396	0.81222403	
+0.7947034	0.09976136	0.114404656	
+0.14890474	0.43289232	0.1489096	
 
-(3,.,.) =
-0.6869495	-0.6013391	
-0.72504604	-0.44045419	
-0.84359026	-0.51410943	
-0.7153435	-0.783236	
-0.8234116	-0.6176827	
+[com.intel.analytics.bigdl.tensor.DenseTensor$mcF$sp of size 2x3x3]	
 
-(4,.,.) =
-0.8869035	-0.51233184	
-0.65199244	-0.48857856	
-0.7880871	-0.7456757	
-0.8663832	-0.22757408	
-0.9411352	-0.8008182	
+val output = model.forward(input)
 
-[com.intel.analytics.bigdl.tensor.DenseTensor of size 4x5x2]
+scala> print(output)
+(1,.,.) =
+-0.31146684	0.40719786	
+-0.51778656	0.58715886	
+-0.51676923	0.4027511	
+
+(2,.,.) =
+-0.5498678	0.29658738	
+-0.280177	0.39901164	
+-0.2387946	0.24809375	
+
+[com.intel.analytics.bigdl.tensor.DenseTensor of size 2x3x2]
 ```
 
 **Python example:**
 ```python
-model = Bottle(Linear(10, 2), 2, 2)
+model = Bottle(Linear(3, 2), 2, 2)
 
-input = np.random.randn(4, 5, 10)
+input = np.random.randn(2, 3, 3)
 output = model.forward(input)
-```
-output is
-```
-array([[[-0.27106649,  0.14462236],
-        [-0.28050202,  0.52495712],
-        [-0.3351084 ,  1.02605069],
-        [-0.18306208,  0.17746207],
-        [ 0.62624407, -0.01642358]],
 
-       [[-0.49295783,  0.58246708],
-        [ 0.25713843,  0.69936216],
-        [ 0.42159486,  0.89629161],
-        [-1.32501745, -0.010911  ],
-        [-0.06844211,  0.38141996]],
+>>> print(input)
+[[[ 0.42370589 -1.7938942   0.56666373]
+  [-1.78501381  0.55676471 -0.50150367]
+  [-1.59262182  0.82079469  1.1873599 ]]
 
-       [[-0.60752791, -0.01978694],
-        [ 0.58144319,  1.03134239],
-        [ 0.48065221, -0.86170584],
-        [-0.51053059,  1.06431556],
-        [ 0.46424878, -0.29169011]],
+ [[ 0.95799792 -0.71447244  1.05344083]
+  [-0.07838376 -0.88780484 -1.80491177]
+  [ 0.99996222  1.39876002 -0.16326094]]]
+>>> print(output)
+[[[ 0.26298434  0.74947536]
+  [-1.24375117 -0.33148435]
+  [-1.35218966  0.17042145]]
 
-       [[-0.00934486,  0.68141061],
-        [ 0.15537724, -0.09281653],
-        [-0.23529468,  0.78246176],
-        [-0.348032  , -0.40045774],
-        [-1.087569  ,  1.19862282]]], dtype=float32)
+ [[ 0.08041853  0.91245329]
+  [-0.08317742 -0.13909879]
+  [-0.52287608  0.3667658 ]]]
 ```

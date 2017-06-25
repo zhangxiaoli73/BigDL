@@ -2,7 +2,7 @@
 
 **Scala:**
 ```scala
-val model = CSubTable[T]()
+val model = CSubTable()
 ```
 **Python:**
 ```python
@@ -13,25 +13,38 @@ Takes a sequence with two Tensor and returns the component-wise subtraction betw
 
 **Scala example:**
 ```scala
+import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric.NumericFloat
 import com.intel.analytics.bigdl.nn._
 import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.utils.T
 
-val model = CSubTable[Float]()
-
-val input1 = Tensor[Float](5).rand()
-val input2 = Tensor[Float](5).rand()
+val model = CSubTable()
+val input1 = Tensor(5).rand()
+val input2 = Tensor(5).rand()
 val input = T(input1, input2)
 val output = model.forward(input)
-```
-output is
-```
-output: com.intel.analytics.bigdl.tensor.Tensor[Float] = 
-0.18143779
--0.24954873
--0.42380047
-0.083815336
--0.10043772
+
+scala> print(input)
+ {
+	2: 0.29122078
+	   0.17347474
+	   0.14127742
+	   0.2249051
+	   0.12171601
+	   [com.intel.analytics.bigdl.tensor.DenseTensor$mcF$sp of size 5]
+	1: 0.6202152
+	   0.70417005
+	   0.21334995
+	   0.05191216
+	   0.4209623
+	   [com.intel.analytics.bigdl.tensor.DenseTensor$mcF$sp of size 5]
+
+scala> print(output)
+0.3289944
+0.5306953
+0.072072536
+-0.17299294
+0.2992463
 [com.intel.analytics.bigdl.tensor.DenseTensor of size 5]
 ```
 
