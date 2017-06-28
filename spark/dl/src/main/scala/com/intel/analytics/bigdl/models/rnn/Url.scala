@@ -85,9 +85,6 @@ object Url {
         buildModelNew()
       } else if (args(1) == "without") {
         buildWithout()
-      } else if (args(1) == "buildLinear") {
-        println("use buildLinear")
-        buildLinear()
       } else if (args(1) == "cnnrnn") {
         println("use cnnrnn")
         buildCNNAndRNN()
@@ -102,8 +99,8 @@ object Url {
         subModel.add(LogSoftMax[Float]())
         subModel
       } else {
-        println("use buildLinear")
-        buildLinear()
+        println("use buildRNN")
+        buildRNN()
       }
     } else {
       println("use lstm")
@@ -163,6 +160,7 @@ object Url {
     model
   }
 
+  /*
   def buildLinear(class_num: Int = 2, vec_dim: Int = 36): Module[Float] = {
     val model = Sequential[Float]()
     model.add(Recurrent[Float]()
@@ -172,6 +170,7 @@ object Url {
       .add(LogSoftMax[Float]())
     model
   }
+  */
 
   def buildWithout(class_num: Int = 2, vec_dim: Int = 36): Module[Float] = {
     val model = Sequential[Float]()
@@ -194,8 +193,8 @@ object Url {
     model.add(Linear(128 * 7, 200 * 36))
 
     model.add(Reshape(Array(200, 36)))
-    model.add(Recurrent[Float]()
-      .add(LinearCell(36, 36)))
+    // model.add(Recurrent[Float]()
+    //  .add(LinearCell(36, 36)))
     model.add(Reshape(Array(200 * 36)))
     model.add(Linear(200 * 36, 100))
 
