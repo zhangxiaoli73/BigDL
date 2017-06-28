@@ -58,7 +58,7 @@ object Url {
         buildRNN()
       } else if (args(1) == "rnn2") {
         println("use buildRNN 222")
-        buildRNN2(2, 20)
+        buildRNN2()
       } else if (args(1) == "without") {
         buildWithout()
       } else if (args(1) == "linearRepeat") {
@@ -80,10 +80,10 @@ object Url {
       }
     } else {
       println("use lstm 111")
-      buildModel(2, 20)
+      buildModel()
     }
 
-    val inputSize = 20
+    val inputSize = 36
     val times = if (args.length > 2) {
       args(2).toInt
     } else {
@@ -118,7 +118,7 @@ object Url {
       .optimize()
   }
 
-  def buildModel(class_num: Int = 2, vec_dim: Int = 20): Module[Float] = {
+  def buildModel(class_num: Int = 2, vec_dim: Int = 36): Module[Float] = {
     val model = Sequential[Float]()
     model.add(Recurrent[Float]()
       .add(LSTM[Float](vec_dim, 20)))
@@ -138,7 +138,7 @@ object Url {
     model
   }
 
-  def buildRNN(class_num: Int = 2, vec_dim: Int = 20): Module[Float] = {
+  def buildRNN(class_num: Int = 2, vec_dim: Int = 36): Module[Float] = {
     val model = Sequential[Float]()
     model.add(Recurrent[Float]()
       .add(RnnCell[Float](vec_dim, 20, Tanh())))
