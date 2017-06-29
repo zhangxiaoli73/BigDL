@@ -56,9 +56,6 @@ object Url {
       } else if (args(1) == "rnn1") {
         println("use buildRNN 111")
         buildRNN()
-      } else if (args(1) == "rnn2") {
-        println("use buildRNN 222")
-        buildRNN2()
       } else if (args(1) == "without") {
         buildWithout()
       } else if (args(1) == "linearRepeat") {
@@ -71,9 +68,6 @@ object Url {
         subModel.add(Select[Float](2, -1))
         subModel.add(LogSoftMax[Float]())
         subModel
-      } else if (args(1) == "lstm2") {
-        println("use lstm 222")
-        buildModel2()
       } else {
         println("use lstm 111")
         buildModel()
@@ -128,30 +122,10 @@ object Url {
     model
   }
 
-  def buildModel2(class_num: Int = 2, vec_dim: Int = 20): Module[Float] = {
-    val model = Sequential[Float]()
-    model.add(Recurrent[Float]()
-      .add(LSTMNew[Float](vec_dim, 20)))
-      .add(Select[Float](2, -1))
-      .add(Linear[Float](20, class_num))
-      .add(LogSoftMax[Float]())
-    model
-  }
-
   def buildRNN(class_num: Int = 2, vec_dim: Int = 20): Module[Float] = {
     val model = Sequential[Float]()
     model.add(Recurrent[Float]()
       .add(RnnCell[Float](vec_dim, 20, Tanh())))
-      .add(Select[Float](2, -1))
-      .add(Linear[Float](20, class_num))
-      .add(LogSoftMax[Float]())
-    model
-  }
-
-  def buildRNN2(class_num: Int = 2, vec_dim: Int = 20): Module[Float] = {
-    val model = Sequential[Float]()
-    model.add(Recurrent[Float]()
-      .add(RnnCell2[Float](vec_dim, 20, Tanh())))
       .add(Select[Float](2, -1))
       .add(Linear[Float](20, class_num))
       .add(LogSoftMax[Float]())
