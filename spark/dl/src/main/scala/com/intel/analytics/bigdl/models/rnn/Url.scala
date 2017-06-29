@@ -83,7 +83,7 @@ object Url {
       buildModel()
     }
 
-    val inputSize = 36
+    val inputSize = 20
     val times = if (args.length > 2) {
       args(2).toInt
     } else {
@@ -118,7 +118,7 @@ object Url {
       .optimize()
   }
 
-  def buildModel(class_num: Int = 2, vec_dim: Int = 36): Module[Float] = {
+  def buildModel(class_num: Int = 2, vec_dim: Int = 20): Module[Float] = {
     val model = Sequential[Float]()
     model.add(Recurrent[Float]()
       .add(LSTM[Float](vec_dim, 20)))
@@ -138,7 +138,7 @@ object Url {
     model
   }
 
-  def buildRNN(class_num: Int = 2, vec_dim: Int = 36): Module[Float] = {
+  def buildRNN(class_num: Int = 2, vec_dim: Int = 20): Module[Float] = {
     val model = Sequential[Float]()
     model.add(Recurrent[Float]()
       .add(RnnCell[Float](vec_dim, 20, Tanh())))
