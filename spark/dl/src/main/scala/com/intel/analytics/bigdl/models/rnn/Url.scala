@@ -49,15 +49,22 @@ object Url {
     }
     val totalLength = 13568
     var i = 0
+    val inputSize = if (args.length > 2) {
+      args(2).toInt
+    } else {
+      36
+    }
+    val class_num = 2
+
     var model = if (args.length > 1) {
       if (args(1) == "cnn") {
         println("use buildCNN")
-        buildCNN()
+        buildCNN(class_num)
       } else if (args(1) == "rnn1") {
         println("use buildRNN 111")
-        buildRNN()
+        buildRNN(class_num, inputSize)
       } else if (args(1) == "without") {
-        buildWithout()
+        buildWithout(class_num, inputSize)
       } else if (args(1) == "linearRepeat") {
         println("linear repeat")
         val subModel = Sequential[Float]()
@@ -70,20 +77,15 @@ object Url {
         subModel
       } else {
         println("use lstm 111")
-        buildModel()
+        buildModel(class_num, inputSize)
       }
     } else {
       println("use lstm 111")
-      buildModel()
+      buildModel(class_num, inputSize)
     }
 
-    val inputSize = 20
-    val times = if (args.length > 2) {
-      args(2).toInt
-    } else {
-      200
-    }
 
+    val times = 200
     val data = Array.tabulate(totalLength)(_ => Sample[Float]())
     val featureSize = Array(times, inputSize)
     val labelSize = Array(1)
@@ -112,7 +114,7 @@ object Url {
       .optimize()
   }
 
-  def buildModel(class_num: Int = 2, vec_dim: Int = 20): Module[Float] = {
+  def buildModel(class_num: Int = 2, vec_dim: Int = 36): Module[Float] = {
     val model = Sequential[Float]()
     model.add(Recurrent[Float]()
       .add(LSTM[Float](vec_dim, 20)))
@@ -122,7 +124,7 @@ object Url {
     model
   }
 
-  def buildRNN(class_num: Int = 2, vec_dim: Int = 20): Module[Float] = {
+  def buildRNN(class_num: Int = 2, vec_dim: Int = 36): Module[Float] = {
     val model = Sequential[Float]()
     model.add(Recurrent[Float]()
       .add(RnnCell[Float](vec_dim, 20, Tanh())))
