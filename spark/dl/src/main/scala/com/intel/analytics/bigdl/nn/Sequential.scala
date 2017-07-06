@@ -149,12 +149,19 @@ class Sequential[T: ClassTag]
       }$line}"
   }
 
-  override def toGraphNodes(inputNodes: Array[ModuleNode[T]]): Array[ModuleNode[T]] = {
-    var curNode = inputNodes
+  override def toGraphNodes(startEnd: Tuple2[Array[ModuleNode[T]], Array[ModuleNode[T]]]):
+  Tuple2[Array[ModuleNode[T]], Array[ModuleNode[T]]] = {
+    var startNodes = startEnd._1
+    var curNodes = startEnd._2
+    var curTuple: Tuple2[Array[ModuleNode[T]], Array[ModuleNode[T]]] = null
     for (i <- 0 to modules.size - 1) {
-        curNode = modules(i).toGraphNodes(curNode)
+      curTuple = modules(i).toGraphNodes((startNodes, curNodes))
+      curNodes = curTuple._2
+
+      // When startNodes is intially empty
+      if(startNodes.isEmpty) startNodes = curTuple._1
     }
-    Array(this.apply(curNode: _*))
+    curTuple
   }
 }
 

@@ -474,10 +474,29 @@ abstract class AbstractModule[A <: Activity: ClassTag, B <: Activity: ClassTag,
     Evaluator(this).test(dataset, vMethods, batchSize)
   }
 
-  def toGraphNodes(inputNodes: Array[ModuleNode[T]]): Array[ModuleNode[T]] = {
-    this.apply(inputNodes: _*)
+  /**
+   * Connect the current module to the current Graph with start nodes and end nodes
+   * @param startEnd: current start nodes and end nodes, they are both empty or both not empty
+   * @return
+   */
+  def toGraphNodes(startEnd: Tuple2[Array[ModuleNode[T]], Array[ModuleNode[T]]]):
+    Tuple2[Array[ModuleNode[T]], Array[ModuleNode[T]]] = {
+    val startNodes = startEnd._1
+    val endNodes = startEnd._2
+    val curNodes = Array(this.apply(endNodes: _*))
+    if (startNodes.isEmpty && endNodes.isEmpty) {
+      (curNodes, curNodes)
+    } else if (startNodes.nonEmpty && endNodes.nonEmpty) {
+      (startNodes, curNodes)
+    } else {
+      throw new Error(s"startNodes and endNodes should be both empty or both non-empty")
+    }
   }
 
+  def toGraph(): Module[T] = {
+    val startEnd = this.toGraphNodes((Array[ModuleNode[T]](), Array[ModuleNode[T]]()))
+    Graph(startEnd._1, startEnd._2)
+  }
 
 }
 

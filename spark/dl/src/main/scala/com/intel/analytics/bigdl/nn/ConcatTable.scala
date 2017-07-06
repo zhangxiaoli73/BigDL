@@ -242,12 +242,18 @@ class ConcatTable[T : ClassTag]
     str
   }
 
-  override def toGraphNodes(inputNodes: Array[ModuleNode[T]]): Array[ModuleNode[T]] = {
+  override def toGraphNodes(startEnd: Tuple2[Array[ModuleNode[T]], Array[ModuleNode[T]]]):
+  Tuple2[Array[ModuleNode[T]], Array[ModuleNode[T]]] = {
     val outputs = ArrayBuffer[ModuleNode[T]]()
+    var outputTuple: Tuple2[Array[ModuleNode[T]], Array[ModuleNode[T]]] = null
+    var startNodes = startEnd._1
+    val endNodes = startEnd._2
     for (i <- 0 to modules.size - 1) {
-      outputs ++= modules(i).toGraphNodes(inputNodes)
+      outputTuple = modules(i).toGraphNodes((startNodes, endNodes))
+      outputs ++= outputTuple._2
     }
-    Array(this.apply(outputs: _*))
+    if (startNodes.isEmpty) startNodes = outputs.toArray
+    (startNodes, outputs.toArray)
   }
 
 }
