@@ -15,6 +15,7 @@
  */
 package com.intel.analytics.bigdl.nn
 
+import com.intel.analytics.bigdl.Module
 import com.intel.analytics.bigdl.nn.Graph.ModuleNode
 import com.intel.analytics.bigdl.nn.abstractnn.{AbstractModule, Activity, TensorModule}
 import com.intel.analytics.bigdl.nn.tf.WithoutInput
@@ -174,6 +175,8 @@ class Graph[T: ClassTag](val inputs : Seq[ModuleNode[T]],
     throw new IllegalArgumentException("Graph: Please don't use add method in Graph container. " +
       "A graph container should not be changed after it is constructed")
   }
+
+  override def toGraph(): Module[T] = this
 
   // Add a dummy output node, to get an one end graph. So the nodes that are not dependent by
   // the outputs will be excluded

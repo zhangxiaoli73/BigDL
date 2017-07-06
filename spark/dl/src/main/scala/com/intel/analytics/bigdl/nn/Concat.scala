@@ -338,7 +338,7 @@ class Concat[T: ClassTag](val dimension: Int)(
       outputs ++= outputTuple._2
     }
     if (startNodes.isEmpty) startNodes = outputs.toArray
-    (startNodes, Array(JoinTable(dimension, -1).apply(outputs: _*)))
+    (startNodes, Array(JoinTable(dimension, -1).inputs(outputs: _*)))
   }
 }
 

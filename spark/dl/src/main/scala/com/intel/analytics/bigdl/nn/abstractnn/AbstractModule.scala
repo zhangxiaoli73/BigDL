@@ -483,7 +483,7 @@ abstract class AbstractModule[A <: Activity: ClassTag, B <: Activity: ClassTag,
     Tuple2[Array[ModuleNode[T]], Array[ModuleNode[T]]] = {
     val startNodes = startEnd._1
     val endNodes = startEnd._2
-    val curNodes = Array(this.apply(endNodes: _*))
+    val curNodes = Array(this.inputs(endNodes: _*))
     if (startNodes.isEmpty && endNodes.isEmpty) {
       (curNodes, curNodes)
     } else if (startNodes.nonEmpty && endNodes.nonEmpty) {
