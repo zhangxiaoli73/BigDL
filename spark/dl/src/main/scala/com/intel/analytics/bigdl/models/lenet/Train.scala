@@ -46,7 +46,9 @@ object Train {
       val validationLabel = param.folder + "/t10k-labels-idx1-ubyte"
 
       val model = if (param.modelSnapshot.isDefined) {
-        Module.load[Float](param.modelSnapshot.get)
+        // Module.load[Float](param.modelSnapshot.get)
+        println("function lener")
+        LeNet5.lenetFunc(classNum = 10)
       } else {
         LeNet5(classNum = 10)
       }
