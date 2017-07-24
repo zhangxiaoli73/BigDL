@@ -27,6 +27,7 @@ import java.io.{File, FileFilter, FilenameFilter}
 import java.text.SimpleDateFormat
 import java.util.Calendar
 
+import com.intel.analytics.bigdl.mkl.MKL
 import org.apache.commons.lang.exception.ExceptionUtils
 import com.intel.analytics.bigdl.visualization.{TrainSummary, ValidationSummary}
 import org.apache.log4j.Logger
@@ -276,6 +277,9 @@ object DistriOptimizer {
             parameters.weightPartition)
 
           parameters.sendWeightPartition()
+
+          MKL.mklFreeBuffers()
+          println("mklFreeBuffers")
           Iterator.empty
         }).count()
 
@@ -295,7 +299,8 @@ object DistriOptimizer {
         logger.info(s"${_header} Train ${recordsNum.value} in ${(end - start) / 1e9}seconds. " +
           s"Throughput is ${driverState("Throughput")} records/second. Loss is ${
             driverState("Loss")}. ${optimMethod.getHyperParameter()}")
-        logger.debug("\n" + metrics.summary())
+        // logger.debug("\n" + metrics.summary())
+        println(metrics.summary())
         logger.debug("Dropped modules: " + (driverSubModelNum - finishedModelNum))
         lossArray = new Array[Double](_subModelNumber)
 
@@ -372,7 +377,8 @@ object DistriOptimizer {
           parameters,
           optimMethod
         )
-
+        MKL.mklFreeBuffers()
+        println("mklFreeBuffers")
       } else {
         logger.info(s"Warning!!! Ignore this iteration as more than maxDropPercentage " +
           s"module is dropped!! Finished modules number: ${finishedModelNum}")
