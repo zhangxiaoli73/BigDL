@@ -275,7 +275,7 @@ object Inception_v2_NoAuxClassifier {
 object Inception_v2 {
   def apply(classNum: Int): Module[Float] = {
     val features1 = Sequential()
-    features1.add(SpatialConvolution(3, 64, 7, 7, 2, 2, 3, 3, 1, false)
+    features1.add(SpatialConvolution(3, 64, 7, 7, 2, 2, 3, 3, 1, true)
       .setName("conv1/7x7_s2"))
     features1.add(SpatialBatchNormalization(64, 1e-3).setName("conv1/7x7_s2/bn"))
     features1.add(ReLU(true).setName("conv1/7x7_s2/bn/sc/relu"))
@@ -361,9 +361,114 @@ object Inception_v2 {
     model
   }
 
-  def graph(classNum: Int, hasDropout: Boolean = true): Module[Float] = {
+  def apply1(classNum: Int): Module[Float] = {
+    val features1 = Sequential()
+    features1.add(SpatialConvolution(3, 64, 7, 7, 2, 2, 3, 3, 1, true)
+      .setName("conv1/7x7_s2"))
+    features1.add(SpatialBatchNormalization(64, 1e-3).setName("conv1/7x7_s2/bn"))
+    features1.add(ReLU(true).setName("conv1/7x7_s2/bn/sc/relu"))
+    features1.add(SpatialMaxPooling(3, 3, 2, 2).ceil().setName("pool1/3x3_s2"))
+    features1.add(SpatialConvolution(64, 64, 1, 1).setName("conv2/3x3_reduce"))
+    features1.add(SpatialBatchNormalization(64, 1e-3).setName("conv2/3x3_reduce/bn"))
+    features1.add(ReLU(true).setName("conv2/3x3_reduce/bn/sc/relu"))
+    features1.add(SpatialConvolution(64, 192, 3, 3, 1, 1, 1, 1).setName("conv2/3x3"))
+    features1.add(SpatialBatchNormalization(192, 1e-3).setName("conv2/3x3/bn"))
+    features1.add(ReLU(true).setName("conv2/3x3/bn/sc/relu"))
+    features1.add(SpatialMaxPooling(3, 3, 2, 2).ceil().setName("pool2/3x3_s2"))
+    features1.add(Inception_Layer_v2(192, T(T(64), T(64, 64), T(64, 96), T("avg", 32)),
+      "inception_3a/"))
+    features1.add(Inception_Layer_v2(256, T(T(64), T(64, 96), T(64, 96), T("avg", 64)),
+      "inception_3b/"))
+    features1.add(Inception_Layer_v2(320, T(T(0), T(128, 160), T(64, 96), T("max", 0)),
+      "inception_3c/"))
+
+    val output1 = Sequential()
+    output1.add(SpatialAveragePooling(5, 5, 3, 3).ceil().setName("pool3/5x5_s3"))
+    output1.add(SpatialConvolution(576, 128, 1, 1, 1, 1).setName("loss1/conv"))
+    output1.add(SpatialBatchNormalization(128, 1e-3).setName("loss1/conv/bn"))
+    output1.add(ReLU(true).setName("loss1/conv/bn/sc/relu"))
+    output1.add(View(128 * 4 * 4).setNumInputDims(3))
+    output1.add(Linear(128 * 4 * 4, 1024).setName("loss1/fc"))
+    output1.add(ReLU(true).setName("loss1/fc/bn/sc/relu"))
+    output1.add(Linear(1024, classNum).setName("loss1/classifier"))
+    output1.add(LogSoftMax().setName("loss1/loss"))
+
+
+    val features2 = Sequential()
+    features2
+      .add(Inception_Layer_v2(576, T(T(224), T(64, 96), T(96, 128), T("avg", 128)),
+        "inception_4a/"))
+      .add(Inception_Layer_v2(576, T(T(192), T(96, 128), T(96, 128), T("avg", 128)),
+        "inception_4b/"))
+      .add(Inception_Layer_v2(576, T(T(160), T(128, 160), T(128, 160), T("avg", 96)),
+        "inception_4c/"))
+      .add(Inception_Layer_v2(576, T(T(96), T(128, 192), T(160, 192), T("avg", 96)),
+        "inception_4d/"))
+      .add(Inception_Layer_v2(576, T(T(0), T(128, 192), T(192, 256), T("max", 0)),
+        "inception_4e/"))
+
+    val output2 = Sequential()
+    output2.add(SpatialAveragePooling(5, 5, 3, 3).ceil().setName("pool4/5x5_s3"))
+    output2.add(SpatialConvolution(1024, 128, 1, 1, 1, 1).setName("loss2/conv"))
+    output2.add(SpatialBatchNormalization(128, 1e-3).setName("loss2/conv/bn"))
+    output2.add(ReLU(true).setName("loss2/conv/bn/sc/relu"))
+    output2.add(View(128 * 2 * 2).setNumInputDims(3))
+    output2.add(Linear(128 * 2 * 2, 1024).setName("loss2/fc"))
+    output2.add(ReLU(true).setName("loss2/fc/bn/sc/relu"))
+    output2.add(Linear(1024, classNum).setName("loss2/classifier"))
+    output2.add(LogSoftMax().setName("loss2/loss"))
+
+    val output3 = Sequential()
+    output3.add(Inception_Layer_v2(1024, T(T(352), T(192, 320), T(160, 224), T("avg", 128)),
+      "inception_5a/"))
+    output3.add(Inception_Layer_v2(1024, T(T(352), T(192, 320), T(192, 224), T("max", 128)),
+      "inception_5b/"))
+    output3.add(SpatialAveragePooling(7, 7, 1, 1).ceil().setName("pool5/7x7_s1"))
+    output3.add(View(1024).setNumInputDims(3))
+    output3.add(Linear(1024, classNum).setName("loss3/classifier"))
+    output3.add(LogSoftMax().setName("loss3/loss"))
+
+    val split2 = Concat(2)
+    split2.add(output3)
+    split2.add(output2)
+
+    split2
+
+//    val model = Sequential()
+//        .add(ParallelTable()
+//        .add(output3)
+//        .add(output2))
+//      .add(JoinTable(2, 2))
+//
+//    model
+
+
+//    val mainBranch = Sequential()
+//    mainBranch.add(features1)
+//    mainBranch.add(features2)
+//
+//    val mainBranch1 = Sequential()
+//    mainBranch1.add(features1)
+//    mainBranch1.add(features2)
+
+//    val split1 = Concat(2)
+//    split1.add(mainBranch)
+//    split1.add(mainBranch2)
+
+    // split2
+
+//    val model = Sequential()
+//
+//    model.add(features1)
+//    model.add(split1)
+//
+//    // model.reset()
+//    model
+  }
+
+  def graph1(classNum: Int, hasDropout: Boolean = true): Module[Float] = {
     val input = Input()
-    val conv1 = SpatialConvolution(3, 64, 7, 7, 2, 2, 3, 3, 1, false)
+    val conv1 = SpatialConvolution(3, 64, 7, 7, 2, 2, 3, 3, 1, true)
       .setName("conv1/7x7_s2").inputs(input)
     val bn1 = SpatialBatchNormalization(64, 1e-3).setName("conv1/7x7_s2/bn").inputs(conv1)
     val relu1 = ReLU(true).setName("conv1/7x7_s2/bn/sc/relu").inputs(bn1)
@@ -403,6 +508,73 @@ object Inception_v2 {
      val features2 = Inception_Layer_v2(layer3_4, 576, T(T(0), T(128, 192), T(192, 256),
        T("max", 0)), "inception_4e/")
 
+    val pool3_1 = SpatialAveragePooling(5, 5, 3, 3).ceil().setName("pool4/5x5_s3").inputs(input)
+    val conv3_1 = SpatialConvolution(1024, 128, 1, 1, 1, 1).setName("loss2/conv").inputs(pool3_1)
+    val bn3_1 = SpatialBatchNormalization(128, 1e-3).setName("loss2/conv/bn").inputs(conv3_1)
+    val relu3_1 = ReLU(true).setName("loss2/conv/bn/sc/relu").inputs(bn3_1)
+    val view3_1 = View(128 * 2 * 2).setNumInputDims(3).inputs(relu3_1)
+    val linear3_1 = Linear(128 * 2 * 2, 1024).setName("loss2/fc").inputs(view3_1)
+    val relu3_2 = ReLU(true).setName("loss2/fc/bn/sc/relu").inputs(linear3_1)
+    val linear3_2 = Linear(1024, classNum).setName("loss2/classifier").inputs(relu3_2)
+    val output2 = LogSoftMax().setName("loss2/loss").inputs(linear3_2)
+
+    val rayer5_1 = Inception_Layer_v2(input, 1024, T(T(352), T(192, 320), T(160, 224),
+      T("avg", 128)), "inception_5a/")
+    val layer5_2 = Inception_Layer_v2(rayer5_1, 1024, T(T(352), T(192, 320), T(192, 224),
+      T("max", 128)), "inception_5b/")
+    val pool5_1 = SpatialAveragePooling(7, 7, 1, 1).ceil().setName("pool5/7x7_s1").inputs(layer5_2)
+    val view5_1 = View(1024).setNumInputDims(3).inputs(pool5_1)
+    val linear5_1 = Linear(1024, classNum).setName("loss3/classifier").inputs(view5_1)
+    val output3 = LogSoftMax().setName("loss3/loss").inputs(linear5_1)
+
+    val split2 = JoinTable(2, 2).inputs(output3, output2)
+    // val split1 = JoinTable(2, 2).inputs(split2, output1)
+    val model = Graph(input, split2)
+    // model.reset()
+    model
+  }
+  def graph(classNum: Int, hasDropout: Boolean = true): Module[Float] = {
+    val input = Input()
+    val conv1 = SpatialConvolution(3, 64, 7, 7, 2, 2, 3, 3, 1, true)
+      .setName("conv1/7x7_s2").inputs(input)
+    val bn1 = SpatialBatchNormalization(64, 1e-3).setName("conv1/7x7_s2/bn").inputs(conv1)
+    val relu1 = ReLU(true).setName("conv1/7x7_s2/bn/sc/relu").inputs(bn1)
+    val pool1 = SpatialMaxPooling(3, 3, 2, 2).ceil().setName("pool1/3x3_s2").inputs(relu1)
+    val conv2 = SpatialConvolution(64, 64, 1, 1).setName("conv2/3x3_reduce").inputs(pool1)
+    val bn2 = SpatialBatchNormalization(64, 1e-3).setName("conv2/3x3_reduce/bn").inputs(conv2)
+    val relu2 = ReLU(true).setName("conv2/3x3_reduce/bn/sc/relu").inputs(bn2)
+    val conv3 = SpatialConvolution(64, 192, 3, 3, 1, 1, 1, 1).setName("conv2/3x3").inputs(relu2)
+    val bn3 = SpatialBatchNormalization(192, 1e-3).setName("conv2/3x3/bn").inputs(conv3)
+    val relu4 = ReLU(true).setName("conv2/3x3/bn/sc/relu").inputs(bn3)
+    val pool2 = SpatialMaxPooling(3, 3, 2, 2).ceil().setName("pool2/3x3_s2").inputs(relu4)
+    val layer1 = Inception_Layer_v2(pool2, 192, T(T(64), T(64, 64), T(64, 96), T("avg", 32)),
+      "inception_3a/")
+    val layer2 = Inception_Layer_v2(layer1, 256, T(T(64), T(64, 96), T(64, 96), T("avg", 64)),
+      "inception_3b/")
+    val features1 = Inception_Layer_v2(layer2, 320, T(T(0), T(128, 160), T(64, 96), T("max", 0)),
+      "inception_3c/")
+
+    val pool2_1 = SpatialAveragePooling(5, 5, 3, 3).ceil().setName("pool3/5x5_s3").inputs(features1)
+    val conv2_1 = SpatialConvolution(576, 128, 1, 1, 1, 1).setName("loss1/conv").inputs(pool2_1)
+    val bn2_1 = SpatialBatchNormalization(128, 1e-3).setName("loss1/conv/bn").inputs(conv2_1)
+    val relu2_1 = ReLU(true).setName("loss1/conv/bn/sc/relu").inputs(bn2_1)
+    val view2_1 = View(128 * 4 * 4).setNumInputDims(3).inputs(relu2_1)
+    val linear2_1 = Linear(128 * 4 * 4, 1024).setName("loss1/fc").inputs(view2_1)
+    val relu2_2 = ReLU(true).setName("loss1/fc/bn/sc/relu").inputs(linear2_1)
+    val linear2_2 = Linear(1024, classNum).setName("loss1/classifier").inputs(relu2_2)
+    val output1 = LogSoftMax().setName("loss1/loss").inputs(linear2_2)
+
+    val layer3_1 = Inception_Layer_v2(576, T(T(224), T(64, 96), T(96, 128),
+      T("avg", 128)), "inception_4a/").inputs(features1)
+    val layer3_2 = Inception_Layer_v2(layer3_1, 576, T(T(192), T(96, 128), T(96, 128),
+      T("avg", 128)), "inception_4b/")
+    val layer3_3 = Inception_Layer_v2(layer3_2, 576, T(T(160), T(128, 160), T(128, 160),
+      T("avg", 96)), "inception_4c/")
+    val layer3_4 = Inception_Layer_v2(layer3_3, 576, T(T(96), T(128, 192), T(160, 192),
+      T("avg", 96)), "inception_4d/")
+    val features2 = Inception_Layer_v2(layer3_4, 576, T(T(0), T(128, 192), T(192, 256),
+      T("max", 0)), "inception_4e/")
+
     val pool3_1 = SpatialAveragePooling(5, 5, 3, 3).ceil().setName("pool4/5x5_s3").inputs(features2)
     val conv3_1 = SpatialConvolution(1024, 128, 1, 1, 1, 1).setName("loss2/conv").inputs(pool3_1)
     val bn3_1 = SpatialBatchNormalization(128, 1e-3).setName("loss2/conv/bn").inputs(conv3_1)
@@ -413,8 +585,8 @@ object Inception_v2 {
     val linear3_2 = Linear(1024, classNum).setName("loss2/classifier").inputs(relu3_2)
     val output2 = LogSoftMax().setName("loss2/loss").inputs(linear3_2)
 
-    val rayer5_1 = Inception_Layer_v2(features2, 1024, T(T(352), T(192, 320), T(160, 224),
-      T("avg", 128)), "inception_5a/")
+    val rayer5_1 = Inception_Layer_v2(1024, T(T(352), T(192, 320), T(160, 224),
+      T("avg", 128)), "inception_5a/").inputs(features2)
     val layer5_2 = Inception_Layer_v2(rayer5_1, 1024, T(T(352), T(192, 320), T(192, 224),
       T("max", 128)), "inception_5b/")
     val pool5_1 = SpatialAveragePooling(7, 7, 1, 1).ceil().setName("pool5/7x7_s1").inputs(layer5_2)
@@ -422,11 +594,11 @@ object Inception_v2 {
     val linear5_1 = Linear(1024, classNum).setName("loss3/classifier").inputs(view5_1)
     val output3 = LogSoftMax().setName("loss3/loss").inputs(linear5_1)
 
-    val split2 = JoinTable(2, 2).inputs(output3, output2)
-    val split1 = JoinTable(2, 2).inputs(split2, output1)
-    val model = Graph(input, split1)
+    val split2 = JoinTable(2, 3).inputs(output3, output2, output1)
+    val model = Graph(input, split2)
     // model.reset()
     model
   }
+
 }
 

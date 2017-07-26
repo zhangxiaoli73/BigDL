@@ -908,20 +908,56 @@ class InceptionSpec extends TorchSpec {
 
   "Inception_v2 graph" should "be correct" in {
     val batchSize = 2
+
+    val input = Tensor[Float](batchSize, 3, 224, 224).apply1(e => Random.nextFloat())
+    val gradOutput = Tensor[Float](batchSize, 3000).apply1(e => Random.nextFloat())
+
     RNG.setSeed(1000)
     val model = Inception_v2(1000)
     RNG.setSeed(1000)
     val graphModel = Inception_v2.graph(1000)
 
-    val input = Tensor[Float](batchSize, 3, 224, 224).apply1(e => Random.nextFloat())
-    val gradOutput = Tensor[Float](batchSize, 3000).apply1(e => Random.nextFloat())
+    val output1 = model.forward(input).toTensor[Float]
+    val output2 = graphModel.forward(input).toTensor[Float]
+    output1 should be(output2)
+
+    val gradInput1 = model.updateGradInput(input, gradOutput).toTensor
+    val gradInput2 = graphModel.updateGradInput(input, gradOutput).toTensor
+
+    var abss = 0.0
+    for (i <- 0 until gradInput1.nElement()) {
+      val tmp = abs(gradInput1.storage().array()(i) - gradInput2.storage().array()(i))
+      abss += tmp
+    }
+    assert(abss < 2e-2)
+    gradInput1 should be(gradInput2)
+  }
+
+  "Inception_v2 graph test" should "be correct" in {
+    val batchSize = 2
+    RNG.setSeed(1000)
+    val model = Inception_v2.apply1(1000)
+    RNG.setSeed(1000)
+    val graphModel = Inception_v2.graph1(1000)
+
+    val input = Tensor[Float](batchSize, 1024, 7, 7).apply1(e => Random.nextFloat())
+    val tmp1 = T(input.clone(), input.clone())
+    val gradOutput = Tensor[Float](batchSize, 2000).apply1(e => Random.nextFloat())
+    val tmp2 = T(gradOutput.clone(), gradOutput.clone())
 
     val output1 = model.forward(input).toTensor[Float]
     val output2 = graphModel.forward(input).toTensor[Float]
     output1 should be(output2)
 
-    val gradInput1 = model.updateGradInput(input, gradOutput)
-    val gradInput2 = graphModel.updateGradInput(input, gradOutput)
+    val gradInput1 = model.updateGradInput(input, gradOutput).toTensor
+    val gradInput2 = graphModel.updateGradInput(input, gradOutput).toTensor
+
+    var abss = 0.0
+    for (i <- 0 until gradInput1.nElement()) {
+      val tmp = abs(gradInput1.storage().array()(i) - gradInput2.storage().array()(i))
+      abss += tmp
+    }
+    assert(abss < 2e-2)
     gradInput1 should be(gradInput2)
   }
 }
