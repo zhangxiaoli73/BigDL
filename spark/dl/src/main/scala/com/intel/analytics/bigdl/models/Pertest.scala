@@ -26,7 +26,7 @@ import com.intel.analytics.bigdl.models.resnet.ResNet
 import com.intel.analytics.bigdl.models.resnet.ResNet.{DatasetType, ShortcutType}
 import com.intel.analytics.bigdl.models.vgg.{VggForCifar10, Vgg_16, Vgg_19}
 import com.intel.analytics.bigdl.nn.Graph._
-import com.intel.analytics.bigdl.nn.abstractnn.AbstractModule
+import com.intel.analytics.bigdl.nn.abstractnn.{AbstractModule, Activity}
 import com.intel.analytics.bigdl.nn.{Graph, _}
 import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.utils._
@@ -40,14 +40,14 @@ import scala.util.Random
 object Pertest {
   var warmUp = 0
   var times = 1
-  var seqLength = 1
+  var seqLength = 2
 
   case class PerfParams(
-     modelName: String = "simplernn",
+     modelName: String = "rnncell",
      warmUp: Int = 30,
-     times: Int = 200,
-     batchSize: Int = 100,
-     seqLength: Int = 2
+     times: Int = 50,
+     batchSize: Int = 4,
+     seqLength: Int = 1
    )
 
   val perfParser = new OptionParser[PerfParams]("BigDL Perf Tests") {
@@ -80,6 +80,7 @@ object Pertest {
       println("times: " + times + " warmUp: " + warmUp)
       println("batchSize: " + param.batchSize)
 
+      name = "tanh"
       if (name == "cadd") {
          testCadd(param.batchSize)
       } else if (name == "rnn") {
@@ -92,65 +93,87 @@ object Pertest {
   }
 
   def testCadd (batchSize: Int): Unit = {
+    val seqLen = 2
+    val input = Tensor[Float](seqLen, batchSize, 128).randn
+    val hidden = Tensor[Float](batchSize, 128).randn
+
     val input1 = T(Tensor[Float](Array(batchSize, 128)).apply1(e => Random.nextFloat()),
                   Tensor[Float](batchSize, 128).apply1(e => Random.nextFloat()))
     val grad1 = Tensor(Array(batchSize, 128)).fill(1)
     val model = CAddTable[Float](false).setName("add")
 
-    for (i <- 1 to warmUp) {
-      val output = model.forward(input1)
-      model.backward(input1, grad1)
-    }
-    val tmp = model.getTimes()
-    val length = tmp.length
-    var time = new Array[Double](length)
-    var m = 0
-    while (m < length) {
-      time(m) = tmp(m)._3.toDouble / tmp(m)._2
-      m += 1
-    }
-    var forTime : Long = 0
-    var backTime : Long = 0
-    val start1 = System.nanoTime()
-    for (i <- 1 to times) {
-      model.resetTimes()
-      model.forward(input1)
-      model.backward(input1, grad1)
-      val tmp = model.getTimes()
-      var m = 0
-      while (m < length) {
-        if (tmp(m)._1.getName() == "add") {
-          forTime = forTime + tmp(m)._2
-          backTime = backTime + tmp(m)._3
-        }
-        m += 1
+    for (j <- 1 to warmUp) {
+      for (i <- 1 to seqLen) {
+        val curInput = T(input.select(1, i), hidden)
+        model.forward(curInput)
       }
     }
-    val tmp1 = model.getTimes()
-    println("diff " + (backTime * 1.0/forTime) + "s" +
-      " forTime: " + forTime + " backTime:" + backTime)
-    println(" all takes time " + (System.nanoTime() - start1) / 1e9 + "s")
 
-    Thread.sleep(100)
-    val start4 = System.nanoTime()
-    for (i <- 1 to times) {
-      model.forward(input1)
-      model.backward(input1, grad1)
+    for (j <- 1 to times) {
+      for (i <- 1 to seqLen) {
+        var st = System.nanoTime()
+        val curInput = T(input.select(1, i), hidden)
+        model.forward(curInput)
+        var eta = (System.nanoTime() - st) / 1e9
+        println(s"cadd forward eta = ${eta} seconds")
+      }
     }
-    println(" all takes time " + (System.nanoTime() - start4) / 1e9 + "s")
-    Thread.sleep(100)
-    val start3 = System.nanoTime()
-    for (i <- 1 to times) {
-      // model.forward(input1)
-      model.backward(input1, grad1)
-    }
-    println(" only_backward takes time " + (System.nanoTime() - start3) / 1e9 + "s")
-    Thread.sleep(100)
-    val start2 = System.nanoTime()
-    for (i <- 1 to times) {
-      model.forward(input1)
-    }
-    println(" only_forward takes time " + (System.nanoTime() - start2) / 1e9 + "s")
+
+
+//    for (i <- 1 to warmUp) {
+//      val output = model.forward(input1)
+//      model.backward(input1, grad1)
+//    }
+//    val tmp = model.getTimes()
+//    val length = tmp.length
+//    var time = new Array[Double](length)
+//    var m = 0
+//    while (m < length) {
+//      time(m) = tmp(m)._3.toDouble / tmp(m)._2
+//      m += 1
+//    }
+//    var forTime : Long = 0
+//    var backTime : Long = 0
+//    val start1 = System.nanoTime()
+//    for (i <- 1 to times) {
+//      model.resetTimes()
+//      model.forward(input1)
+//      model.backward(input1, grad1)
+//      val tmp = model.getTimes()
+//      var m = 0
+//      while (m < length) {
+//        if (tmp(m)._1.getName() == "add") {
+//          forTime = forTime + tmp(m)._2
+//          backTime = backTime + tmp(m)._3
+//        }
+//        m += 1
+//      }
+//    }
+//    val tmp1 = model.getTimes()
+//    println("diff " + (backTime * 1.0/forTime) + "s" +
+//      " forTime: " + forTime + " backTime:" + backTime)
+//    println(" all takes time " + (System.nanoTime() - start1) / 1e9 + "s")
+//
+//    Thread.sleep(100)
+//    val start4 = System.nanoTime()
+//    for (i <- 1 to times) {
+//      model.forward(input1)
+//      model.backward(input1, grad1)
+//    }
+//    println(" all takes time " + (System.nanoTime() - start4) / 1e9 + "s")
+//    Thread.sleep(100)
+//    val start3 = System.nanoTime()
+//    for (i <- 1 to times) {
+//      // model.forward(input1)
+//      model.backward(input1, grad1)
+//    }
+//    println(" only_backward takes time " + (System.nanoTime() - start3) / 1e9 + "s")
+//    Thread.sleep(100)
+//    val start2 = System.nanoTime()
+//    for (i <- 1 to times) {
+//      model.forward(input1)
+//    }
+//    println(" only_forward takes time " + (System.nanoTime() - start2) / 1e9 + "s")
   }
 
   def test (batchSize: Int): Unit = {
@@ -172,7 +195,12 @@ object Pertest {
             .add(Identity[Float]())
           )
 
-       val input1 = T(Tensor[Float](Array(batchSize, 128)).apply1(e => Random.nextFloat()),
+//      val inputSize = 128
+//      val hiddenSize = 128
+//      val simpleRnn = nn.RnnCell(inputSize, hiddenSize, nn.Tanh[Float]())
+//      val model = simpleRnn.cell
+
+      val input1 = T(Tensor[Float](Array(batchSize, 128)).apply1(e => Random.nextFloat()),
          Tensor[Float](batchSize, 128).apply1(e => Random.nextFloat()))
       val grad1 = T(Tensor[Float](Array(batchSize, 128)).apply1(e => Random.nextFloat()),
          Tensor[Float](batchSize, 128).apply1(e => Random.nextFloat()))
@@ -238,7 +266,7 @@ object Pertest {
   }
 
   def getModel(module: String,
-               batchSize: Int): (Module[Float], Tensor[Float], Tensor[Float], Criterion[Float]) = {
+               batchSize: Int): (Module[Float], Activity, Activity, Criterion[Float]) = {
     RNG.setSeed(1000)
     val (_model, input, labels, criterion) = module match {
       case "linear" =>
@@ -246,6 +274,7 @@ object Pertest {
         val labels = Tensor(Array(batchSize, 128)).fill(1)
         val criterion = nn.MSECriterion[Float]()
         (Linear(128, 128), input, labels, criterion)
+
       case "inception" =>
         val input = Tensor[Float](batchSize, 3, 224, 224).apply1(e => Random.nextFloat())
         val target = Tensor[Float](batchSize, 1000).apply1(e => Random.nextFloat())
@@ -272,7 +301,7 @@ object Pertest {
 
       case "lstm" =>
         val sequenceLen = seqLength
-        val inputSize = 128
+        val inputSize = 1280
         val hiddenSize = 128
 
         val input = Tensor[Float](Array(batchSize, sequenceLen, inputSize)).apply1(e => Random.nextFloat())
@@ -311,15 +340,29 @@ object Pertest {
 
       case "simplernn" =>
         val sequenceLen = seqLength
-        val inputSize = 128
+        val inputSize = 1280
         val hiddenSize = 128
 
         val input =
           Tensor[Float](Array(batchSize, sequenceLen, inputSize)).apply1(e => Random.nextFloat())
-        val labels = Tensor(Array(batchSize, hiddenSize)).fill(1)
+        val labels = Tensor(Array(batchSize, hiddenSize)).apply1(e => Random.nextFloat())
         val criterion = nn.MSECriterion[Float]()
 
         (SimpleRNN(1000, inputSize, hiddenSize), input, labels, criterion)
+
+      case "rnncell" =>
+        val inputSize = 128
+        val hiddenSize = 128
+        val simpleRnn = nn.RnnCell(inputSize, hiddenSize, nn.Tanh[Float]())
+        val model = simpleRnn.cell
+
+        val input = T(Tensor[Float](Array(batchSize, 128)).apply1(e => Random.nextFloat()),
+          Tensor[Float](batchSize, 128).apply1(e => Random.nextFloat()))
+        val labels = T(Tensor[Float](Array(batchSize, 128)).apply1(e => Random.nextFloat()),
+          Tensor[Float](batchSize, 128).apply1(e => Random.nextFloat()))
+        val criterion = nn.MSECriterion[Float]()
+
+        (model, input, labels, criterion)
 
       case "lstmpeephole" =>
         val sequenceLen = seqLength
@@ -334,43 +377,40 @@ object Pertest {
 
       case "tanh" =>
         val model = new Tanh[Float]()
-        val input = Tensor[Float](batchSize, 128).apply1(e => Random.nextFloat())
-        val labels = Tensor[Float](batchSize, 128).apply1(e => Random.nextFloat())
+        val input = Tensor[Float](batchSize, 1280).apply1(e => Random.nextFloat())
+        val labels = Tensor[Float](batchSize, 1280).apply1(e => Random.nextFloat())
         val criterion = nn.MSECriterion[Float]()
         (model, input, labels, criterion)
     }
     (_model, input, labels, criterion)
   }
 
-  def computing(input: Tensor[Float], criterion: Criterion[Float], target: Tensor[Float],
+  def computing(input: Activity, criterion: Criterion[Float], gradOutput: Activity,
                 model: Module[Float], name: String = ""): Unit = {
     // warm up
-    var gradOutput: Tensor[Float] = null
     for (i <- 1 to warmUp) {
-      val output = model.forward(input).toTensor[Float]
-      val loss = criterion.forward(output, target)
-      gradOutput = criterion.backward(output, target).toTensor[Float]
+      model.forward(input)
       model.backward(input, gradOutput)
     }
+
+    val start1 = System.nanoTime()
+    for (i <- 1 to times) {
+      model.forward(input)
+      model.backward(input, gradOutput)
+    }
+    println(name + " all takes time " + (System.nanoTime() - start1) / 1e9 + "s")
+
+    val tmp = model.getTimes()
+    val start2 = System.nanoTime()
+    for (i <- 1 to times) {
+      model.forward(input)
+    }
+    println(name + " only_forward takes time " + (System.nanoTime() - start2) / 1e9 + "s")
 
     val start3 = System.nanoTime()
     for (i <- 1 to times) {
       model.backward(input, gradOutput)
     }
     println(name + " only_backward takes time " + (System.nanoTime() - start3) / 1e9 + "s")
-
-    val start2 = System.nanoTime()
-    for (i <- 1 to times) {
-      model.forward(input).toTensor[Float]
-    }
-    println(name + " only_forward takes time " + (System.nanoTime() - start2) / 1e9 + "s")
-
-    val start1 = System.nanoTime()
-    for (i <- 1 to times) {
-      model.forward(input).toTensor[Float]
-      model.backward(input, gradOutput)
-    }
-    val tmp1 = model.getTimes()
-    println(name + " all takes time " + (System.nanoTime() - start1) / 1e9 + "s")
   }
 }

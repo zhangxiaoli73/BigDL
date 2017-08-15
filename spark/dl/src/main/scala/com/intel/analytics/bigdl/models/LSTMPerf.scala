@@ -18,12 +18,13 @@ package com.intel.analytics.bigdl.models
 
 import com.intel.analytics.bigdl.nn
 import com.intel.analytics.bigdl.Module
+import com.intel.analytics.bigdl.nn.BatchNormParams
 import com.intel.analytics.bigdl.numeric.NumericFloat
 
 object GRU {
   def apply(classNum: Int, inputSize: Int, hiddenSize: Int): Module[Float] = {
     val model = nn.Sequential()
-    model.add(nn.Recurrent()
+    model.add(nn.Recurrent(BatchNormParams())
       .add(nn.GRU(inputSize, hiddenSize)))
       .add(nn.Select(2, -1))
     model
@@ -34,7 +35,7 @@ object ConvLSTMPeephole {
   def apply(classNum: Int, inputSize: Int, hiddenSize: Int, kernelC: Int, kernelI: Int, stride: Int)
   : Module[Float] = {
     val model = nn.Sequential()
-    model.add(nn.Recurrent()
+    model.add(nn.Recurrent(BatchNormParams())
       .add(nn.ConvLSTMPeephole(inputSize, hiddenSize, kernelC, kernelI, stride)))
 
     model
@@ -44,7 +45,7 @@ object ConvLSTMPeephole {
 object SimpleRNN {
   def apply(classNum: Int, inputSize: Int, hiddenSize: Int): Module[Float] = {
     val model = nn.Sequential()
-    model.add(nn.Recurrent()
+    model.add(nn.Recurrent(BatchNormParams())
       .add(nn.RnnCell(inputSize, hiddenSize, nn.Tanh[Float]())))
       .add(nn.Select(2, -1))
 
@@ -56,7 +57,7 @@ object LSTM {
   def apply(classNum: Int, inputSize: Int, hiddenSize: Int): Module[Float] = {
     val model = nn.Sequential()
     val embedding = 1
-    model.add(nn.Recurrent().add(nn.LSTM(inputSize, hiddenSize)))
+    model.add(nn.Recurrent(BatchNormParams()).add(nn.LSTM(inputSize, hiddenSize)))
       .add(nn.Select(2, -1))
     model
   }
@@ -67,7 +68,7 @@ object LSTMPeephole {
   def apply(classNum: Int, inputSize: Int, hiddenSize: Int): Module[Float] = {
     val model = nn.Sequential()
     val embedding = 1
-    model.add(nn.Recurrent().add(nn.LSTMPeephole(inputSize, hiddenSize)))
+    model.add(nn.Recurrent(BatchNormParams()).add(nn.LSTMPeephole(inputSize, hiddenSize)))
       .add(nn.Select(2, -1))
 
     model
