@@ -22,7 +22,7 @@ import com.intel.analytics.bigdl.models.inception.{Inception_v1, Inception_v2}
 import com.intel.analytics.bigdl.models.resnet.ResNet
 import com.intel.analytics.bigdl.models.resnet.ResNet.{DatasetType, ShortcutType}
 import com.intel.analytics.bigdl.models.vgg.{Vgg_16, Vgg_19}
-import com.intel.analytics.bigdl.nn.abstractnn.Activity
+import com.intel.analytics.bigdl.nn.abstractnn.{AbstractModule, Activity}
 import com.intel.analytics.bigdl.nn.{Module => _, _}
 import com.intel.analytics.bigdl.numeric.NumericFloat
 import com.intel.analytics.bigdl.optim.{Optimizer, Trigger}
@@ -31,6 +31,7 @@ import com.intel.analytics.bigdl.utils.{Engine, T, ThreadPool}
 import org.apache.log4j.Logger
 import scopt.OptionParser
 
+import scala.collection.mutable.ArrayBuffer
 import scala.util.Random
 
 object LocalOptimizerPerf {
@@ -154,7 +155,7 @@ object LocalOptimizerPerf {
         (SimpleRNN(1000, inputSize, hiddenSize), input, labels, criterion)
 
       case "lstmpeephole" =>
-        val sequenceLen = 1
+        val sequenceLen = 30
         val inputSize = 128
         val hiddenSize = 128
 
@@ -264,6 +265,29 @@ object LocalOptimizerPerf {
       }
     }
 
+    def getTopTimes(times: Array[(AbstractModule[_ <: Activity, _ <: Activity, Float],
+      Long, Long)]): Unit = {
+      var forwardSum = 0L
+      var backwardSum = 0L
+      times.foreach(x => {
+        forwardSum += x._2
+        backwardSum += x._3
+      })
+      println(s"forwardSum = ${forwardSum}", s"backwardSum = ${backwardSum}")
+
+      val timeBuffer = new ArrayBuffer[(AbstractModule[_ <: Activity,
+        _ <: Activity, Float], Long, Long, Long, Double)]
+      var i = 0
+      while (i < times.length) {
+        val all = times(i)._2 + times(i)._3
+        val rate = times(i)._3.toDouble/ times(i)._2
+        timeBuffer.append((times(i)._1, times(i)._2, times(i)._3, all, rate))
+        i += 1
+      }
+      val sortData = timeBuffer.sortBy(a => a._4)
+      sortData.foreach(println)
+    }
+
     def all(model: Module[Float], input: Tensor[Float]): Unit = {
       val subModelNumber = param.coreNumber
       val workingModels = (1 to param.coreNumber).map(i => {
@@ -272,6 +296,9 @@ object LocalOptimizerPerf {
       }).toArray
 
       val default: ThreadPool = new ThreadPool(param.coreNumber * 50)
+
+      val timeBuffer =
+      new ArrayBuffer[(AbstractModule[_ <: Activity, _ <: Activity, Float], Long, Long, Double)]
 
       for (i <- 0 to param.iteration) {
         val start = System.nanoTime()
@@ -302,8 +329,9 @@ object LocalOptimizerPerf {
               localModel.backward(inputBuffer(i), output)
               val end2 = System.nanoTime() - t2
               val tmp = localModel.getTimes()
+              getTopTimes(tmp)
               localModel.resetTimes()
-              // println("forward: " + end1/1e9 + " backward: " + end2/1e9 + " rate: " + end2.toDouble/end1)
+              // println("forward: " + end1 + " backward: " + end2 + " rate: " + end2.toDouble/end1)
               println("forward: " + end1 + " backward: " + end2 + " rate: " + end2.toDouble/end1)
             })
         )
@@ -367,11 +395,11 @@ object LocalOptimizerPerf {
  * @param inputData input data type (constant / random)
  */
 case class LocalOptimizerPerfParam(
-  batchSize: Int = 100,
+  batchSize: Int = 4,
   coreNumber: Int = 1, // Runtime.getRuntime.availableProcessors() / 2,
   iteration: Int = 80,
   dataType: String = "float",
-  module: String = "lstm",
+  module: String = "lstmpeephole",
   inputData: String = "random",
   inference: Boolean = true,
   hiddenSize: Int = 128
