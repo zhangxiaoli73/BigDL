@@ -78,6 +78,9 @@ object PTBWordLM {
         curModel
       }
 
+      val tmp = trainSet.toDistributed().data(train = false).take(1)(0)
+      val d = tmp.data()
+      val l = tmp.labels()
       val optimMethod = if (param.stateSnapshot.isDefined) {
         OptimMethod.load[Float](param.stateSnapshot.get)
       } else {
