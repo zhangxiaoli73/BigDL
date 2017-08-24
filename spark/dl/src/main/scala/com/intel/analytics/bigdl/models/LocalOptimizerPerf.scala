@@ -23,6 +23,7 @@ import com.intel.analytics.bigdl.models.resnet.ResNet
 import com.intel.analytics.bigdl.models.resnet.ResNet.{DatasetType, ShortcutType}
 import com.intel.analytics.bigdl.models.rnn.PTBModel
 import com.intel.analytics.bigdl.models.vgg.{Vgg_16, Vgg_19}
+import com.intel.analytics.bigdl.nn.abstractnn.{AbstractModule, Activity}
 import com.intel.analytics.bigdl.nn.{Module => _, _}
 import com.intel.analytics.bigdl.numeric.NumericFloat
 import com.intel.analytics.bigdl.optim.{Optimizer, Trigger}
@@ -31,9 +32,9 @@ import com.intel.analytics.bigdl.utils.{Engine, T, ThreadPool}
 import org.apache.log4j.Logger
 import scopt.OptionParser
 
+import scala.collection.mutable.ArrayBuffer
+
 object LocalOptimizerPerf {
-  val modelSupported = Set("inception_v1","inception_v2", "vgg16", "vgg19", "alexnet", "resnet_50",
-    "lstm", "lstmpeephole", "simplernn", "gru", "convlstmpeephole", "ptb")
   val logger = Logger.getLogger(getClass)
 
   val parser = new OptionParser[LocalOptimizerPerfParam]("BigDL Local Performance Test") {
@@ -48,15 +49,8 @@ object LocalOptimizerPerf {
       .text("Iteration of perf test. The result will be average of each iteration time cost")
       .action((v, p) => p.copy(iteration = v))
     opt[String]('m', "model")
-      .text(s"Model name. It can be ${modelSupported.mkString("| ")}")
+      .text(s"Model name. ")
       .action((v, p) => p.copy(module = v))
-      .validate(v =>
-        if (modelSupported.contains(v.toLowerCase())) {
-          success
-        } else {
-          failure(s"Model name only supports ${modelSupported.mkString(" | ")}")
-        }
-      )
     opt[String]('d', "inputdata")
       .text("Input data type. One of constant | random")
       .action((v, p) => p.copy(inputData = v))
@@ -82,28 +76,6 @@ object LocalOptimizerPerf {
   def getModel(module: String, batchSize: Int, param: LocalOptimizerPerfParam): (
     Module[Float], Tensor[Float], Tensor[Float], Criterion[Float]) = {
     val (_model, input, labels, criterion) = module match {
-      case "alexnet" =>
-        (AlexNet(1000), Tensor(batchSize, 3, 227, 227), Tensor(batchSize).fill(1),
-          ClassNLLCriterion())
-      case "inception_v1" =>
-        (Inception_v1(1000), Tensor(batchSize, 3, 224, 224), Tensor(batchSize).fill(1),
-          ClassNLLCriterion())
-      case "inception_v2" =>
-        (Inception_v2(1000), Tensor(batchSize, 3, 224, 224), Tensor(batchSize).fill(1),
-          ClassNLLCriterion())
-      case "vgg16" =>
-        (Vgg_16(1000), Tensor(batchSize, 3, 224, 224), Tensor(batchSize).fill(1),
-          ClassNLLCriterion())
-      case "vgg19" =>
-        (Vgg_19(1000), Tensor(batchSize, 3, 224, 224), Tensor(batchSize).fill(1),
-          ClassNLLCriterion())
-      case "resnet_50" =>
-        val model = ResNet(classNum = 1000, T("depth" -> 50, "optnet" -> true,
-          "dataset" -> DatasetType.ImageNet))
-        ResNet.shareGradInput(model)
-        ResNet.modelInit(model)
-
-        (model, Tensor(batchSize, 3, 224, 224), Tensor(batchSize).fill(1), CrossEntropyCriterion())
       case "lstm" =>
         val sequenceLen = param.sequenceLen
         val inputSize = param.inputSize
@@ -113,7 +85,7 @@ object LocalOptimizerPerf {
         val labels = Tensor(Array(batchSize, hiddenSize)).fill(1)
         val criterion = nn.MSECriterion[Float]()
 
-        (LSTM(1000, inputSize, hiddenSize), input, labels, criterion)
+        (LSTMPerf(1000, inputSize, hiddenSize), input, labels, criterion)
 
       case "gru" =>
         val sequenceLen = param.sequenceLen
@@ -124,23 +96,7 @@ object LocalOptimizerPerf {
         val labels = Tensor(Array(batchSize, hiddenSize)).fill(1)
         val criterion = nn.MSECriterion[Float]()
 
-        (GRU(1000, inputSize, hiddenSize), input, labels, criterion)
-
-      case "convlstmpeephole" =>
-        val sequenceLen = 3
-        val inputSize = 3
-        val hiddenSize = 128
-        val kernelC = 3
-        val kernelI = 3
-        val stride = 1
-
-        val (inputWidth, inputHeight) = (112, 112)
-
-        val input = Tensor[Float](Array(batchSize, sequenceLen, inputSize, inputWidth, inputHeight))
-        val labels = Tensor(Array(batchSize, sequenceLen, hiddenSize, inputWidth, inputHeight)).fill(1)
-        val criterion = nn.MSECriterion[Float]()
-
-        (ConvLSTMPeephole(1000, inputSize, hiddenSize, kernelC, kernelI, stride), input, labels, criterion)
+        (GRUPerf(1000, inputSize, hiddenSize), input, labels, criterion)
 
       case "simplernn" =>
         val sequenceLen = param.sequenceLen
@@ -151,7 +107,7 @@ object LocalOptimizerPerf {
         val labels = Tensor(Array(batchSize, hiddenSize)).fill(1)
         val criterion = nn.MSECriterion[Float]()
 
-        (SimpleRNN(1000, inputSize, hiddenSize), input, labels, criterion)
+        (SimpleRNNPerf(1000, inputSize, hiddenSize), input, labels, criterion)
 
       case "lstmpeephole" =>
         val sequenceLen = param.sequenceLen
@@ -162,12 +118,12 @@ object LocalOptimizerPerf {
         val labels = Tensor(Array(batchSize, hiddenSize)).fill(1)
         val criterion = nn.MSECriterion[Float]()
 
-        (LSTMPeephole(1000, inputSize, hiddenSize), input, labels, criterion)
+        (LSTMPeepholePerf(1000, inputSize, hiddenSize), input, labels, criterion)
 
       case "ptb" =>
-        val sequenceLen = 20 // param.sequenceLen
+        val sequenceLen = 35 // 20 // param.sequenceLen
         val inputSize = 10001 // param.inputSize
-        val hiddenSize = 200 // param.hiddenSize
+        val hiddenSize = 1500 // 200 // param.hiddenSize
         val numLayers = 2
 
         val input = Tensor[Float](Array(param.batchSize, 20)).fill(100.0f)
@@ -179,12 +135,39 @@ object LocalOptimizerPerf {
           outputSize = inputSize,
           numLayers = numLayers)
 
+        model.forward(input)
+
         (model, input, labels, criterion)
     }
     (_model, input, labels, criterion)
   }
 
   def performance(param: LocalOptimizerPerfParam): Unit = {
+    def getTopTimes(times: Array[(AbstractModule[_ <: Activity, _ <: Activity, Float],
+      Long, Long)], totalTime: Long): Unit = {
+      var forwardSum = 0L
+      var backwardSum = 0L
+      times.foreach(x => {
+        forwardSum += x._2
+        backwardSum += x._3
+      })
+      println(s"forwardSum = ${forwardSum}", s"backwardSum = ${backwardSum}",
+        s"whole time = ${totalTime}")
+
+      val timeBuffer = new ArrayBuffer[(AbstractModule[_ <: Activity,
+        _ <: Activity, Float], Long, Long, Long, Double, Double)]
+      var i = 0
+      while (i < times.length) {
+        val all = times(i)._2 + times(i)._3
+        val rate = times(i)._3.toDouble/ times(i)._2
+        val rateofAll = all.toDouble/totalTime
+        timeBuffer.append((times(i)._1, times(i)._2, times(i)._3, all, rate, rateofAll))
+        i += 1
+      }
+      val sortData = timeBuffer.sortBy(a => a._4)
+      sortData.foreach(println)
+    }
+
     def predict(model: Module[Float], input: Tensor[Float]): Unit = {
       val subModelNumber = param.coreNumber
       val workingModels = (1 to param.coreNumber).map(i => {
@@ -212,7 +195,6 @@ object LocalOptimizerPerf {
         val lossSum = default.invokeAndWait(
           (0 until param.coreNumber).map(i =>
               () => {
-                // println(s"running model ${i}")
                 val localModel = workingModels(i)
                 localModel.zeroGradParameters()
                 localModel.evaluate()
@@ -226,6 +208,53 @@ object LocalOptimizerPerf {
         logger.info(s"Iteration ${i}-iteration time is ${(end - start) / 1e9}s " +
           s"Throughput is ${param.batchSize.toDouble / (end - start) * 1e9} record / second. "
           )
+      }
+    }
+
+    def times(model: Module[Float], input: Tensor[Float]): Unit = {
+      val subModelNumber = param.coreNumber
+      val workingModels = (1 to param.coreNumber).map(i => {
+        logger.info(s"Clone $i model...")
+        model.cloneModule()
+      }).toArray
+
+      val default: ThreadPool = new ThreadPool(param.coreNumber * 50)
+
+      for (i <- 0 to param.iteration) {
+        val start = System.nanoTime()
+
+        var b = 0
+        val stackSize = input.size(1) / subModelNumber
+        val extraSize = input.size(1) % subModelNumber
+        val parallelism = if (stackSize == 0) extraSize else subModelNumber
+        val inputBuffer = new Array[Tensor[Float]](parallelism)
+        while (b < parallelism) {
+          val offset = b * stackSize + math.min(b, extraSize) + 1
+          val length = stackSize + (if (b < extraSize) 1 else 0)
+          inputBuffer(b) = input.narrow(1, offset, length)
+          b += 1
+        }
+
+        val lossSum = default.invokeAndWait(
+          (0 until param.coreNumber).map(i =>
+            () => {
+              // println(s"running model ${i}")
+              val localModel = workingModels(i)
+              localModel.zeroGradParameters()
+              localModel.evaluate()
+              val t1 = System.nanoTime()
+              val output = localModel.forward(inputBuffer(i))
+              localModel.backward(inputBuffer(i), output)
+              val end = System.nanoTime() - t1
+              val timeData = localModel.getTimes()
+              localModel.resetTimes()
+              getTopTimes(timeData, end)
+            })
+        )
+        val end = System.nanoTime()
+        logger.info(s"Iteration ${i}-iteration time is ${(end - start) / 1e9}s " +
+          s"Throughput is ${param.batchSize.toDouble / (end - start) * 1e9} record / second. "
+        )
       }
     }
 
@@ -284,10 +313,10 @@ object LocalOptimizerPerf {
     println(model)
     println(param.module + " : " + param.testType)
 
-    param.inputData match {
-      case "constant" => input.fill(0.01f)
-      case "random" => input.rand()
-    }
+//    param.inputData match {
+//      case "constant" => input.fill(0.01f)
+//      case "random" => input.rand()
+//    }
 
     val dummyDataSet = new LocalDataSet[MiniBatch[Float]] {
       override def data(train : Boolean): Iterator[MiniBatch[Float]] = {
@@ -308,6 +337,8 @@ object LocalOptimizerPerf {
       optimizer.setEndWhen(Trigger.maxIteration(param.iteration)).optimize()
     } else if (param.testType == "predict") {
       predict(model, input)
+    } else if (param.testType == "times") {
+      times(model, input)
     } else {
       all(model, input)
     }
@@ -329,14 +360,14 @@ object LocalOptimizerPerf {
  * @param inputData input data type (constant / random)
  */
 case class LocalOptimizerPerfParam(
-  batchSize: Int = 32,
-  coreNumber: Int = Runtime.getRuntime.availableProcessors() / 2,
+  batchSize: Int = 20,
+  coreNumber: Int = 1, //Runtime.getRuntime.availableProcessors() / 2,
   iteration: Int = 80,
   dataType: String = "float",
-  module: String = "lstm",
+  module: String = "ptb",
   inputData: String = "random",
-  testType: String = "all",
-  inputSize: Int = 1000,
-  hiddenSize: Int = 200,
+  testType: String = "times",
+  inputSize: Int = 128,
+  hiddenSize: Int = 128,
   sequenceLen: Int = 30
 )
