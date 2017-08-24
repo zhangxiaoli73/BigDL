@@ -20,7 +20,7 @@ import com.intel.analytics.bigdl.nn
 import com.intel.analytics.bigdl.Module
 import com.intel.analytics.bigdl.numeric.NumericFloat
 
-object GRU {
+object GRUPerf {
   def apply(classNum: Int, inputSize: Int, hiddenSize: Int): Module[Float] = {
     val model = nn.Sequential()
     model.add(nn.Recurrent()
@@ -30,7 +30,7 @@ object GRU {
   }
 }
 
-object ConvLSTMPeephole {
+object ConvLSTMPeepholePerf {
   def apply(classNum: Int, inputSize: Int, hiddenSize: Int, kernelC: Int, kernelI: Int, stride: Int)
   : Module[Float] = {
     val model = nn.Sequential()
@@ -41,7 +41,7 @@ object ConvLSTMPeephole {
   }
 }
 
-object SimpleRNN {
+object SimpleRNNPerf {
   def apply(classNum: Int, inputSize: Int, hiddenSize: Int): Module[Float] = {
     val model = nn.Sequential()
     model.add(nn.Recurrent()
@@ -52,7 +52,7 @@ object SimpleRNN {
   }
 }
 
-object LSTM {
+object LSTMPerf {
   def apply(classNum: Int, inputSize: Int, hiddenSize: Int): Module[Float] = {
     val model = nn.Sequential()
     val embedding = 1
@@ -63,7 +63,7 @@ object LSTM {
 }
 
 
-object LSTMPeephole {
+object LSTMPeepholePerf {
   def apply(classNum: Int, inputSize: Int, hiddenSize: Int): Module[Float] = {
     val model = nn.Sequential()
     val embedding = 1
