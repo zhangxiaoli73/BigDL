@@ -33,6 +33,7 @@ import org.apache.log4j.Logger
 import scopt.OptionParser
 
 import scala.collection.mutable.ArrayBuffer
+import scala.util.Random
 
 object LocalOptimizerPerf {
   val logger = Logger.getLogger(getClass)
@@ -70,6 +71,9 @@ object LocalOptimizerPerf {
    opt[Int]('f', "hiddenSize")
       .text("inference. One of true | false")
       .action((v, p) => p.copy(hiddenSize = v))
+    opt[String]('m', "modelType")
+      .text(s"Model type. ")
+      .action((v, p) => p.copy(modelType = v))
     help("help").text("Prints this usage text")
   }
 
@@ -81,7 +85,7 @@ object LocalOptimizerPerf {
         val inputSize = param.inputSize
         val hiddenSize = param.hiddenSize
 
-        val input = Tensor[Float](Array(batchSize, sequenceLen, inputSize))
+        val input = Tensor[Float](Array(batchSize, sequenceLen, inputSize)).randn()
         val labels = Tensor(Array(batchSize, hiddenSize)).fill(1)
         val criterion = nn.MSECriterion[Float]()
 
@@ -92,7 +96,7 @@ object LocalOptimizerPerf {
         val inputSize = param.inputSize
         val hiddenSize = param.hiddenSize
 
-        val input = Tensor[Float](Array(batchSize, sequenceLen, inputSize))
+        val input = Tensor[Float](Array(batchSize, sequenceLen, inputSize)).randn()
         val labels = Tensor(Array(batchSize, hiddenSize)).fill(1)
         val criterion = nn.MSECriterion[Float]()
 
@@ -103,7 +107,7 @@ object LocalOptimizerPerf {
         val inputSize = param.inputSize
         val hiddenSize = param.hiddenSize
 
-        val input = Tensor[Float](Array(batchSize, sequenceLen, inputSize))
+        val input = Tensor[Float](Array(batchSize, sequenceLen, inputSize)).randn()
         val labels = Tensor(Array(batchSize, hiddenSize)).fill(1)
         val criterion = nn.MSECriterion[Float]()
 
@@ -114,20 +118,26 @@ object LocalOptimizerPerf {
         val inputSize = param.inputSize
         val hiddenSize = param.hiddenSize
 
-        val input = Tensor[Float](Array(batchSize, sequenceLen, inputSize))
+        val input = Tensor[Float](Array(batchSize, sequenceLen, inputSize)).randn()
         val labels = Tensor(Array(batchSize, hiddenSize)).fill(1)
         val criterion = nn.MSECriterion[Float]()
 
         (LSTMPeepholePerf(1000, inputSize, hiddenSize), input, labels, criterion)
 
       case "ptb" =>
-        val sequenceLen = 35 // 20 // param.sequenceLen
-        val inputSize = 10001 // param.inputSize
-        val hiddenSize = 1500 // 200 // param.hiddenSize
-        val numLayers = 2
+        val (sequenceLen, inputSize, hiddenSize, numLayers) =
+        if (param.modelType == "small") {
+          (20, 10000, 200, 2)
+        } else if (param.modelType == "meduim") {
+          (35, 10000, 650, 2)
+        } else if (param.modelType == "large") {
+          (35, 10000, 1500, 2)
+        } else {
+          throw new IllegalArgumentException(s"wrong model type ${param.modelType}")
+        }
 
-        val input = Tensor[Float](Array(param.batchSize, 20)).fill(100.0f)
-        val labels = Tensor(Array(param.batchSize, 20)).fill(100.0f)
+        val input = Tensor[Float](param.batchSize, 20).apply1(e => Random.nextFloat()*100 + 10)
+        val labels = Tensor(param.batchSize, 20).fill(100.0f)
         val criterion = nn.MSECriterion[Float]()
 
         val model = PTBModel(inputSize = inputSize,
@@ -135,8 +145,7 @@ object LocalOptimizerPerf {
           outputSize = inputSize,
           numLayers = numLayers)
 
-        model.forward(input)
-
+        model.reset()
         (model, input, labels, criterion)
     }
     (_model, input, labels, criterion)
@@ -338,6 +347,7 @@ object LocalOptimizerPerf {
     } else if (param.testType == "predict") {
       predict(model, input)
     } else if (param.testType == "times") {
+      param.coreNumber = 1
       times(model, input)
     } else {
       all(model, input)
@@ -361,12 +371,13 @@ object LocalOptimizerPerf {
  */
 case class LocalOptimizerPerfParam(
   batchSize: Int = 20,
-  coreNumber: Int = 1, //Runtime.getRuntime.availableProcessors() / 2,
+  var coreNumber: Int = Runtime.getRuntime.availableProcessors() / 2,
   iteration: Int = 80,
   dataType: String = "float",
   module: String = "ptb",
   inputData: String = "random",
   testType: String = "times",
+  modelType: String = "small",
   inputSize: Int = 128,
   hiddenSize: Int = 128,
   sequenceLen: Int = 30

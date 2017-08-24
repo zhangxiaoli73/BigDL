@@ -171,7 +171,7 @@ object ModuleSerializer extends ModuleSerializable{
     registerModule("com.intel.analytics.bigdl.nn.MapTable", MapTable)
     registerModule("com.intel.analytics.bigdl.nn.MaskedSelect", MaskedSelect)
     registerModule("com.intel.analytics.bigdl.nn.Recurrent", Recurrent)
-    registerModule("com.intel.analytics.bigdl.nn.Reshape", Reshape)
+    // registerModule("com.intel.analytics.bigdl.nn.Reshape", Reshape)
     registerModule("com.intel.analytics.bigdl.nn.Scale", Scale)
     registerModule("com.intel.analytics.bigdl.nn.SpatialContrastiveNormalization",
       SpatialContrastiveNormalization)
