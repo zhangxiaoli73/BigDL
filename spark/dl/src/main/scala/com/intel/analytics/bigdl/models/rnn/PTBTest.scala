@@ -69,6 +69,10 @@ object PTBTest {
     opt[String]('m', "modelType")
       .text(s"Model type. ")
       .action((v, p) => p.copy(modelType = v))
+    opt[String]('m', "criterionType")
+      .text(s"criterion Type. ")
+      .action((v, p) => p.copy(criterionType = v))
+
     help("help").text("Prints this usage text")
   }
 
@@ -87,9 +91,16 @@ object PTBTest {
 
     val input = Tensor[Float](param.batchSize, 20).apply1(e => Random.nextFloat()*100 + 10)
     val labels = Tensor(param.batchSize, 20).fill(100.0f)
-    val criterion = TimeDistributedCriterion[Float](
-      CrossEntropyCriterion[Float](),
-      sizeAverage = true)
+
+    val criterion = if (param.criterionType == "class") {
+          TimeDistributedCriterion[Float](ClassNLLCriterion())
+      } else if (param.criterionType == "cross") {
+          TimeDistributedCriterion[Float](
+        CrossEntropyCriterion[Float](),
+        sizeAverage = true)
+      } else {
+        throw new IllegalArgumentException(s"wrong model type ${param.criterionType}")
+    }
 
     val model = PTBModel(inputSize = inputSize,
       hiddenSize = hiddenSize,
@@ -101,6 +112,50 @@ object PTBTest {
   }
 
   def performance(param: LocalOptimizerPerfParam): Unit = {
+    def predict(model: Module[Float], input: Tensor[Float]): Unit = {
+      val subModelNumber = param.coreNumber
+      val workingModels = (1 to param.coreNumber).map(i => {
+        logger.info(s"Clone $i model...")
+        model.cloneModule()
+      }).toArray
+
+      val default: ThreadPool = new ThreadPool(param.coreNumber * 50)
+
+      for (i <- 0 to param.iteration) {
+        val start = System.nanoTime()
+
+        var b = 0
+        val stackSize = input.size(1) / subModelNumber
+        val extraSize = input.size(1) % subModelNumber
+        val parallelism = if (stackSize == 0) extraSize else subModelNumber
+        val inputBuffer = new Array[Tensor[Float]](parallelism)
+        while (b < parallelism) {
+          val offset = b * stackSize + math.min(b, extraSize) + 1
+          val length = stackSize + (if (b < extraSize) 1 else 0)
+          inputBuffer(b) = input.narrow(1, offset, length)
+          b += 1
+        }
+
+        val lossSum = default.invokeAndWait(
+          (0 until param.coreNumber).map(i =>
+            () => {
+              val localModel = workingModels(i)
+              localModel.zeroGradParameters()
+              localModel.evaluate()
+              //                val t1 = System.nanoTime()
+              val output = localModel.forward(inputBuffer(i))
+              localModel.backward(inputBuffer(i), output)
+              //                val end1 = System.nanoTime() - t1
+              //                println("forward: " + end1/1e9)
+            })
+        )
+        val end = System.nanoTime()
+        logger.info(s"Iteration ${i}-iteration time is ${(end - start) / 1e9}s " +
+          s"Throughput is ${param.batchSize.toDouble / (end - start) * 1e9} record / second. "
+        )
+      }
+    }
+
     def getTopTimes(times: Array[(AbstractModule[_ <: Activity, _ <: Activity, Float],
       Long, Long)], totalTime: Long): Unit = {
       var forwardSum = 0L
@@ -200,7 +255,10 @@ object PTBTest {
     } else if (param.testType == "times") {
       param.coreNumber = 1
       times(model, input)
+    } else {
+      predict(model, input)
     }
+
   }
 
   def main(args: Array[String]): Unit = {
@@ -209,15 +267,16 @@ object PTBTest {
 }
 
 case class LocalOptimizerPerfParam(
-  batchSize: Int = 40, // 20,
+  batchSize: Int = 20,
   var coreNumber: Int = Runtime.getRuntime.availableProcessors() / 2,
   iteration: Int = 80,
   dataType: String = "float",
   module: String = "ptb",
   inputData: String = "random",
-  testType: String = "train", // times",
-  modelType: String = "large",
+  testType: String = "train",
+  modelType: String = "small",
   inputSize: Int = 128,
   hiddenSize: Int = 128,
-  sequenceLen: Int = 30
+  sequenceLen: Int = 30,
+  criterionType: String = "cross"
 )

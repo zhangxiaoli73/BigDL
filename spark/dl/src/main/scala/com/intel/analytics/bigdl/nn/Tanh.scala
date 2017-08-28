@@ -41,9 +41,10 @@ class Tanh[@specialized(Float, Double) T: ClassTag](
   }
 
   override def updateGradInput(input: Tensor[T], gradOutput: Tensor[T]): Tensor[T] = {
-    gradInput.resizeAs(gradOutput).copy(gradOutput)
-    buffer.resizeAs(output).copy(output)
-    gradInput.sub(buffer.pow(ev.fromType(2)).cmul(gradOutput))
+    gradInput.resizeAs(gradOutput)
+    buffer.resizeAs(output)
+    buffer.pow(output, ev.fromType(2)).cmul(gradOutput)
+    gradInput.sub(gradOutput, buffer)
     gradInput
   }
 
