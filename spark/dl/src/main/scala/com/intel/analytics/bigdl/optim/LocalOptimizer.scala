@@ -19,16 +19,42 @@ package com.intel.analytics.bigdl.optim
 import com.intel.analytics.bigdl.dataset.{LocalDataSet, MiniBatch}
 import com.intel.analytics.bigdl._
 import com.intel.analytics.bigdl.nn.Utils
-import com.intel.analytics.bigdl.nn.abstractnn.Activity
+import com.intel.analytics.bigdl.nn.abstractnn.{AbstractModule, Activity}
 import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
 import com.intel.analytics.bigdl.utils._
 import org.apache.log4j.Logger
 
+import scala.collection.mutable.ArrayBuffer
 import scala.reflect.ClassTag
 
 object LocalOptimizer {
   val logger = Logger.getLogger(getClass)
+
+  def getTopTimes[T: ClassTag](times: Array[(AbstractModule[_ <: Activity, _ <: Activity, T],
+    Long, Long)], totalTime: Long): Unit = {
+    var forwardSum = 0L
+    var backwardSum = 0L
+    times.foreach(x => {
+      forwardSum += x._2
+      backwardSum += x._3
+    })
+    println(s"forwardSum = ${forwardSum}", s"backwardSum = ${backwardSum}",
+      s"whole time = ${totalTime}")
+
+    val timeBuffer = new ArrayBuffer[(AbstractModule[_ <: Activity,
+      _ <: Activity, T], Long, Long, Long, Double, Double)]
+    var i = 0
+    while (i < times.length) {
+      val all = times(i)._2 + times(i)._3
+      val rate = times(i)._3.toDouble/ times(i)._2
+      val rateofAll = all.toDouble/totalTime
+      timeBuffer.append((times(i)._1, times(i)._2, times(i)._3, all, rate, rateofAll))
+      i += 1
+    }
+    val sortData = timeBuffer.sortBy(a => a._4)
+    sortData.foreach(println)
+  }
 }
 
 /**
@@ -114,14 +140,23 @@ class LocalOptimizer[T: ClassTag] private[optim](
             val localCriterion = workingCriterion(i)
             val input = miniBatchBuffer(i).getInput()
             val target = miniBatchBuffer(i).getTarget()
+            val t1 = System.nanoTime()
             val output = localModel.forward(input)
+            val t2 = System.nanoTime()
             val _loss = ev.toType[Double](localCriterion.forward(output, target))
             val errors = localCriterion.backward(output, target)
+            val t3 = System.nanoTime()
             localModel.backward(input, errors)
+            val t4 = System.nanoTime()
+//            val timeData = localModel.getTimes()
+//            localModel.resetTimes()
+//            getTopTimes(timeData, t4-t3+t2-t1)
+            println(s"model: ${(t4-t3+t2-t1)/1e9} s, criterion: ${(t3-t2)/1e9} s")
             _loss
           })
       ).sum
 
+      val dataModel = System.nanoTime()
       // copy multi-model gradient to the buffer
       Engine.default.invokeAndWait(
         (0 until syncGradParallelNum).map(tid =>
@@ -155,6 +190,7 @@ class LocalOptimizer[T: ClassTag] private[optim](
         s"loss is $loss, iteration time is ${(end - start) / 1e9}s " +
         s"data fetch time is ${(dataFetchTime - start) / 1e9}s, " +
         s"train time ${(end - dataFetchTime) / 1e9}s. " +
+        s"model run time is ${(dataModel - dataFetchTime)/ 1e9}s " +
         s"Throughput is ${batch.size().toDouble / (end - start) * 1e9} record / second. " +
         optimMethod.getHyperParameter()
         )
