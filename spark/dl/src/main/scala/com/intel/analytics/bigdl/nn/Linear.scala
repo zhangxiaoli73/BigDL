@@ -105,8 +105,12 @@ class Linear[T: ClassTag](
         addBuffer.resize(Array(nFrame)).fill(ev.one)
       }
 
-      output.addmm(ev.zero, output, ev.one, input, weight.t)
-      if (withBias) output.addr(ev.one, addBuffer, bias)
+      // output.addmm(ev.zero, output, ev.one, input, weight.t)
+      output.mm(input, weight.t)
+      if (withBias) {
+        // output.addr(ev.one, addBuffer, bias)
+        output.addr(addBuffer, bias)
+      }
     }
     output
   }

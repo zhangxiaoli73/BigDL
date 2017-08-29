@@ -89,8 +89,8 @@ object PTBTest {
         throw new IllegalArgumentException(s"wrong model type ${param.modelType}")
       }
 
-    val input = Tensor[Float](param.batchSize, 20).apply1(e => Random.nextFloat()*100 + 10)
-    val labels = Tensor(param.batchSize, 20).fill(100.0f)
+    val input = Tensor[Float](param.batchSize, sequenceLen).apply1(e => Random.nextFloat()*100 + 10)
+    val labels = Tensor(param.batchSize, sequenceLen).fill(100.0f)
 
     val criterion = if (param.criterionType == "class") {
           TimeDistributedCriterion[Float](ClassNLLCriterion())
@@ -267,14 +267,14 @@ object PTBTest {
 }
 
 case class LocalOptimizerPerfParam(
-  batchSize: Int = 20,
+  batchSize: Int = 4,
   var coreNumber: Int = Runtime.getRuntime.availableProcessors() / 2,
   iteration: Int = 80,
   dataType: String = "float",
   module: String = "ptb",
   inputData: String = "random",
   testType: String = "train",
-  modelType: String = "small",
+  modelType: String = "large",
   inputSize: Int = 128,
   hiddenSize: Int = 128,
   sequenceLen: Int = 30,
