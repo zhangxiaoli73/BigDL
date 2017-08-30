@@ -16,6 +16,7 @@
 
 package com.intel.analytics.bigdl.nn
 
+import com.intel.analytics.bigdl.nn
 import com.intel.analytics.bigdl.nn.abstractnn.{TensorCriterion, TensorModule}
 import com.intel.analytics.bigdl.tensor.Tensor
 import org.scalatest.{FlatSpec, Matchers}
@@ -55,4 +56,88 @@ class AddSpec extends FlatSpec with Matchers {
 
     layer2.gradBias should be (layer1.gradBias.mul(2))
   }
+
+  "test " should "more better" in {
+    val batch = 200
+
+    val input1 = Tensor[Float](batch, 1500).randn()
+    val weight1 = Tensor[Float](1500, 1).randn()
+    val weight2 = Tensor[Float](1, 10000).randn()
+
+    val output1 = Tensor[Float](batch, 1)
+    val output2 = Tensor[Float](batch, 10000)
+
+    val t11 = System.nanoTime()
+    for (i <- 1 to 100) {
+      output1.mm(input1, weight1)
+      output2.mm(output1, weight2)
+    }
+    val end11 = System.nanoTime() - t11
+    println("time: " + end11/1e9 + " s")
+
+    // ************
+
+    val input = Tensor[Float](batch, 1500).randn()
+    val weight = Tensor[Float](1500, 10000).randn()
+
+    val output = Tensor[Float](batch, 10000).rand()
+
+    val t1 = System.nanoTime()
+    for (i <- 1 to 100) {
+      output.mm(input, weight)
+    }
+    val end1 = System.nanoTime() - t1
+    println("time: " + end1/1e9 + " s")
+
+    // ***************
+
+  }
+
+
+   "111" should "222" in {
+     val inputSize = 650 // param.inputSize
+     val hiddenSize = 6000 // param.hiddenSize
+     val batchSize = 2
+
+     val input = Tensor[Float](Array(batchSize, inputSize)).fill(2.0f)
+     val labels = Tensor[Float](Array(batchSize, hiddenSize)).fill(1)
+
+     RNG.setSeed(100)
+     val model1 = Linear[Float](inputSize, hiddenSize)
+     RNG.setSeed(100)
+     val model2 = Sequential[Float]().
+       add(Linear[Float](inputSize, 100)).add(Linear[Float](100, hiddenSize))
+
+     // warm up
+     for (i <- 1 to 100) {
+       val out2 = model2.forward(input)
+       val grad = model2.backward(input, labels)
+     }
+     for (i <- 1 to 100) {
+       val out1 = model1.forward(input)
+       val grad = model1.backward(input, labels)
+     }
+     // ****************
+     val t1 = System.nanoTime()
+     for (i <- 1 to 100) {
+       val out1 = model1.forward(input)
+       val grad = model1.backward(input, labels)
+     }
+     val end1 = System.nanoTime() - t1
+
+     val t2 = System.nanoTime()
+     for (i <- 1 to 100) {
+       val out2 = model2.forward(input)
+       val grad = model2.backward(input, labels)
+     }
+     val end2 = System.nanoTime() - t2
+
+     println(s"end1 ${end1/1e9} end2 ${end2/1e9}")
+
+     val grad1 = model1.getParameters()
+     val grad2 = model2.getParameters()
+
+     println("done")
+  }
+
 }
