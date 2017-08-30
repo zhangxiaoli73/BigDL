@@ -43,30 +43,30 @@ import scala.concurrent.Future
  *                    applied to the bias.
  */
 @SerialVersionUID( 359656776803598943L)
-class Linear[T: ClassTag](
-  val inputSize: Int,
-  val outputSize: Int,
-  val withBias: Boolean = true,
-  var wRegularizer: Regularizer[T] = null,
-  var bRegularizer: Regularizer[T] = null,
-  private val initWeight: Tensor[T] = null,
-  private val initBias: Tensor[T] = null,
-  private val initGradWeight: Tensor[T] = null,
-  private val initGradBias: Tensor[T] = null
-)(implicit ev: TensorNumeric[T]) extends TensorModule[T] with Initializable {
+class LinearNew[T: ClassTag](
+   val inputSize: Int,
+   val outputSize: Int,
+   val withBias: Boolean = true,
+   var wRegularizer: Regularizer[T] = null,
+   var bRegularizer: Regularizer[T] = null,
+   private val initWeight: Tensor[T] = null,
+   private val initBias: Tensor[T] = null,
+   private val initGradWeight: Tensor[T] = null,
+   private val initGradBias: Tensor[T] = null
+ )(implicit ev: TensorNumeric[T]) extends TensorModule[T] with Initializable {
   val weight: Tensor[T] =
     if (initWeight != null) initWeight else Tensor[T](outputSize, inputSize)
   val bias: Tensor[T] =
     if (initBias != null) initBias else if (withBias) Tensor[T](outputSize) else null
   val addBuffer: Tensor[T] = Tensor[T]()
 
+  @transient
+  private var results : Array[Future[_]] = null
+
   val gradWeight: Tensor[T] =
     if (initGradWeight != null) initGradWeight else Tensor[T]()
   val gradBias: Tensor[T] =
     if (initGradBias != null) initGradBias else if (withBias) Tensor[T]() else null
-
-  @transient
-  private var results : Array[Future[_]] = null
 
   {
     val stdv = 1.0 / math.sqrt(weight.size(2))
@@ -86,10 +86,9 @@ class Linear[T: ClassTag](
   }
 
   override def updateOutput(input: Tensor[T]): Tensor[T] = {
-    // println("input size: " + input.size(1))
     require(input.dim() == 1 || input.dim() == 2,
-      "Linear: " + ErrorInfo.constrainInputAsVectorOrBatch +
-      s"input dim ${input.dim()}")
+      "LinearNew: " + ErrorInfo.constrainInputAsVectorOrBatch +
+        s"input dim ${input.dim()}")
 
 
     if (input.dim() == 1) {
@@ -110,7 +109,25 @@ class Linear[T: ClassTag](
         addBuffer.resize(Array(nFrame)).fill(ev.one)
       }
 
-      output.addmm(ev.zero, output, ev.one, input, weight.t)
+
+      val weightT = weight.t
+      val nInput = 4 // weight.size(1)
+
+      if (results == null || results.length > nInput) {
+        results = new Array[Future[_]](nInput)
+      }
+
+      var f = 0
+      while (f < nInput) {
+        val _f = f + 1
+        results(f) = Engine.model.invoke(() => {
+          val tmp1 = output.narrow(2, _f, outputSize/4)
+          val tmp2 = weightT.narrow(2, _f, outputSize/4)
+          tmp1.addmm(ev.zero, tmp1, ev.one, input, tmp2)
+        })
+        f += 1
+      }
+      // output.addmm(ev.zero, output, ev.one, input, weightT)
       if (withBias) output.addr(ev.one, addBuffer, bias)
     }
     output
@@ -118,10 +135,8 @@ class Linear[T: ClassTag](
 
   override def updateGradInput(input: Tensor[T], gradOutput: Tensor[T]): Tensor[T] = {
     require(input.dim() == 1 || input.dim() == 2,
-      "Linear: " + ErrorInfo.constrainInputAsVectorOrBatch +
-    s"input dim ${input.dim()}")
-
-    // println("gradOutput size: " + input.size(1))
+      "LinearNew: " + ErrorInfo.constrainInputAsVectorOrBatch +
+        s"input dim ${input.dim()}")
 
     val nElement = gradInput.nElement()
     gradInput.resizeAs(input)
@@ -139,8 +154,8 @@ class Linear[T: ClassTag](
 
   override def accGradParameters(input: Tensor[T], gradOutput: Tensor[T]): Unit = {
     require(input.dim() == 1 || input.dim() == 2,
-      "Linear: " + ErrorInfo.constrainInputAsVectorOrBatch +
-    s"input dim ${input.dim()}")
+      "LinearNew: " + ErrorInfo.constrainInputAsVectorOrBatch +
+        s"input dim ${input.dim()}")
 
     gradWeight.resize(outputSize, inputSize)
     if (withBias) {
@@ -217,10 +232,10 @@ class Linear[T: ClassTag](
       return false
     }
 
-    if (!obj.isInstanceOf[Linear[T]]) {
+    if (!obj.isInstanceOf[LinearNew[T]]) {
       return false
     }
-    val other = obj.asInstanceOf[Linear[T]]
+    val other = obj.asInstanceOf[LinearNew[T]]
     if (this.eq(other)) {
       return true
     }
@@ -247,19 +262,19 @@ class Linear[T: ClassTag](
   }
 }
 
-object Linear {
+object LinearNew {
   def apply[@specialized(Float, Double) T: ClassTag](
-      inputSize: Int,
-      outputSize: Int,
-      withBias: Boolean = true,
-      wRegularizer: Regularizer[T] = null,
-      bRegularizer: Regularizer[T] = null,
-      initWeight: Tensor[T] = null,
-      initBias: Tensor[T] = null,
-      initGradWeight: Tensor[T] = null,
-      initGradBias: Tensor[T] = null
-  )(implicit ev: TensorNumeric[T]) : Linear[T] = {
-    new Linear[T](inputSize, outputSize,
+    inputSize: Int,
+    outputSize: Int,
+    withBias: Boolean = true,
+    wRegularizer: Regularizer[T] = null,
+    bRegularizer: Regularizer[T] = null,
+    initWeight: Tensor[T] = null,
+    initBias: Tensor[T] = null,
+    initGradWeight: Tensor[T] = null,
+    initGradBias: Tensor[T] = null
+  )(implicit ev: TensorNumeric[T]) : LinearNew[T] = {
+    new LinearNew[T](inputSize, outputSize,
       withBias, wRegularizer, bRegularizer, initWeight, initBias, initGradWeight, initGradBias)
   }
 }

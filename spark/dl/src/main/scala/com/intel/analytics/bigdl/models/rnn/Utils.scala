@@ -53,7 +53,8 @@ object Utils {
                           numSteps: Int = 20,
                           sentFile: Option[String] = None,
                           tokenFile: Option[String] = None,
-                          overWriteCheckpoint: Boolean = false)
+                          overWriteCheckpoint: Boolean = false,
+                          interNum: Int = 0)
 
   val trainParser = new OptionParser[TrainParams]("BigDL SimpleRNN Train Example") {
     opt[String]('f', "dataFolder")
@@ -128,6 +129,11 @@ object Utils {
     opt[Unit]("overWrite")
       .text("overwrite checkpoint files")
       .action( (_, c) => c.copy(overWriteCheckpoint = true) )
+
+    opt[Int]("interNum")
+      .text("interNum checkpoint files")
+      .action( (x, c) => c.copy(interNum = x))
+
   }
 
   case class TestParams(

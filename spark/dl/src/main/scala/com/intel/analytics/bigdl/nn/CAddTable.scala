@@ -35,6 +35,7 @@ class CAddTable[T: ClassTag](val inplace: Boolean = false)(
   implicit ev: TensorNumeric[T]) extends AbstractModule[Table, Tensor[T], T] {
 
   override def updateOutput(input: Table): Tensor[T] = {
+    // require(input[Tensor[T]](1).isContiguous())
     if (inplace) {
       output.set(input[Tensor[T]](1))
     } else {
@@ -42,6 +43,7 @@ class CAddTable[T: ClassTag](val inplace: Boolean = false)(
     }
     var i = 2
     while (i <= input.length()) {
+      // require(input[Tensor[T]](i).isContiguous())
       output.add(input[Tensor[T]](i))
       i += 1
     }

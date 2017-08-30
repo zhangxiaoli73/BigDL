@@ -18,23 +18,30 @@ package com.intel.analytics.bigdl.models.rnn
 
 import com.intel.analytics.bigdl.Module
 import com.intel.analytics.bigdl.nn.Graph._
-import com.intel.analytics.bigdl.nn._
+import com.intel.analytics.bigdl.nn.{TimeDistributed, _}
 
 object PTBModel {
   def apply(
     inputSize: Int,
     hiddenSize: Int,
     outputSize: Int,
-    numLayers: Int)
+    numLayers: Int,
+    interNum: Int = 0)
   : Module[Float] = {
     val input = Input[Float]()
     val embeddingLookup =
       LookupTable[Float](inputSize, hiddenSize).inputs(input)
 //    val transpose = Transpose[Float](Array((1, 2))).inputs(embeddingLookup)
     val lstm = addLayer(hiddenSize, hiddenSize, 1, numLayers, embeddingLookup)
-    val output =
-      TimeDistributed[Float](Linear[Float](hiddenSize, outputSize))
-      .inputs(lstm)
+    val output = if (interNum > 0) {
+//    val linear = Sequential[Float]().
+//      add(Linear[Float](hiddenSize, 100)).add(Linear[Float](100, outputSize))
+      val linear = Sequential[Float]().add(Linear[Float](hiddenSize, interNum)).add(Linear[Float](interNum, outputSize))
+      TimeDistributed[Float](linear).inputs(lstm)
+    } else {
+      val linear = Linear[Float](hiddenSize, outputSize)
+      TimeDistributed[Float](linear).inputs(lstm)
+    }
     Graph(input, output)
   }
 

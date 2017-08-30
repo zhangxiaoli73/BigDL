@@ -16,6 +16,7 @@
 
 package com.intel.analytics.bigdl.nn
 
+import com.intel.analytics.bigdl.nn
 import com.intel.analytics.bigdl.optim.SGD
 import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.utils.RandomGenerator.RNG
@@ -435,5 +436,70 @@ class RecurrentSpec extends FlatSpec with Matchers {
 
     rec.setState(state)
     model.forward(input)
+  }
+
+  "A Recurrent test " should "work good " in {
+    val seed = 100
+
+    val sequenceLen = 30
+    val inputSize = 1280
+    val hiddenSize = 128
+    val batchSize = 4
+
+    val input = Tensor[Float](Array(batchSize, sequenceLen, inputSize))
+    val labels = Tensor[Float](Array(batchSize, hiddenSize)).fill(1)
+    val criterion = nn.MSECriterion[Float]()
+
+    RNG.setSeed(seed)
+    val model1 = nn.Sequential[Float]()
+    model1.add(nn.Recurrent[Float]().add(nn.LSTM(inputSize, hiddenSize)))
+      .add(nn.Select(2, -1))
+
+    RNG.setSeed(seed)
+    val model2 = nn.Sequential[Float]()
+    model2.add(nn.RecurrentNew[Float]().add(nn.LSTM[Float](inputSize, hiddenSize)))
+      .add(nn.Select(2, -1))
+
+    val out1 = model1.forward(input)
+    val grad1 = model1.backward(input, out1)
+    val out2 = model2.forward(input)
+     val grad2 = model2.backward(input, out2)
+
+    // warm up
+    for (i <- 1 to 1000) {
+      val out1 = model1.forward(input)
+      val grad1 = model1.backward(input, out1)
+    }
+    for (i <- 1 to 1000) {
+      val out2 = model2.forward(input)
+      val grad2 = model2.backward(input, out2)
+    }
+
+    //
+    val t1 = System.nanoTime()
+    for (i <- 1 to 1000) {
+      val out1 = model1.forward(input)
+      val grad1 = model1.backward(input, out1)
+    }
+    val end1 = System.nanoTime() -t1
+
+    val t2 = System.nanoTime()
+    for (i <- 1 to 1000) {
+      val out2 = model2.forward(input)
+      val grad2 = model2.backward(input, out2)
+    }
+    val end2 = System.nanoTime() -t2
+
+    println(s"end1 ${end1/1e9} end2 ${end2/1e9}")
+
+    val w1 = model1.getParameters()
+    val w2 = model2.getParameters()
+
+    w1._1 should be (w2._1)
+    w1._2 should be (w2._2)
+
+    out1 should be(out2)
+    grad1 should be(grad2)
+    println("done")
   }
 }

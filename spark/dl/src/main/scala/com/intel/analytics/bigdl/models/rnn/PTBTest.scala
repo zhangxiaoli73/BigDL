@@ -72,6 +72,9 @@ object PTBTest {
     opt[String]('m', "criterionType")
       .text(s"criterion Type. ")
       .action((v, p) => p.copy(criterionType = v))
+    opt[Int]('m', "InterNum")
+      .text(s"InterNum Type. ")
+      .action((v, p) => p.copy(InterNum = v))
 
     help("help").text("Prints this usage text")
   }
@@ -102,10 +105,12 @@ object PTBTest {
         throw new IllegalArgumentException(s"wrong model type ${param.criterionType}")
     }
 
+    println(s"inter number ${param.InterNum}")
     val model = PTBModel(inputSize = inputSize,
       hiddenSize = hiddenSize,
       outputSize = inputSize,
-      numLayers = numLayers)
+      numLayers = numLayers,
+      interNum = param.InterNum)
 
     model.reset()
     (model, input, labels, criterion)
@@ -278,5 +283,6 @@ case class LocalOptimizerPerfParam(
   inputSize: Int = 128,
   hiddenSize: Int = 128,
   sequenceLen: Int = 30,
-  criterionType: String = "cross"
+  criterionType: String = "cross",
+  InterNum: Int = 0
 )

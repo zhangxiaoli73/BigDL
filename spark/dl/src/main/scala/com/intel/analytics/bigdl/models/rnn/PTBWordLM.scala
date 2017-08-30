@@ -69,11 +69,13 @@ object PTBWordLM {
       val model = if (param.modelSnapshot.isDefined) {
         Module.load[Float](param.modelSnapshot.get)
       } else {
+        println(s"inter number ${param.interNum}")
         val curModel = PTBModel(
           inputSize = param.vocabSize,
           hiddenSize = param.hiddenSize,
           outputSize = param.vocabSize,
-          numLayers = param.numLayers)
+          numLayers = param.numLayers,
+          interNum = param.interNum)
         curModel.reset()
         curModel
       }

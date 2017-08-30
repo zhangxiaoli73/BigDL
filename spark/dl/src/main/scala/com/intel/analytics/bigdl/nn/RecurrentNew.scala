@@ -32,7 +32,7 @@ import scala.reflect.ClassTag
  * [[Recurrent]] module is a container of rnn cells
  * Different types of rnn cells can be added using add() function
  */
-class Recurrent[T : ClassTag]()
+class RecurrentNew[T : ClassTag]()
   (implicit ev: TensorNumeric[T]) extends Container[Tensor[T], Tensor[T], T] {
 
   private var hidden: Activity = null
@@ -42,9 +42,11 @@ class Recurrent[T : ClassTag]()
   private val currentGradOutput = T()
   private val gradInputCell = Tensor[T]()
   private var outputCell = Tensor[T]()
+  private var size: Array[Int] = null
   private val _input = T()
   private val batchDim = 1
   private val timeDim = 2
+  private val timeTranspose = 1
   private val inputDim = 1
   private val hidDim = 2
   private var (batchSize, times) = (0, 0)
@@ -66,7 +68,7 @@ class Recurrent[T : ClassTag]()
    * @param module module to be add
    * @return this container
    */
-  override def add(module: AbstractModule[_ <: Activity, _ <: Activity, T]): Recurrent.this.type = {
+  override def add(module: AbstractModule[_ <: Activity, _ <: Activity, T]): RecurrentNew.this.type = {
     require(module.isInstanceOf[Cell[T]],
       "Recurrent: contained module should be Cell type")
     topology = module.asInstanceOf[Cell[T]]
@@ -190,52 +192,108 @@ class Recurrent[T : ClassTag]()
 
     result
   }
-   override def updateOutput(input: Tensor[T]): Tensor[T] = {
-       require(input.dim == 3 || input.dim == 5 || input.dim == 6,
-         "Recurrent: input should be a 3D/5D/6D Tensor, e.g [batch, times, nDim], " +
-           s"current input.dim = ${input.dim}")
 
-       batchSize = input.size(batchDim)
-       times = input.size(timeDim)
+  override def updateOutput(input: Tensor[T]): Tensor[T] = {
+    require(input.dim == 3 || input.dim == 5 || input.dim == 6,
+      "Recurrent: input should be a 3D/5D/6D Tensor, e.g [batch, times, nDim], " +
+        s"current input.dim = ${input.dim}")
 
-       outputCell = if (preTopology != null) {
-         preTopology.forward(input).toTensor[T]
-       } else {
-         input
-       }
 
-      // println("Recurrent outputCell " + outputCell)
+    batchSize = input.size(batchDim)
+    times = input.size(timeDim)
 
-       val hiddenSize = topology.hiddensShape(0)
-       val outputSize = input.size()
-       outputSize(2) = hiddenSize
-       output.resize(outputSize)
-       // Clone N modules along the sequence dimension.
-       extend(outputSize)
+    var buffer = if (preTopology != null) {
+      preTopology.forward(input).toTensor[T]
+    } else {
+      input
+    }
 
-       /**
-        * currentInput forms a T() type. It contains two elements, hidden and input.
-        * Each time it will feed the cell with T(hidden, input) (or T(input, hidden) depends on
-        * your hidDim and inputDim), and the cell will give a table output containing two
-        * identical elements T(output, output). One of the elements from the cell output is
-        * the updated hidden. Thus the currentInput will update its hidden element with this output.
-        */
-       var i = 1
-       // init state
-       currentInput(hidDim) = if (initState != null) initState
-        else hidden
-       while (i <= times) {
-         currentInput(inputDim) = outputCell.select(timeDim, i)
-         // println("Recurrent inputDim " + currentInput(inputDim) + " hidDim" + currentInput(hidDim))
-         cells(i - 1).forward(currentInput)
-         currentInput(hidDim) = cells(i - 1).output.toTable(hidDim)
-         i += 1
-       }
+    size = buffer.size()
+    buffer = buffer.transpose(batchDim, timeDim)
+    outputCell.resizeAs(buffer).copy(buffer)
 
-       copy(cells.map(x => x.output.toTable[Tensor[T]](inputDim)),
-           output, 0)
-       output
-     }
+    //   println("RecurrentNew outputCell " + outputCell)
+
+    val hiddenSize = topology.hiddensShape(0)
+    val outputSize = input.size()
+    outputSize(2) = hiddenSize
+    output.resize(outputSize)
+    // Clone N modules along the sequence dimension.
+    extend(outputSize)
+
+    /**
+      * currentInput forms a T() type. It contains two elements, hidden and input.
+      * Each time it will feed the cell with T(hidden, input) (or T(input, hidden) depends on
+      * your hidDim and inputDim), and the cell will give a table output containing two
+      * identical elements T(output, output). One of the elements from the cell output is
+      * the updated hidden. Thus the currentInput will update its hidden element with this output.
+      */
+    var i = 1
+    // init state
+    currentInput(hidDim) = if (initState != null) initState
+    else hidden
+    while (i <= times) {
+      currentInput(inputDim) = outputCell.select(timeTranspose, i)
+      // println("RecurrentNew inputDim " + currentInput(inputDim) + " hidDim" + currentInput(hidDim))
+      cells(i - 1).forward(currentInput)
+      currentInput(hidDim) = cells(i - 1).output.toTable(hidDim)
+      i += 1
+    }
+
+    copy(cells.map(x => x.output.toTable[Tensor[T]](inputDim)),
+      output, 0)
+    output
+  }
+//
+//  override def updateOutput(input: Tensor[T]): Tensor[T] = {
+//    require(input.dim == 3 || input.dim == 5 || input.dim == 6,
+//      "Recurrent: input should be a 3D/5D/6D Tensor, e.g [batch, times, nDim], " +
+//        s"current input.dim = ${input.dim}")
+//
+//    batchSize = input.size(batchDim)
+//    times = input.size(timeDim)
+//
+//    outputCell = if (preTopology != null) {
+//      preTopology.forward(input).toTensor[T]
+//    } else {
+//      input
+//    }
+//
+//    val tt = outputCell.transpose(batchDim, timeDim)
+//    buffer.resizeAs(tt).copy(tt)
+////    println("RecurrentNew outputCell " + outputCell)
+//
+//    val hiddenSize = topology.hiddensShape(0)
+//    val outputSize = input.size()
+//    outputSize(2) = hiddenSize
+//    output.resize(outputSize)
+//    // Clone N modules along the sequence dimension.
+//    extend(outputSize)
+//
+//    /**
+//     * currentInput forms a T() type. It contains two elements, hidden and input.
+//     * Each time it will feed the cell with T(hidden, input) (or T(input, hidden) depends on
+//     * your hidDim and inputDim), and the cell will give a table output containing two
+//     * identical elements T(output, output). One of the elements from the cell output is
+//     * the updated hidden. Thus the currentInput will update its hidden element with this output.
+//     */
+//    var i = 1
+//    // init state
+//    currentInput(hidDim) = if (initState != null) initState
+//     else hidden
+//    while (i <= times) {
+//      currentInput(inputDim) = buffer.select(batchDim, i)
+//      // println("RecurrentNew inputDim " + currentInput(inputDim) + " hidDim" + currentInput(hidDim))
+//      cells(i - 1).forward(currentInput)
+//      currentInput(hidDim) = cells(i - 1).output.toTable(hidDim)
+//      i += 1
+//    }
+//
+//    copy(cells.map(x => x.output.toTable[Tensor[T]](inputDim)),
+//        output, 0)
+//    output
+//  }
+
   def getState(): Activity = {
     require(cells != null && cells(times - 1).output != null,
       "getState need to be called after updateOutput")
@@ -265,7 +323,7 @@ class Recurrent[T : ClassTag]()
       currentGradOutput(inputDim) = gradOutput.select(timeDim, i)
       _input(hidDim) = if (i > 1) cells(i - 2).output.toTable(hidDim)
         else hidden
-      _input(inputDim) = outputCell.select(timeDim, i)
+      _input(inputDim) = outputCell.select(timeTranspose, i)
       if (i == 1) {
         cells(i - 1).regluarized(true)
       } else {
@@ -294,14 +352,14 @@ class Recurrent[T : ClassTag]()
     } else {
       gradInputCell
     }
-    gradInputCell.resizeAs(outputCell)
+    gradInputCell.resize(size)
     currentGradOutput(hidDim) = gradHidden
     var i = times
     while (i >= 1) {
       currentGradOutput(inputDim) = gradOutput.select(timeDim, i)
       _input(hidDim) = if (i > 1) cells(i - 2).output.toTable(hidDim)
         else hidden
-      _input(inputDim) = outputCell.select(timeDim, i)
+      _input(inputDim) = outputCell.select(timeTranspose, i)
       cells(i - 1).updateGradInput(_input, currentGradOutput)
       currentGradOutput(hidDim) = cells(i - 1).gradInput.toTable(hidDim)
       i -= 1
@@ -322,7 +380,7 @@ class Recurrent[T : ClassTag]()
       currentGradOutput(inputDim) = gradOutput.select(timeDim, i)
       _input(hidDim) = if (i > 1) cells(i - 2).output.toTable(hidDim)
       else hidden
-      _input(inputDim) = outputCell.select(timeDim, i)
+      _input(inputDim) = outputCell.select(timeTranspose, i)
       if (i == 1) {
         cells(i - 1).regluarized(true)
       } else {
@@ -345,7 +403,7 @@ class Recurrent[T : ClassTag]()
     } else {
       gradInputCell
     }
-    gradInputCell.resizeAs(outputCell)
+    gradInputCell.resize(size)
     copy(cells.map(x => x.gradInput.toTable[Tensor[T]](inputDim)),
       gradInputCell, 0)
 
@@ -433,19 +491,19 @@ class Recurrent[T : ClassTag]()
   override def reset(): Unit = {
     require((preTopology == null && modules.length == 1) ||
       (topology != null && preTopology != null && modules.length == 2),
-      "Recurrent extend: should contain only one cell or plus a pre-topology" +
+      "RecurrentNew extend: should contain only one cell or plus a pre-topology" +
         " to process input.")
     require(topology.isInstanceOf[Cell[T]],
-      "Recurrent: should contain module with Cell type")
+      "RecurrentNew: should contain module with Cell type")
 
     modules.foreach(_.reset())
     cells.clear()
   }
 
-  override def canEqual(other: Any): Boolean = other.isInstanceOf[Recurrent[T]]
+  override def canEqual(other: Any): Boolean = other.isInstanceOf[RecurrentNew[T]]
 
   override def equals(other: Any): Boolean = other match {
-    case that: Recurrent[T] =>
+    case that: RecurrentNew[T] =>
       super.equals(that) &&
         (that canEqual this) &&
         cells == that.cells
@@ -458,16 +516,16 @@ class Recurrent[T : ClassTag]()
   }
 }
 
-object Recurrent extends ContainerSerializable {
+object RecurrentNew extends ContainerSerializable {
   def apply[@specialized(Float, Double) T: ClassTag]()
-    (implicit ev: TensorNumeric[T]) : Recurrent[T] = {
-    new Recurrent[T]()
+    (implicit ev: TensorNumeric[T]) : RecurrentNew[T] = {
+    new RecurrentNew[T]()
   }
 
   override def loadModule[T: ClassTag](model : BigDLModule)
                                       (implicit ev: TensorNumeric[T]) : ModuleData[T] = {
     val moduleData = super.loadModule(model)
-    val recurrent = moduleData.module.asInstanceOf[Recurrent[T]]
+    val recurrent = moduleData.module.asInstanceOf[RecurrentNew[T]]
     val attrMap = model.getAttrMap
 
     val topologyAttr = attrMap.get("topology")
@@ -485,7 +543,7 @@ object Recurrent extends ContainerSerializable {
                                            (implicit ev: TensorNumeric[T]) : BigDLModule = {
     val containerBuilder = BigDLModule.newBuilder(super.serializeModule(module))
 
-    val recurrent = module.module.asInstanceOf[Recurrent[T]]
+    val recurrent = module.module.asInstanceOf[RecurrentNew[T]]
 
     val topologyBuilder = AttrValue.newBuilder
     DataConverter.setAttributeValue(topologyBuilder, recurrent.topology,

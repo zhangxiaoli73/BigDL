@@ -139,19 +139,12 @@ class LocalOptimizer[T: ClassTag] private[optim](
             val localCriterion = workingCriterion(i)
             val input = miniBatchBuffer(i).getInput()
             val target = miniBatchBuffer(i).getTarget()
-            val t1 = System.nanoTime()
             val output = localModel.forward(input)
-            val t2 = System.nanoTime()
-            val _loss = ev.toType[Double](localCriterion.forward(output, target))
-            val errors = localCriterion.backward(output, target)
-            val t3 = System.nanoTime()
-            localModel.backward(input, errors)
-            val t4 = System.nanoTime()
-//            val timeData = localModel.getTimes()
-//            localModel.resetTimes()
-//            getTopTimes(timeData, t4-t3+t2-t1)
-            println(s"model: ${(t4-t3+t2-t1)/1e9} s, criterion: ${(t3-t2)/1e9} s")
-            _loss
+//            val _loss = ev.toType[Double](localCriterion.forward(output, target))
+//            val errors = localCriterion.backward(output, target)
+            localModel.backward(input, output)
+//            _loss
+            1.0
           })
       ).sum
 
@@ -191,6 +184,7 @@ class LocalOptimizer[T: ClassTag] private[optim](
         s"data fetch time is ${(dataFetchTime - start) / 1e9}s, " +
         s"train time ${(end - dataFetchTime) / 1e9}s. " +
         s"model run time is ${(dataModel - dataFetchTime)/ 1e9}s " +
+        s"model sync time is ${(end - dataModel)/ 1e9}s " +
         s"Throughput is ${batch.size().toDouble / (end - start) * 1e9} record / second. " +
         optimMethod.getHyperParameter()
         )
