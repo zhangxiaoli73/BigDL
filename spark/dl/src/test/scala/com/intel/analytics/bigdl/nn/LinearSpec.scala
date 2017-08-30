@@ -331,6 +331,21 @@ class LinearSpec extends FlatSpec with Matchers {
     linear.forward(input) should be(Tensor[Double](T(8.4, 11.2)))
   }
 
+  "LinearNew forward" should "be correct" in {
+    val linear = new LinearNew[Double](3, 2)
+    linear.weight.setValue(1, 1, 1.0)
+    linear.weight.setValue(1, 2, 2.0)
+    linear.weight.setValue(1, 3, 3.0)
+    linear.weight.setValue(2, 1, 4.0)
+    linear.weight.setValue(2, 2, 5.0)
+    linear.weight.setValue(2, 3, 6.0)
+    linear.bias.setValue(1, 7.0)
+    linear.bias.setValue(2, 8.0)
+
+    val input = Tensor[Double](T(0.1, 0.2, 0.3))
+    linear.forward(input) should be(Tensor[Double](T(8.4, 11.2)))
+  }
+
   "Linear forward" should "be correct with given weight" in {
     val weight = Tensor[Double](T(
       T(1.0, 2.0, 3.0),
