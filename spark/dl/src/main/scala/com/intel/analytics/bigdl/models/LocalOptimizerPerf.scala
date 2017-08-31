@@ -136,8 +136,8 @@ object LocalOptimizerPerf {
           throw new IllegalArgumentException(s"wrong model type ${param.modelType}")
         }
 
-        val input = Tensor[Float](param.batchSize, 20).apply1(e => Random.nextFloat()*100 + 10)
-        val labels = Tensor(param.batchSize, 20).fill(100.0f)
+        val input = Tensor[Float](param.batchSize, sequenceLen).apply1(e => Random.nextFloat()*100 + 10)
+        val labels = Tensor(param.batchSize, sequenceLen).fill(100.0f)
         val criterion = nn.MSECriterion[Float]()
 
         val model = PTBModel(inputSize = inputSize,
