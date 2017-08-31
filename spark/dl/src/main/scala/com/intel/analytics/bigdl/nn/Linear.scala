@@ -22,7 +22,8 @@ import com.intel.analytics.bigdl.utils.{RandomGenerator, T, Table}
 
 import scala.reflect.ClassTag
 import RandomGenerator._
-import com.intel.analytics.bigdl.nn.abstractnn.{Initializable, TensorModule}
+import breeze.linalg.{max, min}
+import com.intel.analytics.bigdl.nn.abstractnn.{AbstractModule, Activity, Initializable, TensorModule}
 import com.intel.analytics.bigdl.optim.Regularizer
 
 /**
@@ -253,5 +254,42 @@ object Linear {
   )(implicit ev: TensorNumeric[T]) : Linear[T] = {
     new Linear[T](inputSize, outputSize,
       withBias, wRegularizer, bRegularizer, initWeight, initBias, initGradWeight, initGradBias)
+  }
+
+  def apply1[@specialized(Float, Double) T: ClassTag](
+      rate: Int,
+      inputSize: Int,
+      outputSize: Int,
+      withBias: Boolean = true,
+      wRegularizer: Regularizer[T] = null,
+      bRegularizer: Regularizer[T] = null,
+      initWeight: Tensor[T] = null,
+      initBias: Tensor[T] = null,
+      initGradWeight: Tensor[T] = null,
+      initGradBias: Tensor[T] = null
+    )(implicit ev: TensorNumeric[T]) : AbstractModule[Activity, Activity, T] = {
+
+    val interNum = if ((inputSize > 1000 && outputSize > 1000) && rate > 0) {
+      min(inputSize, outputSize) / (rate + 1)
+    } else if ((inputSize > 1000 || outputSize > 1000) && rate > 0) {
+      min(inputSize, outputSize) / rate
+    } else {
+      0
+    }
+
+    println(s"linear inter number ${interNum}")
+
+    val model = if (interNum > 0) {
+      val linear = Sequential[T]()
+        .add(Linear[T](inputSize, interNum, withBias, wRegularizer, bRegularizer,
+          initWeight, initBias, initGradWeight, initGradBias))
+        .add(Linear[T](interNum, outputSize, withBias, wRegularizer, bRegularizer,
+          initWeight, initBias, initGradWeight, initGradBias))
+      linear
+    } else {
+      new Linear[T](inputSize, outputSize,
+        withBias, wRegularizer, bRegularizer, initWeight, initBias, initGradWeight, initGradBias)
+    }
+    model
   }
 }

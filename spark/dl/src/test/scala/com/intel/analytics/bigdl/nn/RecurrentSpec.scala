@@ -17,6 +17,7 @@
 package com.intel.analytics.bigdl.nn
 
 import com.intel.analytics.bigdl.nn
+import com.intel.analytics.bigdl.nn.abstractnn.{AbstractModule, Activity}
 import com.intel.analytics.bigdl.optim.SGD
 import com.intel.analytics.bigdl.tensor.{Storage, Tensor}
 import com.intel.analytics.bigdl.utils.RandomGenerator.RNG
@@ -594,11 +595,42 @@ class RecurrentSpec extends FlatSpec with Matchers {
     model.forward(input)
   }
 
+  def getTopTimes(times: Array[(AbstractModule[_ <: Activity, _ <: Activity, Float],
+    Long, Long)], totalTime: Long = 0L): Unit = {
+    var forwardSum = 0L
+    var backwardSum = 0L
+    times.foreach(x => {
+      forwardSum += x._2
+      backwardSum += x._3
+    })
+
+    val allTime = if (totalTime > 0) {
+      totalTime
+    } else {
+      forwardSum + backwardSum
+    }
+    println(s"forwardSum = ${forwardSum}", s"backwardSum = ${backwardSum}",
+      s"whole time = ${allTime}")
+
+    val timeBuffer = new ArrayBuffer[(AbstractModule[_ <: Activity,
+      _ <: Activity, Float], Long, Long, Long, Double, Double)]
+    var i = 0
+    while (i < times.length) {
+      val all = times(i)._2 + times(i)._3
+      val rate = times(i)._3.toDouble/ times(i)._2
+      val rateofAll = all.toDouble/allTime
+      timeBuffer.append((times(i)._1, times(i)._2, times(i)._3, all, rate, rateofAll))
+      i += 1
+    }
+    val sortData = timeBuffer.sortBy(a => a._4)
+    sortData.foreach(println)
+  }
+
   "A Recurrent test " should "work good " in {
     val seed = 100
 
     val sequenceLen = 30
-    val inputSize = 1280
+    val inputSize = 128
     val hiddenSize = 128
     val batchSize = 4
 
@@ -613,7 +645,7 @@ class RecurrentSpec extends FlatSpec with Matchers {
 
     RNG.setSeed(seed)
     val model2 = nn.Sequential[Float]()
-    model2.add(nn.Recurrent[Float]().add(nn.LSTM[Float](inputSize, hiddenSize)))
+    model2.add(nn.RecurrentNew[Float]().add(nn.LSTM[Float](inputSize, hiddenSize)))
       .add(nn.Select(2, -1))
 
     val out1 = model1.forward(input)
@@ -622,40 +654,49 @@ class RecurrentSpec extends FlatSpec with Matchers {
      val grad2 = model2.backward(input, out2)
 
     // warm up
-    for (i <- 1 to 1000) {
-      val out1 = model1.forward(input)
-      val grad1 = model1.backward(input, out1)
-    }
+//    for (i <- 1 to 1000) {
+//      val out1 = model1.forward(input)
+//      val grad1 = model1.backward(input, out1)
+//    }
     for (i <- 1 to 1000) {
       val out2 = model2.forward(input)
       val grad2 = model2.backward(input, out2)
     }
 
     //
+    println("start run")
     val t1 = System.nanoTime()
-    for (i <- 1 to 1000) {
-      val out1 = model1.forward(input)
-      val grad1 = model1.backward(input, out1)
-    }
+//    for (i <- 1 to 3) {
+//      val out1 = model1.forward(input)
+//      val grad1 = model1.backward(input, out1)
+//      val timeData = model1.getTimes()
+//      model1.resetTimes()
+//      getTopTimes(timeData)
+//      println("\n")
+//    }
     val end1 = System.nanoTime() -t1
 
     val t2 = System.nanoTime()
-    for (i <- 1 to 1000) {
+    for (i <- 1 to 3) {
       val out2 = model2.forward(input)
       val grad2 = model2.backward(input, out2)
+      val timeData = model2.getTimes()
+      model2.resetTimes()
+      getTopTimes(timeData)
+      println("\n")
     }
     val end2 = System.nanoTime() -t2
 
     println(s"end1 ${end1/1e9} end2 ${end2/1e9}")
 
-    val w1 = model1.getParameters()
-    val w2 = model2.getParameters()
-
-    w1._1 should be (w2._1)
-    w1._2 should be (w2._2)
-
-    out1 should be(out2)
-    grad1 should be(grad2)
+//    val w1 = model1.getParameters()
+//    val w2 = model2.getParameters()
+//
+//    w1._1 should be (w2._1)
+//    w1._2 should be (w2._2)
+//
+//    out1 should be(out2)
+//    grad1 should be(grad2)
     println("done")
   }
 }
