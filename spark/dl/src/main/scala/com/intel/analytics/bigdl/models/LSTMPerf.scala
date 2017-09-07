@@ -47,7 +47,16 @@ object SimpleRNNPerf {
     model.add(nn.Recurrent()
       .add(nn.RnnCell(inputSize, hiddenSize, nn.Tanh[Float]())))
       .add(nn.Select(2, -1))
+    model
+  }
+}
 
+object SimpleRNNPerfNew {
+  def apply(classNum: Int, inputSize: Int, hiddenSize: Int): Module[Float] = {
+    val model = nn.Sequential()
+    model.add(nn.RecurrentNew()
+      .add(nn.RnnCell(inputSize, hiddenSize, nn.Tanh[Float]())))
+      .add(nn.Select(2, -1))
     model
   }
 }
@@ -57,6 +66,16 @@ object LSTMPerf {
     val model = nn.Sequential()
     val embedding = 1
     model.add(nn.Recurrent().add(nn.LSTM(inputSize, hiddenSize)))
+      .add(nn.Select(2, -1))
+    model
+  }
+}
+
+object LSTMPerfNew {
+  def apply(classNum: Int, inputSize: Int, hiddenSize: Int): Module[Float] = {
+    val model = nn.Sequential()
+    val embedding = 1
+    model.add(nn.RecurrentNew().add(nn.LSTM(inputSize, hiddenSize)))
       .add(nn.Select(2, -1))
     model
   }

@@ -141,11 +141,10 @@ class LocalOptimizer[T: ClassTag] private[optim](
             val input = miniBatchBuffer(i).getInput()
             val target = miniBatchBuffer(i).getTarget()
             val output = localModel.forward(input)
-//            val _loss = ev.toType[Double](localCriterion.forward(output, target))
-//            val errors = localCriterion.backward(output, target)
-            localModel.backward(input, output)
-//            _loss
-            1.0
+            val _loss = ev.toType[Double](localCriterion.forward(output, target))
+            val errors = localCriterion.backward(output, target)
+            localModel.backward(input, errors)
+            _loss
           })
       ).sum
 

@@ -15,6 +15,8 @@
  */
 package com.intel.analytics.bigdl.models.rnn
 
+import java.util.concurrent.atomic.AtomicInteger
+
 import breeze.linalg.all
 import com.intel.analytics.bigdl._
 import com.intel.analytics.bigdl.dataset.{LocalDataSet, MiniBatch}
@@ -243,9 +245,17 @@ object PTBTest {
     val dummyDataSet = new LocalDataSet[MiniBatch[Float]] {
       override def data(train : Boolean): Iterator[MiniBatch[Float]] = {
         new Iterator[MiniBatch[Float]] {
-          override def hasNext: Boolean = true
+          private val index = new AtomicInteger()
+          override def hasNext: Boolean = {
+            if (train) {
+              true
+            } else {
+              index.get() < 100000
+            }
+          }
 
           override def next(): MiniBatch[Float] = {
+            index.getAndIncrement()
             MiniBatch(input, labels)
           }
         }
@@ -278,7 +288,7 @@ case class LocalOptimizerPerfParam(
   dataType: String = "float",
   module: String = "ptb",
   inputData: String = "random",
-  testType: String = "train",
+  testType: String = "times",
   modelType: String = "large",
   inputSize: Int = 128,
   hiddenSize: Int = 128,

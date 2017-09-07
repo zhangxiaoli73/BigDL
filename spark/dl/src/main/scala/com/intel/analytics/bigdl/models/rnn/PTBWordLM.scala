@@ -22,10 +22,12 @@ import com.intel.analytics.bigdl.dataset.text.LabeledSentenceToSample
 import com.intel.analytics.bigdl.dataset.text._
 import com.intel.analytics.bigdl.dataset.text.utils.SentenceToken
 import com.intel.analytics.bigdl.nn.{ClassNLLCriterion, CrossEntropyCriterion, Module, TimeDistributedCriterion}
+import com.intel.analytics.bigdl.optim.SGD.EpochLearningDecay
 import com.intel.analytics.bigdl.optim._
 import com.intel.analytics.bigdl.tensor.{Storage, Tensor}
 import com.intel.analytics.bigdl.utils.{Engine, T, Table}
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric._
+import com.intel.analytics.bigdl.visualization.{TrainSummary, ValidationSummary}
 import org.apache.log4j.{Level, Logger}
 import org.apache.spark.SparkContext
 
@@ -75,7 +77,8 @@ object PTBWordLM {
           hiddenSize = param.hiddenSize,
           outputSize = param.vocabSize,
           numLayers = param.numLayers,
-          interNum = param.interNum)
+          interNum = param.interNum,
+          keepProb = param.keepProb)
         curModel.reset()
         curModel
       }
@@ -83,14 +86,23 @@ object PTBWordLM {
       val optimMethod = if (param.stateSnapshot.isDefined) {
         OptimMethod.load[Float](param.stateSnapshot.get)
       } else {
-        new Adam[Float](param.learningRate, learningRateDecay = 0.5)
+        new SGD[Float](learningRate = param.learningRate, clipNorm = param.clipNorm,
+          learningRateDecay = param.learningRateDecay,
+          learningRateSchedule = EpochLearningDecay(param.startEpoch, param.nEpochs))
       }
+
+      val logdir = "ptbModel"
+      val appName = s"${sc.applicationId}"
+      val trainSummary = TrainSummary(logdir, appName)
+      trainSummary.setSummaryTrigger("LearningRate", Trigger.severalIteration(1))
+      trainSummary.setSummaryTrigger("Parameters", Trigger.severalIteration(10))
+      val validationSummary = ValidationSummary(logdir, appName)
 
       val optimizer = Optimizer(
         model = model,
         dataset = trainSet,
         criterion = TimeDistributedCriterion[Float](
-          CrossEntropyCriterion[Float](), sizeAverage = true)
+          CrossEntropyCriterion[Float](), sizeAverage = false)
       )
 
       if (param.checkpoint.isDefined) {
@@ -105,7 +117,9 @@ object PTBWordLM {
         .setValidation(Trigger.everyEpoch, validationSet, Array(new Loss[Float](
           TimeDistributedCriterion[Float](
             CrossEntropyCriterion[Float](),
-            sizeAverage = true))))
+            sizeAverage = false))))
+        .setTrainSummary(trainSummary)
+        .setValidationSummary(validationSummary)
         .setOptimMethod(optimMethod)
         .setEndWhen(Trigger.maxEpoch(param.nEpochs))
         .optimize()
