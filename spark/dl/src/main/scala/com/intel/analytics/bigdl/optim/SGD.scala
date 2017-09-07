@@ -16,10 +16,15 @@
 
 package com.intel.analytics.bigdl.optim
 
+import breeze.linalg.{clip, max, norm}
+import com.intel.analytics.bigdl.nn
+import com.intel.analytics.bigdl.nn.ops
 import com.intel.analytics.bigdl.optim.SGD.{Default, LearningRateSchedule}
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
 import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.utils.{T, Table}
+import org.apache.spark.internal
+import org.apache.spark.internal.config
 
 import scala.reflect.ClassTag
 
@@ -44,7 +49,8 @@ class SGD[@specialized(Float, Double) T: ClassTag](
   var nesterov: Boolean = false,
   var learningRateSchedule: LearningRateSchedule = Default(),
   var learningRates: Tensor[T] = null,
-  var weightDecays: Tensor[T] = null)(implicit ev: TensorNumeric[T])
+  var weightDecays: Tensor[T] = null,
+  val clipNorm: Float = 0.00001f)(implicit ev: TensorNumeric[T])
   extends OptimMethod[T] {
 
   import SGD._
@@ -73,6 +79,7 @@ class SGD[@specialized(Float, Double) T: ClassTag](
       "Nesterov momentum requires a momentum and zero dampening")
 
     var (fx, dfdx) = feval(x)
+    clipByGlobalNorm(dfdx, clipNorm)
 
     if (wd != 0 || wds != null) {
       require(!state.get[Boolean]("isLayerwiseScaled").getOrElse(false),
@@ -193,6 +200,19 @@ class SGD[@specialized(Float, Double) T: ClassTag](
   }
 
   override def getLearningRate(): Double = this.learningRateSchedule.currentRate
+
+
+  def clipByGlobalNorm(t_list: Tensor[T], clip_norm: Float): Unit = {
+    // global_norm = sqrt(sum([l2norm(t)**2 for t in t_list]))
+    if (clip_norm > 0.01f) {
+      val use_norm = ev.toType[Double](t_list.norm(2))
+      val scale = clip_norm * math.min( 1.0 / use_norm, 1.0 / clip_norm)
+      println("use_norm " + use_norm + " scale " + scale + " clipNorm " + clip_norm)
+      if (scale < 1.0) {
+        t_list.mul(ev.fromType(scale))
+      }
+    }
+  }
 }
 
 object SGD {
@@ -506,6 +526,24 @@ object SGD {
     }
   }
 
+  case class EpochLearningDecay(startEpoch: Int, endEpoch: Int) extends LearningRateSchedule {
+    override def updateHyperParameter[T](optimMethod: SGD[T]): Unit = {
+      val lrd = optimMethod.learningRateDecay
+      val lr = if (currentRate > 0) {
+        currentRate
+      } else {
+        optimMethod.learningRate
+      }
+      val epoch = optimMethod.state[Int]("epoch")
+      if ((epoch >= startEpoch) && (epoch <= endEpoch)) {
+        val lrd2 = math.pow(lrd, max(epoch + 1 - startEpoch, 0))
+        currentRate = -lr * lrd2
+      } else {
+        currentRate = -lr
+      }
+    }
+  }
+
   /**
    * A structure to specify hyper parameters by start epoch and end epoch.
    * Usually work with [[EpochSchedule]].
@@ -578,5 +616,4 @@ object SGD {
       }
     }
   }
-
 }

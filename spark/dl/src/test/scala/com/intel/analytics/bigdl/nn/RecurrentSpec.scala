@@ -630,7 +630,7 @@ class RecurrentSpec extends FlatSpec with Matchers {
     val seed = 100
 
     val sequenceLen = 30
-    val inputSize = 128
+    val inputSize = 1280
     val hiddenSize = 128
     val batchSize = 4
 
@@ -651,13 +651,13 @@ class RecurrentSpec extends FlatSpec with Matchers {
     val out1 = model1.forward(input)
     val grad1 = model1.backward(input, out1)
     val out2 = model2.forward(input)
-     val grad2 = model2.backward(input, out2)
+    val grad2 = model2.backward(input, out2)
 
     // warm up
-//    for (i <- 1 to 1000) {
-//      val out1 = model1.forward(input)
-//      val grad1 = model1.backward(input, out1)
-//    }
+    for (i <- 1 to 1000) {
+      val out1 = model1.forward(input)
+      val grad1 = model1.backward(input, out1)
+    }
     for (i <- 1 to 1000) {
       val out2 = model2.forward(input)
       val grad2 = model2.backward(input, out2)
@@ -666,37 +666,37 @@ class RecurrentSpec extends FlatSpec with Matchers {
     //
     println("start run")
     val t1 = System.nanoTime()
-//    for (i <- 1 to 3) {
-//      val out1 = model1.forward(input)
-//      val grad1 = model1.backward(input, out1)
+    for (i <- 1 to 30) {
+      val out1 = model1.forward(input)
+      val grad1 = model1.backward(input, out1)
 //      val timeData = model1.getTimes()
 //      model1.resetTimes()
 //      getTopTimes(timeData)
 //      println("\n")
-//    }
+    }
     val end1 = System.nanoTime() -t1
 
     val t2 = System.nanoTime()
-    for (i <- 1 to 3) {
+    for (i <- 1 to 30) {
       val out2 = model2.forward(input)
       val grad2 = model2.backward(input, out2)
-      val timeData = model2.getTimes()
-      model2.resetTimes()
-      getTopTimes(timeData)
-      println("\n")
+//      val timeData = model2.getTimes()
+//      model2.resetTimes()
+//      getTopTimes(timeData)
+//      println("\n")
     }
     val end2 = System.nanoTime() -t2
 
     println(s"end1 ${end1/1e9} end2 ${end2/1e9}")
 
-//    val w1 = model1.getParameters()
-//    val w2 = model2.getParameters()
-//
-//    w1._1 should be (w2._1)
-//    w1._2 should be (w2._2)
-//
-//    out1 should be(out2)
-//    grad1 should be(grad2)
+    val w1 = model1.getParameters()
+    val w2 = model2.getParameters()
+
+    w1._1 should be (w2._1)
+    w1._2 should be (w2._2)
+
+    out1 should be(out2)
+    grad1 should be(grad2)
     println("done")
   }
 }

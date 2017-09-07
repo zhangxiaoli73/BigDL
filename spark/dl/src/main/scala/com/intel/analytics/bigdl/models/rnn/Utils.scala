@@ -45,6 +45,7 @@ object Utils {
                           learningRate: Double = 0.01,
                           momentum: Double = 0.0,
                           weightDecay: Double = 0.5,
+                          learningRateDecay: Double = 0.0,
                           dampening: Double = 0.0,
                           hiddenSize: Int = 200,
                           vocabSize: Int = 10001,
@@ -54,7 +55,10 @@ object Utils {
                           sentFile: Option[String] = None,
                           tokenFile: Option[String] = None,
                           overWriteCheckpoint: Boolean = false,
-                          interNum: Int = 0)
+                          interNum: Int = 0,
+                          clipNorm: Float = 5.0f,
+                          startEpoch: Int = 1,
+                          keepProb: Float = 2.0f)
 
   val trainParser = new OptionParser[TrainParams]("BigDL SimpleRNN Train Example") {
     opt[String]('f', "dataFolder")
@@ -93,6 +97,10 @@ object Utils {
     opt[Double]("weightDecay")
       .text("weight decay")
       .action((x, c) => c.copy(weightDecay = x))
+
+    opt[Double]("learningRateDecay")
+      .text("learningRateDecay")
+      .action((x, c) => c.copy(learningRateDecay = x))
 
     opt[Double]("dampening")
       .text("dampening")
@@ -134,6 +142,17 @@ object Utils {
       .text("interNum checkpoint files")
       .action( (x, c) => c.copy(interNum = x))
 
+    opt[Double]("clipNorm")
+      .text("clipNorm")
+      .action((x, c) => c.copy(clipNorm = x.toFloat))
+
+    opt[Int]("startEpoch")
+      .text("startEpoch")
+      .action((x, c) => c.copy(startEpoch = x))
+
+    opt[Double]("keepProb")
+      .text("keepProb")
+      .action((x, c) => c.copy(keepProb = x.toFloat))
   }
 
   case class TestParams(

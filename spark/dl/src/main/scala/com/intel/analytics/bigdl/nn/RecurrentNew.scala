@@ -51,6 +51,7 @@ class RecurrentNew[T : ClassTag]()
   private val hidDim = 2
   private var (batchSize, times) = (0, 0)
   private var topology: Cell[T] = null
+  private var buffer = Tensor[T]()
   private var preTopology: AbstractModule[Activity, Activity, T] = null
   private val dropouts: ArrayBuffer[Array[Dropout[T]]] =
     new ArrayBuffer[Array[Dropout[T]]]
@@ -209,10 +210,10 @@ class RecurrentNew[T : ClassTag]()
     }
 
     size = buffer.size()
-    val t1 = System.nanoTime()
+    // val t1 = System.nanoTime()
     buffer = buffer.transpose(batchDim, timeDim)
     outputCell.resizeAs(buffer).copy(buffer)
-    val end1 = System.nanoTime()
+    // val end1 = System.nanoTime()
     //   println("RecurrentNew outputCell " + outputCell)
 
     val hiddenSize = topology.hiddensShape(0)
@@ -244,8 +245,8 @@ class RecurrentNew[T : ClassTag]()
     copy(cells.map(x => x.output.toTable[Tensor[T]](inputDim)),
       output, 0)
 
-    val end2 = System.nanoTime()
-    println(s"times end1 ${(end1-t1)} end2 ${(end2-end1)}")
+    // val end2 = System.nanoTime()
+    // println(s"times end1 ${(end1-t1)} end2 ${(end2-end1)}")
     output
   }
 
@@ -330,9 +331,13 @@ class RecurrentNew[T : ClassTag]()
   override def backward(input: Tensor[T], gradOutput: Tensor[T]): Tensor[T] = {
     val st = System.nanoTime
     currentGradOutput(hidDim) = gradHidden
+
+    val gradOutputTranspose = gradOutput.transpose(batchDim, timeDim)
+    buffer.resizeAs(gradOutputTranspose).copy(gradOutputTranspose)
+
     var i = times
     while (i >= 1) {
-      currentGradOutput(inputDim) = gradOutput.select(timeDim, i)
+      currentGradOutput(inputDim) = buffer.select(timeTranspose, i) // gradOutput.select(timeDim, i)
       _input(hidDim) = if (i > 1) cells(i - 2).output.toTable(hidDim)
       else hidden
       _input(inputDim) = outputCell.select(timeTranspose, i)

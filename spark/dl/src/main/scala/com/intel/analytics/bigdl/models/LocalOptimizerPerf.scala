@@ -370,11 +370,11 @@ object LocalOptimizerPerf {
  * @param inputData input data type (constant / random)
  */
 case class LocalOptimizerPerfParam(
-  batchSize: Int = 20,
-  var coreNumber: Int = Runtime.getRuntime.availableProcessors() / 2,
+  batchSize: Int = 30,
+  var coreNumber: Int = 1, //Runtime.getRuntime.availableProcessors() / 2,
   iteration: Int = 80,
   dataType: String = "float",
-  module: String = "ptb",
+  module: String = "lstm",
   inputData: String = "random",
   testType: String = "times",
   modelType: String = "small",
