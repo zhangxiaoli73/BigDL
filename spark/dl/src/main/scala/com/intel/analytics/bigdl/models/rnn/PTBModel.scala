@@ -19,6 +19,8 @@ package com.intel.analytics.bigdl.models.rnn
 import com.intel.analytics.bigdl.Module
 import com.intel.analytics.bigdl.nn.Graph._
 import com.intel.analytics.bigdl.nn.{TimeDistributed, _}
+import org.apache.spark.internal
+import org.apache.spark.internal.config
 
 object PTBModel {
   def apply(
@@ -26,22 +28,31 @@ object PTBModel {
     hiddenSize: Int,
     outputSize: Int,
     numLayers: Int,
-    interNum: Int = 0)
+    interNum: Int = 0,
+    keepProb: Float = 2.0f)
   : Module[Float] = {
     val input = Input[Float]()
     val embeddingLookup =
       LookupTable[Float](inputSize, hiddenSize).inputs(input)
 //    val transpose = Transpose[Float](Array((1, 2))).inputs(embeddingLookup)
-    val lstm = addLayer(hiddenSize, hiddenSize, 1, numLayers, embeddingLookup)
-    val output = if (interNum > 0) {
-//    val linear = Sequential[Float]().
-//      add(Linear[Float](hiddenSize, 100)).add(Linear[Float](100, outputSize))
-      val linear = Sequential[Float]().add(Linear[Float](hiddenSize, interNum)).add(Linear[Float](interNum, outputSize))
-      TimeDistributed[Float](linear).inputs(lstm)
-    } else {
-      val linear = Linear[Float](hiddenSize, outputSize)
-      TimeDistributed[Float](linear).inputs(lstm)
-    }
+
+    val  inputs = if (keepProb < 1) {
+      Dropout[Float](keepProb).inputs(embeddingLookup)
+    } else embeddingLookup
+
+    val lstm = addLayer(hiddenSize, hiddenSize, 1, numLayers, inputs, interNum)
+//    val output = if (interNum > 0) {
+////    val linear = Sequential[Float]().
+////      add(Linear[Float](hiddenSize, 100)).add(Linear[Float](100, outputSize))
+//      val linear = Sequential[Float]().add(Linear[Float](hiddenSize, interNum)).add(Linear[Float](interNum, outputSize))
+//      TimeDistributed[Float](linear).inputs(lstm)
+//    } else {
+//      val linear = Linear[Float](hiddenSize, outputSize)
+//      TimeDistributed[Float](linear).inputs(lstm)
+//    }
+    val linear = Linear.apply1[Float](interNum, hiddenSize, outputSize)
+    val output = TimeDistributed[Float](linear).inputs(lstm)
+
     Graph(input, output)
   }
 
@@ -49,10 +60,11 @@ object PTBModel {
                hiddenSize: Int,
                depth: Int,
                numLayers: Int,
-               input: ModuleNode[Float]): ModuleNode[Float] = {
+               input: ModuleNode[Float],
+               interNum: Int = 0): ModuleNode[Float] = {
     if (depth == numLayers) {
       Recurrent[Float]()
-        .add(LSTM[Float](inputSize, hiddenSize, 0, null, null, null, 2))
+        .add(LSTM[Float](inputSize, hiddenSize, 0, null, null, null, interNum))
         .inputs(input)
     } else {
       addLayer(
@@ -61,8 +73,9 @@ object PTBModel {
         depth + 1,
         numLayers,
         Recurrent[Float]()
-          .add(LSTM[Float](inputSize, hiddenSize, 0, null, null, null, 2))
-          .inputs(input)
+          .add(LSTM[Float](inputSize, hiddenSize, 0, null, null, null, interNum))
+          .inputs(input),
+        interNum
       )
     }
   }

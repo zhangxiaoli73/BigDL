@@ -15,6 +15,8 @@
  */
 package com.intel.analytics.bigdl.models
 
+import java.util.concurrent.atomic.AtomicInteger
+
 import com.intel.analytics.bigdl._
 import com.intel.analytics.bigdl.dataset.{LocalDataSet, MiniBatch}
 import com.intel.analytics.bigdl.example.loadmodel.AlexNet
@@ -91,6 +93,17 @@ object LocalOptimizerPerf {
 
         (LSTMPerf(1000, inputSize, hiddenSize), input, labels, criterion)
 
+      case "lstm_new" =>
+        val sequenceLen = param.sequenceLen
+        val inputSize = param.inputSize
+        val hiddenSize = param.hiddenSize
+
+        val input = Tensor[Float](Array(batchSize, sequenceLen, inputSize)).randn()
+        val labels = Tensor(Array(batchSize, hiddenSize)).fill(1)
+        val criterion = nn.MSECriterion[Float]()
+
+        (LSTMPerfNew(1000, inputSize, hiddenSize), input, labels, criterion)
+
       case "gru" =>
         val sequenceLen = param.sequenceLen
         val inputSize = param.inputSize
@@ -112,6 +125,17 @@ object LocalOptimizerPerf {
         val criterion = nn.MSECriterion[Float]()
 
         (SimpleRNNPerf(1000, inputSize, hiddenSize), input, labels, criterion)
+
+      case "simplernn_new" =>
+        val sequenceLen = param.sequenceLen
+        val inputSize = param.inputSize
+        val hiddenSize = param.hiddenSize
+
+        val input = Tensor[Float](Array(batchSize, sequenceLen, inputSize)).randn()
+        val labels = Tensor(Array(batchSize, hiddenSize)).fill(1)
+        val criterion = nn.MSECriterion[Float]()
+
+        (SimpleRNNPerfNew(1000, inputSize, hiddenSize), input, labels, criterion)
 
       case "lstmpeephole" =>
         val sequenceLen = param.sequenceLen
@@ -138,7 +162,7 @@ object LocalOptimizerPerf {
 
         val input = Tensor[Float](param.batchSize, sequenceLen).apply1(e => Random.nextFloat()*100 + 10)
         val labels = Tensor(param.batchSize, sequenceLen).fill(100.0f)
-        val criterion = nn.MSECriterion[Float]()
+        val criterion = nn.ClassNLLCriterion[Float]()
 
         val model = PTBModel(inputSize = inputSize,
           hiddenSize = hiddenSize,
@@ -330,9 +354,17 @@ object LocalOptimizerPerf {
     val dummyDataSet = new LocalDataSet[MiniBatch[Float]] {
       override def data(train : Boolean): Iterator[MiniBatch[Float]] = {
         new Iterator[MiniBatch[Float]] {
-          override def hasNext: Boolean = true
+          private val index = new AtomicInteger()
+          override def hasNext: Boolean = {
+            if (train) {
+              true
+            } else {
+              index.get() < 100000
+            }
+          }
 
           override def next(): MiniBatch[Float] = {
+            index.getAndIncrement()
             MiniBatch(input, labels)
           }
         }
@@ -370,13 +402,13 @@ object LocalOptimizerPerf {
  * @param inputData input data type (constant / random)
  */
 case class LocalOptimizerPerfParam(
-  batchSize: Int = 20,
+  batchSize: Int = 80,
   var coreNumber: Int = Runtime.getRuntime.availableProcessors() / 2,
   iteration: Int = 80,
   dataType: String = "float",
-  module: String = "ptb",
+  module: String = "lstm",
   inputData: String = "random",
-  testType: String = "times",
+  testType: String = "train",
   modelType: String = "small",
   inputSize: Int = 128,
   hiddenSize: Int = 128,

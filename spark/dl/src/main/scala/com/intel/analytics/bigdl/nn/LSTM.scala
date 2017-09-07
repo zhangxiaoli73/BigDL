@@ -74,7 +74,7 @@ class LSTM[T : ClassTag] (
   override def preTopology: AbstractModule[Activity, Activity, T] = if (p != 0) {
     null
   } else {
-    TimeDistributed[T](Linear.apply1(rate, inputSize, 4 * hiddenSize,
+    TimeDistributed[T](Linear(inputSize, 4 * hiddenSize,
       wRegularizer = wRegularizer, bRegularizer = bRegularizer))
   }
 
@@ -120,7 +120,7 @@ class LSTM[T : ClassTag] (
       h2g = JoinTable(1, 1).inputs(linearh2g1, linearh2g2, linearh2g3, linearh2g4)
     } else {
       i2g = input1
-      h2g = Linear.apply1(rate, hiddenSize, 4 * hiddenSize,
+      h2g = Linear(hiddenSize, 4 * hiddenSize,
         withBias = false, wRegularizer = uRegularizer).inputs(input2)
     }
 
@@ -201,8 +201,9 @@ object LSTM {
     wRegularizer: Regularizer[T] = null,
     uRegularizer: Regularizer[T] = null,
     bRegularizer: Regularizer[T] = null,
-    rate: Int = 0)
+    rate: Int = 0
+  )
     (implicit ev: TensorNumeric[T]): LSTM[T] = {
-    new LSTM[T](inputSize, hiddenSize, p, wRegularizer, uRegularizer, bRegularizer, rate)
+    new LSTM[T](inputSize, hiddenSize, p, wRegularizer, uRegularizer, bRegularizer)
   }
 }

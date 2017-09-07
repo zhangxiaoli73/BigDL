@@ -43,14 +43,17 @@ class Recurrent[T : ClassTag](var batchNormParams: BatchNormParams[T] = null)
   private val currentInput = T()
   private val currentGradOutput = T()
   private val gradInputCell = Tensor[T]()
-  private var outputCell = Tensor[T]()
+  private val outputCell = Tensor[T]()
+  private var size: Array[Int] = null
   private val _input = T()
   private val batchDim = 1
   private val timeDim = 2
+  private val timeTranspose = 1
   private val inputDim = 1
   private val hidDim = 2
   private var (batchSize, times) = (0, 0)
   private var topology: Cell[T] = null
+  private val buffer = Tensor[T]()
   private var preTopology: AbstractModule[Activity, Activity, T] = null
   private val dropouts: ArrayBuffer[Array[Dropout[T]]] =
     new ArrayBuffer[Array[Dropout[T]]]
@@ -73,7 +76,6 @@ class Recurrent[T : ClassTag](var batchNormParams: BatchNormParams[T] = null)
   override def add(module: AbstractModule[_ <: Activity, _ <: Activity, T]): Recurrent.this.type = {
     require(module.isInstanceOf[Cell[T]],
       "Recurrent: contained module should be Cell type")
-
     topology = module.asInstanceOf[Cell[T]]
     preTopology = topology.preTopology
 
@@ -159,23 +161,87 @@ class Recurrent[T : ClassTag](var batchNormParams: BatchNormParams[T] = null)
   }
 
   /**
-   * set the cells' output and gradInput to recurrent's output and gradInput
-   * to decrease the copy expense.
-   * @param src
-   * @param dst
-   */
+    * set the cells' output and gradInput to recurrent's output and gradInput
+    * to decrease the copy expense.
+    * @param src
+    * @param dst
+    */
+  //  private def copy(src: ArrayBuffer[Tensor[T]], dst: Tensor[T], offset: Int): Unit = {
+  //    var t = 1
+  //    while ((t + offset) <= times) {
+  //      dst.select(timeDim, t + offset).copy(src(t - 1))
+  //      t += 1
+  //    }
+  //  }
+
+  //    private def copy(src: ArrayBuffer[Tensor[T]], dst: Tensor[T], offset: Int): Unit = {
+  //      var t = 1
+  //      var tt = 0
+  //      val dstArr = dst.storage().array()
+  //      val length3 = dst.size(3)
+  //      while ((t + offset) <= times) {
+  //        val t1 = src(t - 1).storage().array()
+  //        var l = 0
+  //        while (l < batchSize) {
+  //          System.arraycopy(t1, l * length3, dstArr, times * length3 * l + length3 * (t-1), length3)
+  //          l += 1
+  //        }
+  //        t += 1
+  //      }
+  //    }
+
   private def copy(src: ArrayBuffer[Tensor[T]], dst: Tensor[T], offset: Int): Unit = {
+    val dstArr = dst.storage().array()
+    val dstOffset = dst.storageOffset() - 1
+    val otherSize = dst.nElement() / (batchSize * times)
+
     var t = 1
+    val length2 = batchSize * otherSize
     while ((t + offset) <= times) {
-      dst.select(timeDim, t + offset).copy(src(t - 1))
+      val srcArr = src(t - 1).storage().array()
+      val srcOffset = src(t - 1).storageOffset() - 1
+      val length1 = (t - 1) * otherSize + dstOffset
+      var l = 0
+      while (l < length2) {
+        System.arraycopy(srcArr, l + srcOffset, dstArr, times * l + length1, otherSize)
+        l += otherSize
+      }
+      t += 1
+    }
+  }
+
+  def transposeMemory(src: Tensor[T], dst: Tensor[T]): Unit = {
+    val srcSize = src.size()
+    val batchSize = srcSize(0)
+    val timeSize = srcSize(1)
+    val otherSize = src.nElement() / (batchSize * timeSize)
+    val srcArr = src.storage().array()
+    val srcOffset = src.storageOffset() - 1
+
+    srcSize(0) = timeSize
+    srcSize(1) = batchSize
+    dst.resize(srcSize)
+    val dstArr = dst.storage().array()
+    val dstOffset = dst.storageOffset() - 1
+
+    val length3 = timeSize * otherSize
+    var t = 1
+    while (t <= batchSize) {
+      var l = 0
+      val length1 = timeSize * otherSize * (t-1) + srcOffset
+      val length2 = (t-1) * otherSize + dstOffset
+      while (l < length3) {
+        System.arraycopy(srcArr, length1 + l, dstArr, l * batchSize + length2, otherSize)
+        l += otherSize
+      }
       t += 1
     }
   }
 
   /**
-   * Sharing weights, bias, gradWeights across all the cells in time dim
-   * @param cells
-   */
+    * Sharing weights, bias, gradWeights across all the cells in time dim
+    * @param cells
+    */
   def share(cells: ArrayBuffer[Cell[T]]): Unit = {
     val params = cells.head.parameters()
     cells.foreach(c => {
@@ -229,11 +295,14 @@ class Recurrent[T : ClassTag](var batchNormParams: BatchNormParams[T] = null)
     batchSize = input.size(batchDim)
     times = input.size(timeDim)
 
-    outputCell = if (preTopology != null) {
+    val buffer = if (preTopology != null) {
       preTopology.forward(input).toTensor[T]
     } else {
       input
     }
+
+    size = buffer.size()
+    transposeMemory(buffer, outputCell)
 
     val hiddenSize = topology.hiddensShape(0)
     val outputSize = input.size()
@@ -254,7 +323,7 @@ class Recurrent[T : ClassTag](var batchNormParams: BatchNormParams[T] = null)
     currentInput(hidDim) = if (initState != null) initState
      else hidden
     while (i <= times) {
-      currentInput(inputDim) = outputCell.select(timeDim, i)
+      currentInput(inputDim) = outputCell.select(timeTranspose, i)
       cells(i - 1).forward(currentInput)
       currentInput(hidDim) = cells(i - 1).output.toTable(hidDim)
       i += 1
@@ -293,8 +362,8 @@ class Recurrent[T : ClassTag](var batchNormParams: BatchNormParams[T] = null)
     while (i >= 1) {
       currentGradOutput(inputDim) = gradOutput.select(timeDim, i)
       _input(hidDim) = if (i > 1) cells(i - 2).output.toTable(hidDim)
-        else hidden
-      _input(inputDim) = outputCell.select(timeDim, i)
+      else hidden
+      _input(inputDim) = outputCell.select(timeTranspose, i)
       if (i == 1) {
         cells(i - 1).regluarized(true)
       } else {
@@ -323,14 +392,14 @@ class Recurrent[T : ClassTag](var batchNormParams: BatchNormParams[T] = null)
     } else {
       gradInputCell
     }
-    gradInputCell.resizeAs(outputCell)
+    gradInputCell.resize(size)
     currentGradOutput(hidDim) = gradHidden
     var i = times
     while (i >= 1) {
       currentGradOutput(inputDim) = gradOutput.select(timeDim, i)
       _input(hidDim) = if (i > 1) cells(i - 2).output.toTable(hidDim)
-        else hidden
-      _input(inputDim) = outputCell.select(timeDim, i)
+      else hidden
+      _input(inputDim) = outputCell.select(timeTranspose, i)
       cells(i - 1).updateGradInput(_input, currentGradOutput)
       currentGradOutput(hidDim) = cells(i - 1).gradInput.toTable(hidDim)
       i -= 1
@@ -346,13 +415,14 @@ class Recurrent[T : ClassTag](var batchNormParams: BatchNormParams[T] = null)
   override def backward(input: Tensor[T], gradOutput: Tensor[T]): Tensor[T] = {
     val st = System.nanoTime
     currentGradOutput(hidDim) = gradHidden
-    var i = times
 
+    transposeMemory(gradOutput, buffer)
+    var i = times
     while (i >= 1) {
-      currentGradOutput(inputDim) = gradOutput.select(timeDim, i)
+      currentGradOutput(inputDim) = buffer.select(timeTranspose, i) // gradOutput.select(timeDim, i)
       _input(hidDim) = if (i > 1) cells(i - 2).output.toTable(hidDim)
       else hidden
-      _input(inputDim) = outputCell.select(timeDim, i)
+      _input(inputDim) = outputCell.select(timeTranspose, i)
       if (i == 1) {
         cells(i - 1).regluarized(true)
       } else {
@@ -375,7 +445,7 @@ class Recurrent[T : ClassTag](var batchNormParams: BatchNormParams[T] = null)
     } else {
       gradInputCell
     }
-    gradInputCell.resizeAs(outputCell)
+    gradInputCell.resize(size)
     copy(cells.map(x => x.gradInput.toTable[Tensor[T]](inputDim)),
       gradInputCell, 0)
 
@@ -457,6 +527,7 @@ class Recurrent[T : ClassTag](var batchNormParams: BatchNormParams[T] = null)
     cells.clear()
     timeBuffer.clear()
     initState = null
+    buffer.set()
     this
   }
 

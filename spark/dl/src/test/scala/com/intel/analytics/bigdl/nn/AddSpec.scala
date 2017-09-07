@@ -16,11 +16,16 @@
 
 package com.intel.analytics.bigdl.nn
 
+import breeze.linalg.*
 import com.intel.analytics.bigdl.nn
 import com.intel.analytics.bigdl.nn.abstractnn.{TensorCriterion, TensorModule}
 import com.intel.analytics.bigdl.tensor.Tensor
 import org.scalatest.{FlatSpec, Matchers}
 import com.intel.analytics.bigdl.utils.RandomGenerator._
+import spire.syntax.rng
+
+import scala.collection.mutable.ArrayBuffer
+import scala.util.Random
 
 @com.intel.analytics.bigdl.tags.Parallel
 class AddSpec extends FlatSpec with Matchers {
@@ -140,4 +145,138 @@ class AddSpec extends FlatSpec with Matchers {
      println("done")
   }
 
+  "333" should "444" in {
+    RNG.setSeed(100)
+    val tmp1 = Tensor[Float](10, 10).apply1(e => RNG.random())
+    val tmp2 = Tensor[Float](10, 10).apply1(e => RNG.random())
+    val tmp22 = Tensor[Float](10, 10).apply1(e => RNG.random())
+    val tmp3 = Tensor[Float](10, 3, 10)
+    val tmp4 = Tensor[Float](10, 3, 10)
+
+    val times = 3
+    val timeDim = 2
+    val length3 = 10
+    val batchDim = 10
+
+    val src = Array(tmp1, tmp2, tmp22)
+    def copy(src: Array[Tensor[Float]], dst: Tensor[Float], offset: Int): Unit = {
+      var t = 1
+      while ((t + offset) <= times) {
+        dst.select(timeDim, t + offset).copy(src(t - 1))
+        t += 1
+      }
+    }
+
+    def copy2(src: Array[Tensor[Float]], dst: Tensor[Float], offset: Int): Unit = {
+      var t = 1
+      var tt = 0
+      val dstArr = dst.storage().array()
+      while (t <= times) {
+//        dst.select(timeDim, t + offset).copy(src(t - 1))
+        val t1 = src(t - 1).storage().array()
+        var l = 0
+        while (l < batchDim) {
+          System.arraycopy(t1, l * length3, dstArr, times * length3 * l + length3 * (t-1), length3)
+          l += 1
+        }
+        t += 1
+      }
+    }
+
+    var start1 = System.nanoTime()
+    for (i <- 1 to 100) {
+      copy(src, tmp3, 0)
+    }
+    var end1 = System.nanoTime() - start1
+
+    println(tmp1)
+    println(tmp2)
+    println("src")
+    println(tmp3)
+    println("src 222")
+    var start2 = System.nanoTime()
+    for (i <- 1 to 100) {
+      copy2(src, tmp4, 0)
+    }
+    var end2 = System.nanoTime() - start2
+    println(tmp4)
+
+    tmp4 should be (tmp3)
+    println("end1 " + end1/1e9 + " end2 " + end2/1e9)
+  }
+
+  "333 111111" should "444" in {
+    RNG.setSeed(100)
+    val tmp1 = Tensor[Float](30, 10, 128, 10).apply1(e => Random.nextFloat())
+    var tmp3 = Tensor[Float](10, 30, 128, 10)
+    var tmp4 = Tensor[Float](10, 30, 128, 10)
+
+    val times = 30
+    val length3 = 128*10
+    val batchDim = 10
+
+    def copy2(src: Tensor[Float], dst: Tensor[Float], offset: Int): Unit = {
+      var t = 1
+      var tt = 0
+      var l = 0
+      val dstArr = dst.storage().array()
+      val t1 = src.storage().array()
+      val length4 = batchDim * length3
+      while (t <= times) {
+        var l = 0
+        val length1 = batchDim * length3 * (t-1)
+        val length2 = (t-1) * length3
+        while (l < length4) {
+          System.arraycopy(t1, length1 + l, dstArr, l * times + length2, length3)
+          l += length3
+        }
+        t += 1
+      }
+    }
+
+    def transposeMemory(src: Tensor[Float], dst: Tensor[Float]): Unit = {
+      var t = 1
+      val dstArr = dst.storage().array()
+      val srcArr = src.storage().array()
+
+      val firstSize = src.size(1)
+      val secondSize = src.size(2)
+      val otherSize = src.nElement() / (firstSize * secondSize)
+
+      val length3 = secondSize * otherSize
+      while (t <= firstSize) {
+        var l = 0
+        val length1 = secondSize * otherSize * (t-1)
+        val length2 = (t-1) * otherSize
+        while (l < length3) {
+          System.arraycopy(srcArr, length1 + l, dstArr, l * firstSize + length2, otherSize)
+          l += otherSize
+        }
+        t += 1
+      }
+    }
+
+    var start2 = System.nanoTime()
+    for (i <- 1 to 100) {
+      transposeMemory(tmp1, tmp4)
+    }
+    var end2 = System.nanoTime() - start2
+
+    var start1 = System.nanoTime()
+    for (i <- 1 to 100) {
+      val buffer = tmp1.transpose(1, 2)
+      tmp3.resizeAs(buffer).copy(buffer)
+    }
+    var end1 = System.nanoTime() - start1
+
+    println(tmp1)
+    println("src")
+    println(tmp3)
+    println("src 222")
+
+    println(tmp4)
+
+    tmp4 should be (tmp3)
+    println("end1 " + end1/1e9 + " end2 " + end2/1e9)
+  }
 }

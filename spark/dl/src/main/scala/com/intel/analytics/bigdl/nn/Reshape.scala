@@ -145,48 +145,10 @@ class Reshape[@specialized(Float, Double) T: ClassTag](
   }
 }
 
-object Reshape extends ModuleSerializable {
+object Reshape {
   def apply[T: ClassTag](
       size: Array[Int],
       batchMode: Option[Boolean] = None)(implicit ev: TensorNumeric[T]) : Reshape[T] = {
     new Reshape[T](size, batchMode)
-  }
-
-  override def doLoadModule[T: ClassTag](model : BigDLModule)
-    (implicit ev: TensorNumeric[T]) : AbstractModule[Activity, Activity, T] = {
-
-    val attrMap = model.getAttrMap
-    val size = DataConverter.getAttributeValue(attrMap.get("size")).
-      asInstanceOf[Array[Int]]
-    val batchModeV = DataConverter.getAttributeValue(attrMap.get("batchMode")).
-      asInstanceOf[Int]
-    var batchMode : Option[Boolean] = None
-    if (batchModeV == 1) {
-      batchMode = Some(false)
-    } else if (batchModeV == 2) {
-      batchMode = Some(true)
-    }
-    Reshape(size, batchMode).asInstanceOf[AbstractModule[Activity, Activity, T]]
-  }
-
-  override def doSerializeModule[T: ClassTag](module : ModuleData[T],
-                                           reshapeBuilder : BigDLModule.Builder)
-                                           (implicit ev: TensorNumeric[T]) : Unit = {
-
-    val reshape = module.module.asInstanceOf[Reshape[T]]
-
-    val sizeBuilder = AttrValue.newBuilder
-    DataConverter.setAttributeValue(sizeBuilder, reshape.size,
-      universe.typeOf[Array[Int]])
-    reshapeBuilder.putAttr("size", sizeBuilder.build)
-
-    var batchMode = 0
-    if (reshape.batchMode != None) {
-      batchMode = if (reshape.batchMode.get == false) 1 else 2
-    }
-    val batchModeBuilder = AttrValue.newBuilder
-    DataConverter.setAttributeValue(batchModeBuilder, batchMode,
-      universe.typeOf[Int])
-    reshapeBuilder.putAttr("batchMode", batchModeBuilder.build)
   }
 }
