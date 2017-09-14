@@ -52,59 +52,102 @@ class Select[T: ClassTag](
     (dim, index)
   }
 
-  def copyMemory(src: Tensor[T], dst: Tensor[T], index: Int): Unit = {
+  def copyMemoryOld(src: Tensor[T], dst: Tensor[T], srcIndex: Int): Unit = {
     val srcSize = src.size()
     val batchSize = srcSize(0)
     val timeSize = srcSize(1)
-    val otherSize = src.nElement() / (batchSize * timeSize)
+    val stepSize = src.nElement() / (batchSize * timeSize)
     val srcArr = src.storage().array()
     val srcOffset = src.storageOffset() - 1
 
-    srcSize(0) = timeSize
-    srcSize(1) = batchSize
-    dst.resize(srcSize)
+//    srcSize(0) = timeSize
+//    srcSize(1) = batchSize
+//    dst.resize(srcSize)
     val dstArr = dst.storage().array()
     val dstOffset = dst.storageOffset() - 1
 
     var t = 1
-    val l = (index-1) * otherSize
+    val l = (srcIndex-1) * stepSize
     while (t <= batchSize) {
-      val length1 = timeSize * otherSize * (t-1) + srcOffset
-      val length2 = (t-1) * otherSize + dstOffset
-      System.arraycopy(srcArr, length1 + l, dstArr, l * batchSize + length2, otherSize)
+      val length1 = timeSize * stepSize * (t-1) + srcOffset
+      val length2 = (t-1) * stepSize + dstOffset
+      System.arraycopy(srcArr, length1 + l, dstArr, l * batchSize + length2, stepSize)
       t += 1
     }
   }
 
-  def copyToMemory(src: Tensor[T], dst: Tensor[T], dstDim: Int, dstIndex: Int): Unit = {
+  def copyMemory(src: Tensor[T], dst: Tensor[T], srcIndex: Int): Unit = {
+    val batchSize = src.size(1)
+    val timeSize = src.size(2)
+    val stepSize = src.nElement() / (batchSize * timeSize)
+
+    val srcArr = src.storage().array()
+    var srcOffset = src.storageOffset() - 1
+    val dstArr = dst.storage().array()
+    var dstOffset = dst.storageOffset() - 1
+
+    val recordSize = timeSize * stepSize
+    val indexSize = (srcIndex-1) * stepSize
+
+    var b = 0
+    while (b < batchSize) {
+      System.arraycopy(srcArr, srcOffset + indexSize, dstArr, dstOffset, stepSize)
+      srcOffset += recordSize
+      dstOffset += stepSize
+      b += 1
+    }
+  }
+
+  def copyToMemoryOld(src: Tensor[T], dst: Tensor[T], dstIndex: Int): Unit = {
     val dstArr = dst.storage().array()
     val dstOffset = dst.storageOffset() - 1
     val batchSize = dst.size(1)
     val times = dst.size(2)
-    val otherSize = dst.nElement() / (batchSize * times)
+    val stepSize = dst.nElement() / (batchSize * times)
 
-    val length2 = batchSize * otherSize
+    val batchStepSize = batchSize * stepSize
     val srcArr = src.storage().array()
     val srcOffset = src.storageOffset() - 1
-    val length1 = (dstIndex - 1) * otherSize + dstOffset
+    val length1 = (dstIndex - 1) * stepSize + dstOffset
     var l = 0
-    while (l < length2) {
-      System.arraycopy(srcArr, l + srcOffset, dstArr, times * l + length1, otherSize)
-      l += otherSize
+    while (l < batchStepSize) {
+      System.arraycopy(srcArr, l + srcOffset, dstArr, times * l + length1, stepSize)
+      l += stepSize
+    }
+  }
+
+  def copyToMemory(src: Tensor[T], dst: Tensor[T], dstIndex: Int): Unit = {
+    val batchSize = dst.size(1)
+    val timeSize = dst.size(2)
+    val stepSize = dst.nElement() / (batchSize * timeSize)
+
+    val dstArr = dst.storage().array()
+    var dstOffset = dst.storageOffset() - 1
+    val srcArr = src.storage().array()
+    var srcOffset = src.storageOffset() - 1
+
+    val recordSize = timeSize * stepSize
+    val indexSize = (dstIndex - 1) * stepSize
+
+    var b = 0
+    while (b < batchSize) {
+      System.arraycopy(srcArr, srcOffset, dstArr, dstOffset + indexSize, stepSize)
+      srcOffset += stepSize
+      dstOffset += recordSize
+      b += 1
     }
   }
 
   override def updateOutput(input: Tensor[T]): Tensor[T] = {
     val (dim, index) = getPositiveDimAndIndex(input)
+    val output = input.select(dim, index)
+    this.output.resizeAs(output)
     if ((dim == 2) && (input.dim() > 2)) {
-      copyMemory(input, buffer, index)
-      this.output = buffer.select(1, index)
-      this.output
+      copyMemory(input, this.output, index)
     } else {
-      val output = input.select(dim, index)
-      this.output.resizeAs(output)
       this.output.copy(output)
     }
+    this.output
   }
 
   override def updateGradInput(input: Tensor[T], gradOutput: Tensor[T]): Tensor[T] = {
@@ -112,7 +155,7 @@ class Select[T: ClassTag](
     gradInput.resizeAs(input)
     gradInput.zero()
     if ((dim == 2) && (gradInput.dim() > 2)) {
-      copyToMemory(gradOutput, gradInput, dim, index)
+      copyToMemory(gradOutput, gradInput, index)
     } else {
       gradInput.select(dim, index).copy(gradOutput)
     }

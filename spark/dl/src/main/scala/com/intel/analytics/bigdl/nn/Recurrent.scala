@@ -544,6 +544,61 @@ object Recurrent extends ContainerSerializable {
     new Recurrent[T](batchNormParams)
   }
 
+  private[bigdl] def selectCopy[@specialized(Float, Double) T: ClassTag](
+    src: Tensor[T], srcIndex: Int, dst: Tensor[T]): Unit = {
+    require(src.isContiguous(), "Recurrent.selectCopy: src should be contiguous")
+    require(dst.isContiguous(), "Recurrent.selectCopy: dst should be contiguous")
+    require((src.dim() > 2) && (src.dim() == dst.dim() + 1),
+      s"src dim ${src.dim()} should be dst dim ${dst.dim()} + 1")
+
+    val batchSize = src.size(1)
+    val timeSize = src.size(2)
+    val stepSize = src.nElement() / (batchSize * timeSize)
+
+    val srcArr = src.storage().array()
+    var srcOffset = src.storageOffset() - 1
+    val dstArr = dst.storage().array()
+    var dstOffset = dst.storageOffset() - 1
+
+    val recordSize = timeSize * stepSize
+    val indexSize = (srcIndex-1) * stepSize
+
+    var b = 0
+    while (b < batchSize) {
+      System.arraycopy(srcArr, srcOffset + indexSize, dstArr, dstOffset, stepSize)
+      srcOffset += recordSize
+      dstOffset += stepSize
+      b += 1
+    }
+  }
+
+  private[bigdl] def copyToIndex[@specialized(Float, Double) T: ClassTag](
+    src: Tensor[T], dst: Tensor[T], dstIndex: Int): Unit = {
+    require(src.isContiguous(), "Recurrent.selectCopy: src should be contiguous")
+    require(dst.isContiguous(), "Recurrent.selectCopy: dst should be contiguous")
+    require((dst.dim() > 2) && (dst.dim() == src.dim() + 1),
+      s"dst dim ${dst.dim()} should be src dim ${src.dim()} + 1")
+    val batchSize = dst.size(1)
+    val timeSize = dst.size(2)
+    val stepSize = dst.nElement() / (batchSize * timeSize)
+
+    val dstArr = dst.storage().array()
+    var dstOffset = dst.storageOffset() - 1
+    val srcArr = src.storage().array()
+    var srcOffset = src.storageOffset() - 1
+
+    val recordSize = timeSize * stepSize
+    val indexSize = (dstIndex - 1) * stepSize
+
+    var b = 0
+    while (b < batchSize) {
+      System.arraycopy(srcArr, srcOffset, dstArr, dstOffset + indexSize, stepSize)
+      srcOffset += stepSize
+      dstOffset += recordSize
+      b += 1
+    }
+  }
+
   override def doLoadModule[T: ClassTag](model : BigDLModule)
     (implicit ev: TensorNumeric[T]) : AbstractModule[Activity, Activity, T] = {
 
