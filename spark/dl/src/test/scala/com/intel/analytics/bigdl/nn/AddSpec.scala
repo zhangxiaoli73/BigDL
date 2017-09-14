@@ -207,13 +207,13 @@ class AddSpec extends FlatSpec with Matchers {
 
   "333 111111" should "444" in {
     RNG.setSeed(100)
-    val tmp1 = Tensor[Float](30, 10, 128, 10).apply1(e => Random.nextFloat())
-    var tmp3 = Tensor[Float](10, 30, 128, 10)
-    var tmp4 = Tensor[Float](10, 30, 128, 10)
+    val tmp1 = Tensor[Float](3, 2, 4).apply1(e => Random.nextFloat())
+    var tmp3 = Tensor[Float](2, 3, 4)
+    var tmp4 = Tensor[Float](2, 3, 4)
 
-    val times = 30
-    val length3 = 128*10
-    val batchDim = 10
+    val times = 3
+    val length3 = 4
+    val batchDim = 2
 
     def copy2(src: Tensor[Float], dst: Tensor[Float], offset: Int): Unit = {
       var t = 1
@@ -235,26 +235,59 @@ class AddSpec extends FlatSpec with Matchers {
     }
 
     def transposeMemory(src: Tensor[Float], dst: Tensor[Float]): Unit = {
-      var t = 1
-      val dstArr = dst.storage().array()
+      val srcSize = src.size()
+      val batchSize = srcSize(0)
+      val timeSize = srcSize(1)
+      val stepSize = src.nElement() / (batchSize * timeSize)
       val srcArr = src.storage().array()
+      var srcOffset = src.storageOffset() - 1
 
-      val firstSize = src.size(1)
-      val secondSize = src.size(2)
-      val otherSize = src.nElement() / (firstSize * secondSize)
+      srcSize(0) = timeSize
+      srcSize(1) = batchSize
+      dst.resize(srcSize)
+      val dstArr = dst.storage().array()
+      var dstOffset = dst.storageOffset() - 1
 
-      val length3 = secondSize * otherSize
-      while (t <= firstSize) {
+      val recordSize = timeSize * stepSize
+      val batchStepSize = batchSize * stepSize
+
+      var b = 1
+      while(b <= batchSize) {
+        var t = 1
         var l = 0
-        val length1 = secondSize * otherSize * (t-1)
-        val length2 = (t-1) * otherSize
-        while (l < length3) {
-          System.arraycopy(srcArr, length1 + l, dstArr, l * firstSize + length2, otherSize)
-          l += otherSize
+        var m = 0
+        while (t <= timeSize) {
+          System.arraycopy(srcArr, srcOffset + l, dstArr, dstOffset + m, stepSize)
+          l += stepSize
+          m += batchStepSize
+          t += 1
         }
-        t += 1
+        srcOffset  += recordSize
+        dstOffset += stepSize
+        b += 1
       }
     }
+//    def transposeMemory(src: Tensor[Float], dst: Tensor[Float]): Unit = {
+//      var t = 1
+//      val dstArr = dst.storage().array()
+//      val srcArr = src.storage().array()
+//
+//      val firstSize = src.size(1)
+//      val secondSize = src.size(2)
+//      val otherSize = src.nElement() / (firstSize * secondSize)
+//
+//      val length3 = secondSize * otherSize
+//      while (t <= firstSize) {
+//        var l = 0
+//        val length1 = secondSize * otherSize * (t-1)
+//        val length2 = (t-1) * otherSize
+//        while (l < length3) {
+//          System.arraycopy(srcArr, length1 + l, dstArr, l * firstSize + length2, otherSize)
+//          l += otherSize
+//        }
+//        t += 1
+//      }
+//    }
 
     var start2 = System.nanoTime()
     for (i <- 1 to 100) {
@@ -340,15 +373,20 @@ class AddSpec extends FlatSpec with Matchers {
 
   "333 33333" should "444" in {
     RNG.setSeed(100)
-    val dim = 2
+    val dim = 3
     val index = 2
     val tmp1 = Tensor[Float](3, 2, 4).apply1(e => Random.nextFloat())
     val tmp3 = Tensor[Float](3, 2, 4)
-    var tmp2 = Tensor[Float](3, 4).apply1(e => Random.nextFloat())
+    var tmp2 = Tensor[Float](3, 2).apply1(e => Random.nextFloat())
     val tmp4 = Tensor[Float](3, 2, 4)
 
 
     tmp3.select(dim, index).copy(tmp2)
+
+    println(tmp2)
+    println("src")
+    println(tmp3)
+    System.exit(1)
 
     def copyMemory(src: Tensor[Float], dst: Tensor[Float], dstDim: Int, dstIndex: Int): Unit = {
       val dstArr = dst.storage().array()
