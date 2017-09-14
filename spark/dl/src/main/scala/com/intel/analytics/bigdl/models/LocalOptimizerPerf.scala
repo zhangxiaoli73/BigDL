@@ -404,13 +404,13 @@ object LocalOptimizerPerf {
 case class LocalOptimizerPerfParam(
   batchSize: Int = 80,
   var coreNumber: Int = Runtime.getRuntime.availableProcessors() / 2,
-  iteration: Int = 80,
+  iteration: Int = 30,
   dataType: String = "float",
-  module: String = "lstm",
+  module: String = "lstm_new",
   inputData: String = "random",
-  testType: String = "train",
+  testType: String = "times",
   modelType: String = "small",
-  inputSize: Int = 128,
-  hiddenSize: Int = 128,
+  inputSize: Int = 1500,
+  hiddenSize: Int = 1500,
   sequenceLen: Int = 30
 )

@@ -166,30 +166,6 @@ class Recurrent[T : ClassTag](var batchNormParams: BatchNormParams[T] = null)
     * @param src
     * @param dst
     */
-  //  private def copy(src: ArrayBuffer[Tensor[T]], dst: Tensor[T], offset: Int): Unit = {
-  //    var t = 1
-  //    while ((t + offset) <= times) {
-  //      dst.select(timeDim, t + offset).copy(src(t - 1))
-  //      t += 1
-  //    }
-  //  }
-
-  //    private def copy(src: ArrayBuffer[Tensor[T]], dst: Tensor[T], offset: Int): Unit = {
-  //      var t = 1
-  //      var tt = 0
-  //      val dstArr = dst.storage().array()
-  //      val length3 = dst.size(3)
-  //      while ((t + offset) <= times) {
-  //        val t1 = src(t - 1).storage().array()
-  //        var l = 0
-  //        while (l < batchSize) {
-  //          System.arraycopy(t1, l * length3, dstArr, times * length3 * l + length3 * (t-1), length3)
-  //          l += 1
-  //        }
-  //        t += 1
-  //      }
-  //    }
-
   private def copy(src: ArrayBuffer[Tensor[T]], dst: Tensor[T], offset: Int): Unit = {
     val dstArr = dst.storage().array()
     val dstOffset = dst.storageOffset() - 1

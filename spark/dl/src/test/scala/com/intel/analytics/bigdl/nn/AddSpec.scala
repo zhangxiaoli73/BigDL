@@ -16,7 +16,7 @@
 
 package com.intel.analytics.bigdl.nn
 
-import breeze.linalg.*
+import breeze.linalg.{*, dim}
 import com.intel.analytics.bigdl.nn
 import com.intel.analytics.bigdl.nn.abstractnn.{TensorCriterion, TensorModule}
 import com.intel.analytics.bigdl.tensor.Tensor
@@ -278,5 +278,105 @@ class AddSpec extends FlatSpec with Matchers {
 
     tmp4 should be (tmp3)
     println("end1 " + end1/1e9 + " end2 " + end2/1e9)
+  }
+
+  "333 2222222222" should "444" in {
+    RNG.setSeed(100)
+    val dim = 2
+    val index = 2
+    val tmp1 = Tensor[Float](3, 2, 4).apply1(e => Random.nextFloat())
+    val tmp3 = Tensor[Float]()
+    var tmp2 = Tensor[Float]()
+
+    def copyMemory(src: Tensor[Float], dst: Tensor[Float], index: Int): Unit = {
+      val srcSize = src.size()
+      val batchSize = srcSize(0)
+      val timeSize = srcSize(1)
+      val otherSize = src.nElement() / (batchSize * timeSize)
+      val srcArr = src.storage().array()
+      val srcOffset = src.storageOffset() - 1
+
+      srcSize(0) = timeSize
+      srcSize(1) = batchSize
+      dst.resize(srcSize)
+      val dstArr = dst.storage().array()
+      val dstOffset = dst.storageOffset() - 1
+
+      var t = 1
+      val l = (index-1) * otherSize
+      while (t <= batchSize) {
+        val length1 = timeSize * otherSize * (t-1) + srcOffset
+        val length2 = (t-1) * otherSize + dstOffset
+        System.arraycopy(srcArr, length1 + l, dstArr, l * batchSize + length2, otherSize)
+        t += 1
+      }
+    }
+    println(tmp1)
+    println("src")
+    var tmp = tmp1.select(dim, index)
+    println(tmp)
+
+    var start2 = System.nanoTime()
+    for (i <- 1 to 1000) {
+      copyMemory(tmp1, tmp3, index)
+    }
+    var end2 = System.nanoTime() - start2
+
+    var start1 = System.nanoTime()
+    for (i <- 1 to 1000) {
+      tmp2 = tmp.resizeAs(tmp).copy(tmp)
+    }
+    var end1 = System.nanoTime() - start1
+
+
+    println(tmp3)
+    val tmp4 = tmp3.select(1, index)
+    println(tmp4)
+
+    tmp2 should be (tmp4)
+    println("end1 " + end1/1e9 + " end2 " + end2/1e9)
+    println("done")
+  }
+
+  "333 33333" should "444" in {
+    RNG.setSeed(100)
+    val dim = 2
+    val index = 2
+    val tmp1 = Tensor[Float](3, 2, 4).apply1(e => Random.nextFloat())
+    val tmp3 = Tensor[Float](3, 2, 4)
+    var tmp2 = Tensor[Float](3, 4).apply1(e => Random.nextFloat())
+    val tmp4 = Tensor[Float](3, 2, 4)
+
+
+    tmp3.select(dim, index).copy(tmp2)
+
+    def copyMemory(src: Tensor[Float], dst: Tensor[Float], dstDim: Int, dstIndex: Int): Unit = {
+      val dstArr = dst.storage().array()
+      val dstOffset = dst.storageOffset() - 1
+      val batchSize = dst.size(1)
+      val times = dst.size(2)
+      val otherSize = dst.nElement() / (batchSize * times)
+
+      val length2 = batchSize * otherSize
+      val srcArr = src.storage().array()
+      val srcOffset = src.storageOffset() - 1
+      val length1 = (dstIndex - 1) * otherSize + dstOffset
+      var l = 0
+      while (l < length2) {
+        System.arraycopy(srcArr, l + srcOffset, dstArr, times * l + length1, otherSize)
+        l += otherSize
+      }
+    }
+
+    copyMemory(tmp2, tmp4, dim, index)
+
+    println(tmp2)
+    println("src")
+    println(tmp3)
+    println("11111111111111111")
+    println(tmp4)
+
+    // tmp3 should be (tmp4)
+    println("done")
   }
 }
