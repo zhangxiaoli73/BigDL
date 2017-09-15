@@ -406,7 +406,7 @@ case class LocalOptimizerPerfParam(
   var coreNumber: Int = Runtime.getRuntime.availableProcessors() / 2,
   iteration: Int = 30,
   dataType: String = "float",
-  module: String = "lstm_new",
+  module: String = "lstm",
   inputData: String = "random",
   testType: String = "times",
   modelType: String = "small",
