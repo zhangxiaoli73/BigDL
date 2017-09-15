@@ -65,6 +65,7 @@ class Select[T: ClassTag](
     val (dim, index) = getPositiveDimAndIndex(input)
     gradInput.resizeAs(input)
     gradInput.zero()
+    val tmp = gradInput.select(dim, index)
     if ((dim == 2) && (gradInput.dim() > 2)) {
       Recurrent.copyToIndex(gradOutput, gradInput, index)
     } else {
