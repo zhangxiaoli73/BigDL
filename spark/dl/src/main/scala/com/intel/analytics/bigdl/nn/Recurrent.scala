@@ -582,6 +582,35 @@ object Recurrent extends ContainerSerializable {
     }
   }
 
+  def transposeMemory[@specialized(Float, Double) T: ClassTag](
+    src: Tensor[T], dst: Tensor[T]): Unit = {
+    val srcSize = src.size()
+    val batchSize = srcSize(0)
+    val timeSize = srcSize(1)
+    val otherSize = src.nElement() / (batchSize * timeSize)
+    val srcArr = src.storage().array()
+    val srcOffset = src.storageOffset() - 1
+
+    srcSize(0) = timeSize
+    srcSize(1) = batchSize
+    dst.resize(srcSize)
+    val dstArr = dst.storage().array()
+    val dstOffset = dst.storageOffset() - 1
+
+    val length3 = timeSize * otherSize
+    var t = 1
+    while (t <= batchSize) {
+      var l = 0
+      val length1 = timeSize * otherSize * (t-1) + srcOffset
+      val length2 = (t-1) * otherSize + dstOffset
+      while (l < length3) {
+        System.arraycopy(srcArr, length1 + l, dstArr, l * batchSize + length2, otherSize)
+        l += otherSize
+      }
+      t += 1
+    }
+  }
+
   override def doLoadModule[T: ClassTag](model : BigDLModule)
     (implicit ev: TensorNumeric[T]) : AbstractModule[Activity, Activity, T] = {
 

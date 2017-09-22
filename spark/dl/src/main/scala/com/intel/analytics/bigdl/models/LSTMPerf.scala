@@ -71,6 +71,16 @@ object LSTMPerf {
   }
 }
 
+object SeqLSTMPerf {
+  def apply(classNum: Int, inputSize: Int, hiddenSize: Int): Module[Float] = {
+    val model = nn.Sequential()
+    val embedding = 1
+    model.add(nn.SeqLSTM(inputSize, hiddenSize))
+      .add(nn.Select(2, -1))
+    model
+  }
+}
+
 object LSTMPerfNew {
   def apply(classNum: Int, inputSize: Int, hiddenSize: Int): Module[Float] = {
     val model = nn.Sequential()

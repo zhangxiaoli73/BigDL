@@ -104,6 +104,17 @@ object LocalOptimizerPerf {
 
         (LSTMPerfNew(1000, inputSize, hiddenSize), input, labels, criterion)
 
+      case "seqlstm" =>
+        val sequenceLen = param.sequenceLen
+        val inputSize = param.inputSize
+        val hiddenSize = param.hiddenSize
+
+        val input = Tensor[Float](Array(batchSize, sequenceLen, inputSize)).randn()
+        val labels = Tensor(Array(batchSize, hiddenSize)).fill(1)
+        val criterion = nn.MSECriterion[Float]()
+
+        (SeqLSTMPerf(1000, inputSize, hiddenSize), input, labels, criterion)
+
       case "gru" =>
         val sequenceLen = param.sequenceLen
         val inputSize = param.inputSize
@@ -408,9 +419,9 @@ case class LocalOptimizerPerfParam(
   dataType: String = "float",
   module: String = "lstm",
   inputData: String = "random",
-  testType: String = "times",
+  testType: String = "train",
   modelType: String = "small",
-  inputSize: Int = 1500,
-  hiddenSize: Int = 1500,
+  inputSize: Int = 128,
+  hiddenSize: Int = 128,
   sequenceLen: Int = 30
 )
