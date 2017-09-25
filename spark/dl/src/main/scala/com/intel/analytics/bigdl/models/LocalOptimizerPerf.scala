@@ -406,7 +406,7 @@ object LocalOptimizerPerf {
  * Local Optimizer Performance Parameters
  *
  * @param batchSize batch size
- * @param coreNumber core number
+ * @param coreNumber core n umber
  * @param iteration how many iterations to run
  * @param dataType data type (double / float)
  * @param module module name
@@ -415,7 +415,7 @@ object LocalOptimizerPerf {
 case class LocalOptimizerPerfParam(
   batchSize: Int = 80,
   var coreNumber: Int = Runtime.getRuntime.availableProcessors() / 2,
-  iteration: Int = 30,
+  iteration: Int = 100,
   dataType: String = "float",
   module: String = "lstm",
   inputData: String = "random",

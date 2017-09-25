@@ -20,8 +20,9 @@ import com.intel.analytics.bigdl.nn
 import com.intel.analytics.bigdl.nn.abstractnn.{AbstractModule, Activity}
 import com.intel.analytics.bigdl.optim.SGD
 import com.intel.analytics.bigdl.tensor.{Storage, Tensor}
+import com.intel.analytics.bigdl.torch.TH
 import com.intel.analytics.bigdl.utils.RandomGenerator.RNG
-import com.intel.analytics.bigdl.utils.{Engine, T}
+import com.intel.analytics.bigdl.utils.{Engine, T, Table}
 import org.scalatest.{FlatSpec, Matchers}
 
 import scala.collection.mutable.ArrayBuffer
@@ -734,6 +735,233 @@ class RecurrentSpec extends FlatSpec with Matchers {
     val loss = criterion.forward(input, labels)
 
     println(loss)
+    println("done")
+  }
+
+  "A Recurrent Module 1111111" should "perform correct gradient check" in {
+    val hiddenSize = 128
+    val inputSize = 128
+    val seqLength = 30
+    val bpttTruncate = 10
+    val batchSize = 20
+    val seed = 100
+
+    RNG.setSeed(seed)
+    val model = Sequential[Double]()
+      .add(Recurrent[Double]()
+        .add(LSTM[Double](inputSize, hiddenSize)))
+
+    RNG.setSeed(seed)
+    val model2 = SeqLSTM[Double](inputSize, hiddenSize)
+
+    val (weights, grad) = model.getParameters()
+    val (weights2, grad22) = model2.getParameters()
+
+    weights2.copy(weights)
+    grad22.copy(grad)
+
+    val (t1, t2) = model2.getParameters()
+
+    val input = Tensor[Double](Array(batchSize, seqLength, inputSize)).randn()
+    val labels = Tensor[Double](Array(batchSize, seqLength, hiddenSize)).randn()
+
+    for (i <- 1 to 20) {
+      val out2 = model2.forward(input)
+      val grad2 = model2.backward(input, labels)
+    }
+
+    for (i <- 1 to 20) {
+      val out1 = model.forward(input)
+      val grad1 = model.backward(input, labels)
+    }
+
+    for (i <- 1 to 30) {
+      val start1 = System.nanoTime()
+      val out1 = model.forward(input)
+      val start2 = System.nanoTime()
+      val grad1 = model.backward(input, labels)
+      val start3 = System.nanoTime()
+      val end1 = (start2 - start1)/1e9
+      val end2 = (start3 - start2)/1e9
+
+      println(s"lstm forward ${end1/1e9} backward ${end2/1e9}")
+    }
+
+    for (i <- 1 to 30) {
+      val start1 = System.nanoTime()
+      val out2 = model2.forward(input)
+      val start2 = System.nanoTime()
+      val grad2 = model2.backward(input, labels)
+      val start3 = System.nanoTime()
+      val end1 = (start2 - start1)/1e9
+      val end2 = (start3 - start2)/1e9
+
+      println(s"seqlstm  forward ${end1/1e9} backward ${end2/1e9}")
+    }
+
+    println("start")
+    val start1 = System.nanoTime()
+    for (i <- 1 to 20) {
+      val out1 = model.forward(input)
+      val grad1 = model.backward(input, labels)
+    }
+
+    val start2 = System.nanoTime()
+    for (i <- 1 to 20) {
+      val out2 = model2.forward(input)
+      val grad2 = model2.backward(input, labels)
+    }
+    val end2 = System.nanoTime() - start2
+
+    val time1 = model.getTimes()
+    val time2 = model2.getTimes()
+    val end1 = System.nanoTime() - start1
+    println(s" end1 ${end1/1e9} end2 ${end2/1e9}")
+
+    println("done")
+  }
+
+  "A Recurrent Module 2222222222" should "perform correct gradient check" in {
+    val hiddenSize = 128
+    val inputSize = 128
+    val seqLength = 30
+    val bpttTruncate = 10
+    val batchSize = 20
+    val seed = 100
+
+    RNG.setSeed(seed)
+    val model = Sequential[Double]()
+      .add(Recurrent[Double]()
+        .add(LSTM[Double](inputSize, hiddenSize)))
+
+    RNG.setSeed(seed)
+    val model2 = SeqLSTM[Double](inputSize, hiddenSize)
+
+    val (weights, grad) = model.getParameters()
+    val (weights2, grad22) = model2.getParameters()
+
+    weights2.copy(weights)
+    grad22.copy(grad)
+
+    val (t1, t2) = model2.getParameters()
+
+    val input = Tensor[Double](Array(batchSize, seqLength, inputSize)).randn()
+    val labels = Tensor[Double](Array(batchSize, seqLength, hiddenSize)).randn()
+
+    val out2 = model2.forward(input)
+    val grad2 = model2.backward(input, labels)
+
+    val out1 = model.forward(input)
+    val grad1 = model.backward(input, labels)
+
+    println("start")
+    val start2 = System.nanoTime()
+    for (i <- 1 to 200) {
+      // val out2 = model2.forward(input)
+      val grad2 = model2.backward(input, labels)
+    }
+    val end2 = System.nanoTime() - start2
+
+    val start1 = System.nanoTime()
+    for (i <- 1 to 200) {
+      // val out1 = model.forward(input)
+      val grad1 = model.backward(input, labels)
+    }
+    val time1 = model.getTimes()
+    val time2 = model2.getTimes()
+    val end1 = System.nanoTime() - start1
+    println(s" end1 ${end1/1e9} end2 ${end2/1e9}")
+
+    println("done")
+  }
+
+  "A Recurrent SeqLSTM Module" should "same with torch SeqLSTM" in {
+    val hiddenSize = 3
+    val inputSize = 1
+    val outputSize = 3
+    val bpttTruncate = 10
+    val batchSize = 3
+    val seed = 100
+
+    RNG.setSeed(seed)
+    val model2 = new SeqLSTM[Double](inputSize, hiddenSize).setName("lstm")
+
+
+    val input = Tensor[Double](Array(batchSize, hiddenSize, inputSize)).rand()
+    val labels = Tensor[Double](Array(batchSize, hiddenSize, hiddenSize)).rand()
+
+    for (i <- 1 to 9) {
+      val out2 = model2.forward(input)
+      val grad2 = model2.backward(input, out2)
+    }
+    val out2 = model2.forward(input)
+    val grad2 = model2.backward(input, out2)
+    val allParams = model2.getParametersTable()
+    val all2 = allParams.get("lstm").asInstanceOf[Option[Table]].get
+    val weight = all2.get[Tensor[Double]]("weight").get
+    val bias = all2.get[Tensor[Double]]("bias").get
+    val gradWeight = all2.get[Tensor[Double]]("gradWeight").get
+    val gradBias = all2.get[Tensor[Double]]("gradBias").get
+    val gates = model2.gates
+    val cell = model2.cell
+    val buffer = model2.grad_a_buffer
+
+    val code = "torch.manualSeed(" + seed + ")\n" +
+      "require('torch')\n" +
+      "require('nn')\n" +
+      "require('rnn')\n" +
+      "require('nngraph')" +
+      "module = nn.SeqLSTM(1, 3)\n" +
+      "module.batchfirst = true\n" +
+      "local i = 0\n" +
+      "while i < 10 do\n" +
+      "output = module:forward(input)\n" +
+      "gradInput = module:backward(input, output)\n" +
+      "i = i + 1\n" +
+      "end\n" +
+      "bias = module.bias\n" +
+      "weight = module.weight\n" +
+      "gradBias = module.gradBias\n" +
+      "gradWeight = module.gradWeight\n" +
+      "rem = module._remember\n" +
+      "c0 = module.c0\n" +
+      "h0 = module.h0\n" +
+      "gates = module.gates\n" +
+      "cell = module.cell\n" +
+      "grad_c0 = module.grad_c0\n" +
+      "grad_h0 = module.grad_h0\n" +
+      "buffer1 = module.buffer1\n" +
+      "buffer2 = module.buffer2\n" +
+      "grad_a_buffer = module.grad_a_buffer\n" +
+      "grad_next_h = module.grad_next_h\n"
+
+
+    val (luaTime, torchResult) = TH.run(code, Map("input" -> input, "gradOutput" -> labels),
+      Array("output", "gradInput", "bias", "weight", "grad", "gradBias", "gradWeight", "rem",
+        "c0", "h0", "gates", "cell", "grad_c0", "grad_h0", "buffer1", "buffer2", "grad_a_buffer",
+        "grad_next_h"))
+
+    val luaOutput1 = torchResult("output").asInstanceOf[Tensor[Double]]
+    val luaOutput2 = torchResult("gradInput").asInstanceOf[Tensor[Double]]
+    val luaBias = torchResult("bias").asInstanceOf[Tensor[Double]]
+    val luaWeight = torchResult("weight").asInstanceOf[Tensor[Double]]
+    val luaGradBias = torchResult("gradBias").asInstanceOf[Tensor[Double]]
+    val luaGradWeight = torchResult("gradWeight").asInstanceOf[Tensor[Double]]
+    val luaGates = torchResult("gates").asInstanceOf[Tensor[Double]]
+    val luagrad_a_buffer = torchResult("grad_a_buffer").asInstanceOf[Tensor[Double]]
+    val grad_next_h = torchResult("grad_next_h").asInstanceOf[Tensor[Double]]
+    val luaCell = torchResult("cell").asInstanceOf[Tensor[Double]]
+
+    luaBias should be(bias)
+    luaWeight should be(weight)
+    //    luaGates should be(gates)
+    luaOutput1 should be(out2)
+    luaCell should be(cell)
+    luagrad_a_buffer should be(buffer)
+    luaGradBias should be(gradBias)
+    luaGradWeight should be(gradWeight)
+    luaOutput2 should be(grad2)
+
     println("done")
   }
 }
