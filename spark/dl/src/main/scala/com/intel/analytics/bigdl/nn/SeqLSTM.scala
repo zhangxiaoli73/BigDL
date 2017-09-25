@@ -48,7 +48,13 @@ class SeqLSTM[T: ClassTag] (inputSize: Int, hiddenSize: Int, var outputSize: Int
 
   val cell = Tensor[T]()  // this will be (T, N, H)
   var gates = Tensor[T]() // this will be (N, 4H)
+
   var gatesArr : Array[Tensor[T]] = null
+
+  var gatesArr1 = Tensor[T]()
+  var gatesArr2 = Tensor[T]()
+  var gatesArr3 = Tensor[T]()
+  var gatesArr4 = Tensor[T]()
 
   val buffer1 = Tensor[T]() // this will be (N, H)
   val buffer2 = Tensor[T]() // this will be (N, H)
@@ -60,6 +66,10 @@ class SeqLSTM[T: ClassTag] (inputSize: Int, hiddenSize: Int, var outputSize: Int
   val grad_buffer3 = Tensor[T]()
 //  val grad_buffer4 = Tensor[T]()
 
+  val grad_Ai = Tensor[T]()
+  val grad_Af = Tensor[T]()
+  val grad_Ao = Tensor[T]()
+  val grad_Ag = Tensor[T]()
 
   val h0 = Tensor[T]()
   val c0 = Tensor[T]()
@@ -164,6 +174,12 @@ class SeqLSTM[T: ClassTag] (inputSize: Int, hiddenSize: Int, var outputSize: Int
         i += 1
       }
     }
+    if (gatesArr1.nElement() == 0) {
+      gatesArr1.resize(T, N, H)
+      gatesArr2.resize(T, N, H)
+      gatesArr3.resize(T, N, H)
+      gatesArr4.resize(T, N, H)
+    }
 
     if (c0.nElement() == 0 || !remember) {
       c0.resize(N, H).zero()
@@ -218,10 +234,15 @@ class SeqLSTM[T: ClassTag] (inputSize: Int, hiddenSize: Int, var outputSize: Int
       Recurrent.selectCopy(preMM, t, gates)
       gates.addmm(prev_h, Wh)
 
-      val i = gatesArr(t-1).copy(gates.narrow(2, 1, H)) // input gate
-      val f = gatesArr(T + t - 1).copy(gates.narrow(2, H + 1, H)) // forget gate
-      val o = gatesArr(2 * T + t - 1).copy(gates.narrow(2, 2 * H + 1, H)) // output gate
-      val g = gatesArr(3 * T + t - 1).copy(gates.narrow(2, 3 * H + 1, H)) // input transform
+//      val i = gatesArr(t-1).copy(gates.narrow(2, 1, H)) // input gate
+//      val f = gatesArr(T + t - 1).copy(gates.narrow(2, H + 1, H)) // forget gate
+//      val o = gatesArr(2 * T + t - 1).copy(gates.narrow(2, 2 * H + 1, H)) // output gate
+//      val g = gatesArr(3 * T + t - 1).copy(gates.narrow(2, 3 * H + 1, H)) // input transform
+
+      val i = gatesArr1.select(1, t).copy(gates.narrow(2, 1, H)) // input gate
+      val f = gatesArr2.select(1, t).copy(gates.narrow(2, H + 1, H)) // forget gate
+      val o = gatesArr3.select(1, t).copy(gates.narrow(2, 2 * H + 1, H)) // output gate
+      val g = gatesArr4.select(1, t).copy(gates.narrow(2, 3 * H + 1, H)) // input transform
 
       sigmoid(i)
       sigmoid(f)
@@ -253,6 +274,12 @@ class SeqLSTM[T: ClassTag] (inputSize: Int, hiddenSize: Int, var outputSize: Int
     val T = input.size(timeDim)
     val N = input.size(batchDim)
 
+    if (grad_Af.nElement() == 0) {
+      grad_Af.resize(T, N, H)
+      grad_Ai.resize(T, N, H)
+      grad_Ao.resize(T, N, H)
+      grad_Ag.resize(T, N, H)
+    }
     val Wx = weight.narrow(1, 1, D)
     val Wh = weight.narrow(1, D + 1, R)
     val grad_Wx = gradWeight.narrow(1, 1, D)
@@ -274,12 +301,18 @@ class SeqLSTM[T: ClassTag] (inputSize: Int, hiddenSize: Int, var outputSize: Int
     grad_buffer2.cmul(grad_buffer1, grad_buffer1)
 
     grad_buffer3.resize(T, N, H).fill(ev.one)
-    grad_buffer3.add(ev.fromType(-1), grad_buffer2)
+    grad_buffer3.add(ev.fromType(-1), grad_buffer2).cmul(gatesArr3)
 
     val grad_a = grad_a_buffer.resize(N, 4 * H).zero()
 
+    // test
+    grad_Af.fill(ev.one).add(ev.fromType(-1), gatesArr2).cmul(gatesArr2)
+    grad_Ai.fill(ev.one).add(ev.fromType(-1), gatesArr1).cmul(gatesArr1).cmul(gatesArr4)
+    grad_Ao.fill(ev.one).add(ev.fromType(-1), gatesArr3).cmul(gatesArr3).cmul(grad_buffer1)
+    grad_buffer1.cmul(gatesArr4, gatesArr4)
+    grad_Ag.fill(ev.one).add(ev.fromType(-1), grad_buffer1).cmul(gatesArr1)
+
     while (t >= 1) {
-      val next_c = cell.select(1, t)
       if (t == 1) {
         prev_h = h0
         prev_c = c0
@@ -296,33 +329,31 @@ class SeqLSTM[T: ClassTag] (inputSize: Int, hiddenSize: Int, var outputSize: Int
       }
       grad_next_h.add(gradTemp)
 
-      val i = gatesArr(t-1)
-      val f = gatesArr(t-1 + T)
-      val o = gatesArr(t-1 + 2*T)
-      val g = gatesArr(t- 1 + 3*T)
+//      val i = gatesArr(t-1)
+//      val f = gatesArr(t-1 + T)
+//      val o = gatesArr(t-1 + 2*T)
+//      val g = gatesArr(t- 1 + 3*T)
 
-      val grad_ai = grad_buffer1.select(1, t)
-      val grad_af = grad_buffer2.resize(N, H) // select(1, t)
-      val grad_ao = grad_buffer3.select(1, t) // grad_ag
-      // val grad_ag = grad_buffer4.resize(N, H).zero()
+//      val i = gatesArr1.select(1, t)
+//      val f = gatesArr2.select(1, t)
+//      val o = gatesArr3.select(1, t)
+//      val g = gatesArr4.select(1, t)
 
-      grad_ao.cmul(grad_next_h).cmul(o)
-      grad_next_c.add(grad_ao)
+      grad_buffer3.select(1, t).cmul(grad_next_h)
+      grad_next_c.add(grad_buffer3.select(1, t))
 
-      grad_ao.fill(ev.one).add(ev.fromType(-1), o).cmul(o).cmul(grad_ai).cmul(grad_next_h)
-      grad_a.narrow(2, 2 * H + 1, H).copy(grad_ao)
+      // grad_ao.fill(ev.one).add(ev.fromType(-1), o).cmul(o).cmul(grad_ai).cmul(grad_next_h)
+      grad_Ao.select(1, t).cmul(grad_next_h)
+      grad_a.narrow(2, 2 * H + 1, H).copy(grad_Ao.select(1, t))
 
-      grad_ai.cmul(g, g)
-      grad_ao.fill(ev.one).add(ev.fromType(-1), grad_ai).cmul(i).cmul(grad_next_c)
-      grad_a.narrow(2, 3 * H + 1, H).copy(grad_ao)
+      grad_Ag.select(1, t).cmul(grad_next_c)
+      grad_a.narrow(2, 3 * H + 1, H).copy(grad_Ag.select(1, t))
 
-      grad_ai.fill(ev.one).add(ev.fromType(-1), i).cmul(i).cmul(g).cmul(grad_next_c)
-      grad_a.narrow(2, 1, H).copy(grad_ai)
+      grad_Ai.select(1, t).cmul(grad_next_c)
+      grad_a.narrow(2, 1, H).copy(grad_Ai.select(1, t))
 
-      grad_af.fill(ev.one).add(ev.fromType(-1), f).cmul(f).cmul(prev_c).cmul(grad_next_c)
-      grad_a.narrow(2, H + 1, H).copy(grad_af)
-
-      // _gradInput.select(1, t).mm(grad_a, Wx.t())
+      grad_Af.select(1, t).cmul(prev_c).cmul(grad_next_c)
+      grad_a.narrow(2, H + 1, H).copy(grad_Af.select(1, t))
 
       _gradInput.select(1, t).mm(grad_a, Wx.t())
 
@@ -335,14 +366,21 @@ class SeqLSTM[T: ClassTag] (inputSize: Int, hiddenSize: Int, var outputSize: Int
       grad_Wx.addmm(scale, outTemp.t(), grad_a)
       grad_Wh.addmm(scale, prev_h.t(), grad_a)
 
-      grad_next_h.addmm(ev.zero, grad_next_h, ev.one, grad_a, Wh.t)
-      grad_next_c.cmul(f)
+      grad_next_h.addmm(grad_a, Wh.t)
+      grad_next_c.cmul(gatesArr2.select(1, t))
 
       val grad_a_sum = grad_buffer2.resize(1, 4 * H).zero().sum(grad_a, 1)
       gradBias.add(scale, grad_a_sum)
-
       t = t -1
     }
+
+//    grad_buffer2.resize(T, 4 * H).zero()
+//    grad_buffer2.narrow(2, 1, H).sum(grad_Ai, 2)
+//    grad_buffer2.narrow(2, H + 1, H).sum(grad_Af, 2)
+//    grad_buffer2.narrow(2, 2 * H + 1, H).sum(grad_Ao, 2)
+//    grad_buffer2.narrow(2, 3 * H + 1, H).sum(grad_Ag, 2)
+//    gradBias.add(scale, grad_buffer2.sum(1))
+
     if (batchfirst) {
       Recurrent.transposeMemory(_gradInput, gradInput)
     }
