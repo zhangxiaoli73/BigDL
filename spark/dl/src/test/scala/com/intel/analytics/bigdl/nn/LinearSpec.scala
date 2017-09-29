@@ -22,8 +22,13 @@ import com.intel.analytics.bigdl._
 
 import scala.math._
 import com.intel.analytics.bigdl._
+import com.intel.analytics.bigdl.mkl.MKL
+import com.intel.analytics.bigdl.models.LSTM
+import com.intel.analytics.bigdl.models.lenet.LeNet5
 import com.intel.analytics.bigdl.optim.{L1Regularizer, L2Regularizer, SGD}
+import com.intel.analytics.bigdl.utils.RandomGenerator._
 import com.intel.analytics.bigdl.utils.{RandomGenerator, T}
+import org.junit.Assert._
 
 @com.intel.analytics.bigdl.tags.Parallel
 class LinearSpec extends FlatSpec with Matchers {
@@ -402,5 +407,160 @@ class LinearSpec extends FlatSpec with Matchers {
     val exceptedBias = Tensor[Float](T(0f, 0f, 0f, 0f, 0f))
     linear.weight should be (exceptedWeight)
     linear.bias should be (exceptedBias)
+  }
+
+  "Linear pack" should "be correct" in {
+
+    val linear = new Linear[Float](inputSize = 65, outputSize = 1500)
+
+    val linear2 = linear.cloneModule().asInstanceOf[Linear[Float]]
+    linear2.pack()
+    linear2.beginPack()
+
+    val input = Tensor[Float](800, 65).rand()
+
+    val output1 = linear.forward(input)
+    val output2 = linear2.forward(input)
+
+    // output1 should be(output2)
+
+    val grad1 = linear.updateGradInput(input, output1)
+    val grad2 = linear2.updateGradInput(input, output2)
+
+    // grad1 should be(grad2)
+
+    for (i <- 1 to 100) {
+      val output1 = linear.forward(input)
+      // val grad1 = linear.updateGradInput(input, output1)
+    }
+
+    for (i <- 1 to 100) {
+      val output2 = linear2.forward(input)
+      // val grad2 = linear2.updateGradInput(input, output2)
+    }
+
+    // linear2.freepack()
+
+    var s2 = System.nanoTime()
+    for (i <- 1 to 30) {
+      val output2 = linear2.forward(input)
+      // val grad2 = linear2.updateGradInput(input, output2)
+    }
+    var end2 = System.nanoTime() - s2
+    linear2.freepack()
+
+    var s1 = System.nanoTime()
+    for (i <- 1 to 30) {
+      val output1 = linear.forward(input)
+      // val grad1 = linear.updateGradInput(input, output1)
+    }
+    var end1 = System.nanoTime() - s1
+
+    println(s"end1 ${end1/1e9} end2 ${end2/1e9}")
+    // println(output2)
+
+  }
+
+  "Recurrent tests" should "good" in {
+    val sequenceLen = 30
+    val inputSize = 128
+    val hiddenSize = 128
+
+    val batchSize = 100
+
+    val input = Tensor[Float](Array(batchSize, sequenceLen, inputSize)).rand()
+    val labels = Tensor[Float](Array(batchSize, hiddenSize)).fill(1)
+
+    val model = LSTM[Float](1000, inputSize, hiddenSize)
+    val model2 = LSTM[Float](1000, inputSize, hiddenSize)
+
+
+  }
+
+  "pack test" should "good" in {
+    val m: Int = 164
+    val k: Int = 164
+    val n: Int = 160
+
+    val a: Array[Float] = new Array[Float](m * k)
+    val b: Array[Float] = new Array[Float](k * n)
+    val c1: Array[Float] = new Array[Float](m * n)
+    val c2: Array[Float] = new Array[Float](m * n)
+
+    for (i <- 1 to m*k) {
+      a(i-1) = RNG.uniform(0, 1).toFloat
+    }
+
+    for (i <- 1 to k*n) {
+      b(i-1) = RNG.uniform(0, 1).toFloat
+    }
+
+    for (i <- 1 to m*n) {
+      c1(i-1) = RNG.uniform(0, 1).toFloat
+      c2(i-1) = c1(i-1)
+    }
+
+    val alpha: Float = 1f
+    val beta: Float = 1f
+    val lda: Int = m
+    val ldb: Int = k
+    val ldc: Int = m
+
+    val times = 20
+    val packMem: Long = MKL.sgemmAlloc('A', m, n, k)
+    MKL.sgemmPack('A', 'N', m, n, k, alpha, a, 0, lda, packMem)
+
+    for (i <- 1 to times) {
+      MKL.sgemmCompute('P', 'N', m, n, k, a, 0, lda, b, 0, ldb, beta, c1, 0, ldc, packMem)
+    }
+    // MKL.sgemmFree(packMem)
+    for (i <- 1 to times) {
+      MKL.vsgemm('N', 'N', m, n, k, alpha, a, 0, lda, b, 0, ldb, beta, c2, 0, ldc)
+    }
+
+    c1 should be(c2)
+
+    println("start 1")
+    val t1 = System.nanoTime()
+    for (i <- 1 to times) {
+      MKL.sgemmCompute('P', 'N', m, n, k, a, 0, lda, b, 0, ldb, beta, c1, 0, ldc, packMem)
+    }
+    val end1 = System.nanoTime() - t1
+
+    MKL.sgemmFree(packMem)
+
+    println("start 2")
+    val t2 = System.nanoTime()
+    for (i <- 1 to times) {
+      MKL.vsgemm('N', 'N', m, n, k, alpha, a, 0, lda, b, 0, ldb, beta, c2, 0, ldc)
+    }
+    val end2 = System.nanoTime() - t2
+
+    println(s"sgemmCompute ${end1/1e9} vsgemm ${end2/1e9}")
+  }
+
+  "graph" should "good" in {
+    RNG.setSeed(100)
+    val tmp = LSTM[Float](100, 100) // LeNet5.graph(10)
+    val tmp2 = tmp.cloneModule().asInstanceOf[LSTM[Float]] // LeNet5.graph(10)
+
+    val all1 = tmp.cell.getSubModule("celllinear").getOrElse(null)
+    all1.asInstanceOf[Linear[Float]].needPack = true
+    all1.asInstanceOf[Linear[Float]].packAgain = true
+
+    val input2 = T(Tensor[Float](20, 100), Tensor[Float](20, 100))
+    val input1 = Tensor[Float](20, 400)
+
+    val input = T(input1, input2)
+    tmp.forward(input)
+
+    val all2 = tmp2.cell.getSubModule("celllinear").getOrElse(null)
+    all2.asInstanceOf[Linear[Float]].needPack = true
+    all2.asInstanceOf[Linear[Float]].packAgain = true
+    all2.asInstanceOf[Linear[Float]].packMem = all1.asInstanceOf[Linear[Float]].packMem
+    tmp2.forward(input)
+
+    println("done")
+
   }
 }

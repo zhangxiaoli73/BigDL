@@ -120,7 +120,7 @@ class LSTM[T : ClassTag] (
     } else {
       i2g = input1
       h2g = Linear(hiddenSize, 4 * hiddenSize,
-        withBias = false, wRegularizer = uRegularizer).inputs(input2)
+        withBias = false, wRegularizer = uRegularizer).setName("celllinear").inputs(input2)
     }
 
     val caddTable = CAddTable(false).inputs(i2g, h2g)
@@ -163,7 +163,7 @@ class LSTM[T : ClassTag] (
      * out2 = out1
      * out3 = cMult1 + cMult2
      */
-    Graph(Array(input1, input2, input3), Array(out1, out2, out3))
+    Graph(Array(input1, input2, input3), Array(out1, out2, out3)).setName("graph")
   }
 
   override def canEqual(other: Any): Boolean = other.isInstanceOf[LSTM[T]]

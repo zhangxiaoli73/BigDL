@@ -22,7 +22,8 @@ import java.util.List
 
 import com.google.protobuf.{CodedInputStream, TextFormat}
 import com.intel.analytics.bigdl.Module
-import com.intel.analytics.bigdl.nn.Graph
+import com.intel.analytics.bigdl.models.lenet.LeNet5
+import com.intel.analytics.bigdl.nn.{Graph, Linear}
 import com.intel.analytics.bigdl.nn.abstractnn.{AbstractModule, Activity}
 import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
@@ -331,7 +332,9 @@ object TensorflowLoader{
       gradients += grad
     }
 
-    Graph(inputNodes.toArray, outputNodes.toArray, Some((weights.toArray, gradients.toArray)))
+    // Graph(inputNodes.toArray, outputNodes.toArray, Some((weights.toArray, gradients.toArray)))
+
+    Linear[T](10, 10).asInstanceOf[Module[T]]
   }
 
   /**

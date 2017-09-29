@@ -17,11 +17,12 @@
 package com.intel.analytics.bigdl.nn
 
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
-import com.intel.analytics.bigdl.tensor.Tensor
+import com.intel.analytics.bigdl.tensor.{DoubleType, FloatType, Tensor}
 import com.intel.analytics.bigdl.utils.{RandomGenerator, T, Table}
 
 import scala.reflect.ClassTag
 import RandomGenerator._
+import com.intel.analytics.bigdl.mkl.MKL
 import com.intel.analytics.bigdl.nn.abstractnn.{Initializable, TensorModule}
 import com.intel.analytics.bigdl.optim.Regularizer
 
@@ -80,11 +81,97 @@ class Linear[T: ClassTag](
     zeroGradParameters()
   }
 
+
+  var needPack : Boolean = false
+  var packMem: Long = 0
+  var packAgain = true
+  def pack(): Unit = {
+    needPack = true
+  }
+  def resetPack(): Unit = {
+    packAgain = true
+  }
+
+  def beginPack(): Unit = {
+//    packAgain = true
+//    packMem = 0L
+  }
+
+  def setPackValue(value : Long): Unit = {
+    packMem = value
+  }
+
+  def packForward(input: Tensor[T], output: Tensor[T]): Unit = {
+    if (MKL.isMKLLoaded && weight.isContiguous() && (ev.getType() == FloatType)) {
+      val b : Array[Float] = input.asInstanceOf[Tensor[Float]].storage().array()
+      val a : Array[Float] = weight.asInstanceOf[Tensor[Float]].storage().array()
+      val c: Array[Float] = output.asInstanceOf[Tensor[Float]].storage().array()
+
+      val m = weight.size(1)
+      val k = weight.size(2)
+      val n = input.size(1)
+      val alpha = 1
+      val beta = 0
+      val lda: Int = weight.size(2)
+      val ldb: Int = input.size(2)
+      val ldc: Int = output.size(2)
+
+//      println(s"in linear $packMem")
+
+      if (packMem == 0) {
+//        println("only once")
+        packMem = MKL.sgemmAlloc('A', m, n, k)
+      }
+
+      if (packAgain) {
+//        println("only once")
+        MKL.sgemmPack('A', 'T', m, n, k, alpha, a, 0, lda, packMem)
+        packAgain = false
+      }
+      MKL.sgemmCompute('P', 'N', m, n, k, a, 0, lda, b, 0, ldb, beta, c, 0, ldc, packMem)
+
+      // MKL.vsgemm('T', 'N', m, n, k, alpha, a, 0, lda, b, 0, ldb, beta, c, 0, ldc)
+    }
+  }
+
+  def packBackward(input: Tensor[T], output: Tensor[T]): Unit = {
+    if (MKL.isMKLLoaded && weight.isContiguous() && (ev.getType() == FloatType)) {
+      val b : Array[Float] = input.asInstanceOf[Tensor[Float]].storage().array()
+      val a : Array[Float] = weight.asInstanceOf[Tensor[Float]].storage().array()
+      val c: Array[Float] = output.asInstanceOf[Tensor[Float]].storage().array()
+
+      val m = weight.size(2)
+      val k = weight.size(1)
+      val n = input.size(1)
+      val alpha = 1
+      val beta = 0
+      val lda: Int = weight.size(2)
+      val ldb: Int = input.size(2)
+      val ldc: Int = output.size(2)
+
+      if (packMem == 0) {
+        packMem = MKL.sgemmAlloc('A', m, n, k)
+      }
+      if (packAgain) {
+        MKL.sgemmPack('A', 'N', m, n, k, alpha, a, 0, lda, packMem)
+        packAgain = false
+      }
+      MKL.sgemmCompute('P', 'N', m, n, k, a, 0, lda, b, 0, ldb, beta, c, 0, ldc, packMem)
+
+      // MKL.vsgemm('N', 'N', m, n, k, alpha, a, 0, lda, b, 0, ldb, beta, c, 0, ldc)
+    }
+  }
+
+  def freepack(): Unit = {
+    MKL.sgemmFree(packMem)
+  }
+
   override def updateOutput(input: Tensor[T]): Tensor[T] = {
     require(input.dim() == 1 || input.dim() == 2,
       "Linear: " + ErrorInfo.constrainInputAsVectorOrBatch +
       s"input dim ${input.dim()}")
 
+    // weight.fill(ev.fromType(0.01))
 
     if (input.dim() == 1) {
       output.resize(Array(outputSize))
@@ -104,7 +191,14 @@ class Linear[T: ClassTag](
         addBuffer.resize(Array(nFrame)).fill(ev.one)
       }
 
-      output.addmm(ev.zero, output, ev.one, input, weight.t)
+      val s1 = System.nanoTime()
+      if (needPack) {
+        packForward(input, output)
+      } else {
+        output.addmm(ev.zero, output, ev.one, input, weight.t)
+      }
+      val end1 = System.nanoTime() - s1
+//      println(s"$needPack forward time ${end1/1e9}")
       if (withBias) output.addr(ev.one, addBuffer, bias)
     }
     output
@@ -124,7 +218,11 @@ class Linear[T: ClassTag](
     if (input.dim() == 1) {
       gradInput.addmv(ev.fromType[Int](0), ev.fromType[Int](1), weight.t(), gradOutput)
     } else if (input.dim() == 2) {
-      gradInput.addmm(ev.fromType[Int](0), ev.fromType[Int](1), gradOutput, weight)
+      if (needPack) {
+        packBackward(gradOutput, gradInput)
+      } else {
+        gradInput.addmm(ev.fromType[Int](0), ev.fromType[Int](1), gradOutput, weight)
+      }
     }
     gradInput
   }
@@ -159,6 +257,7 @@ class Linear[T: ClassTag](
     }
 
     if (null != wRegularizer && scaleW != 0) {
+      println("update weight")
       wRegularizer.accRegularization(weight, gradWeight, scaleW)
     }
     if (null != bRegularizer && scaleB != 0) {

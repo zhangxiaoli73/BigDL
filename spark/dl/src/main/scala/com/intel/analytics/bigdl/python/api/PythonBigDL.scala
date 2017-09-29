@@ -1921,21 +1921,21 @@ class PythonBigDL[T: ClassTag](implicit ev: TensorNumeric[T]) extends Serializab
     model.unFreeze()
   }
 
-  def setFreeze(model: Graph[T], freezeLayers: JList[String]): Graph[T] = {
-    model.freeze(freezeLayers.asScala.toArray)
-  }
+//  def setFreeze(model: Graph[T], freezeLayers: JList[String]): Graph[T] = {
+//    model.freeze(freezeLayers.asScala.toArray)
+//  }
 
   def unFreeze(model: Graph[T]): Graph[T] = {
     model.unFreeze()
   }
 
-  def setStopGradient(model: Graph[T], layers: JList[String]): Graph[T] = {
-    model.stopGradient(layers.asScala.toArray)
-  }
-
-  def saveGraphTopology(model: Graph[T], logPath: String): Graph[T] = {
-    model.saveGraphTopology(logPath)
-  }
+//  def setStopGradient(model: Graph[T], layers: JList[String]): Graph[T] = {
+//    model.stopGradient(layers.asScala.toArray)
+//  }
+//
+//  def saveGraphTopology(model: Graph[T], logPath: String): Graph[T] = {
+//    model.saveGraphTopology(logPath)
+//  }
 
   def createResizeBilinear(
     outputHeight: Int,

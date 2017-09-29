@@ -21,6 +21,7 @@ import com.intel.analytics.bigdl.dataset.{DataSet, FixedLength, PaddingParam, Sa
 import com.intel.analytics.bigdl.dataset.text.LabeledSentenceToSample
 import com.intel.analytics.bigdl.dataset.text._
 import com.intel.analytics.bigdl.dataset.text.utils.SentenceToken
+import com.intel.analytics.bigdl.models.SimpleRNN
 import com.intel.analytics.bigdl.nn.{CrossEntropyCriterion, Module, TimeDistributedCriterion}
 import com.intel.analytics.bigdl.optim._
 import com.intel.analytics.bigdl.tensor.{Storage, Tensor}

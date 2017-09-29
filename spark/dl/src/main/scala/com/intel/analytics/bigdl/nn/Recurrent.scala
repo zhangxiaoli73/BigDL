@@ -34,7 +34,8 @@ import scala.reflect.ClassTag
  * [[Recurrent]] module is a container of rnn cells
  * Different types of rnn cells can be added using add() function
  */
-class Recurrent[T : ClassTag](var batchNormParams: BatchNormParams[T] = null)
+class Recurrent[T : ClassTag](var batchNormParams: BatchNormParams[T] = null,
+                              var pack: Boolean = false)
   (implicit ev: TensorNumeric[T]) extends Container[Tensor[T], Tensor[T], T] {
 
   private var hidden: Activity = null
@@ -76,6 +77,10 @@ class Recurrent[T : ClassTag](var batchNormParams: BatchNormParams[T] = null)
     require(module.isInstanceOf[Cell[T]],
       "Recurrent: contained module should be Cell type")
 
+    if (pack) {
+      packLinear(module.asInstanceOf[Cell[T]])
+    }
+
     topology = module.asInstanceOf[Cell[T]]
     preTopology = topology.preTopology
 
@@ -96,6 +101,34 @@ class Recurrent[T : ClassTag](var batchNormParams: BatchNormParams[T] = null)
     }
     modules += topology
     this
+  }
+
+
+  def packLinear(model: Cell[T]): Unit = {
+    val allModels = model.cell.getSubModules()
+    for (elem <- allModels) {
+      if (elem._2.isInstanceOf[Linear[T]]) {
+        elem._2.asInstanceOf[Linear[T]].pack()
+      }
+    }
+  }
+
+  def resetPack(model: Cell[T]): Unit = {
+    val allModels = model.cell.getSubModules()
+    for (elem <- allModels) {
+      if (elem._2.isInstanceOf[Linear[T]]) {
+        elem._2.asInstanceOf[Linear[T]].resetPack()
+      }
+    }
+  }
+
+  def beginPack(model: Cell[T]): Unit = {
+    val allModels = model.cell.getSubModules()
+    for (elem <- allModels) {
+      if (elem._2.isInstanceOf[Linear[T]]) {
+        elem._2.asInstanceOf[Linear[T]].beginPack()
+      }
+    }
   }
 
   private def batchNormalization(batchNormParams: BatchNormParams[T]) = {
@@ -146,11 +179,13 @@ class Recurrent[T : ClassTag](var batchNormParams: BatchNormParams[T] = null)
       cells.head.hidResize(hidden = hidden, batchSize = batchSize, imageSize)
       gradHidden = hidden
     }
+
     var t = cells.length
     if (t < times) {
       val cloneCell = cells.head.cloneModule()
       cloneCell.parameters()._1.map(_.set())
       cloneCell.parameters()._2.map(_.set())
+
       while (t < times) {
         cells += cloneCell.cloneModule()
           .asInstanceOf[Cell[T]]
@@ -183,16 +218,16 @@ class Recurrent[T : ClassTag](var batchNormParams: BatchNormParams[T] = null)
       }
     })
 
-    val stepLength = dropouts.length
-    for (i <- dropouts.head.indices) {
-      val head = dropouts.head(i)
-      val noise = head.noise
-      for (j <- 1 until stepLength) {
-        val current = dropouts(j)(i)
-        current.noise = noise
-        current.isResampling = false
-      }
-    }
+//    val stepLength = dropouts.length
+//    for (i <- dropouts.head.indices) {
+//      val head = dropouts.head(i)
+//      val noise = head.noise
+//      for (j <- 1 until stepLength) {
+//        val current = dropouts(j)(i)
+//        current.noise = noise
+//        current.isResampling = false
+//      }
+//    }
   }
 
   def findDropouts(cell: Cell[T]): Array[Dropout[T]] = {
@@ -237,13 +272,38 @@ class Recurrent[T : ClassTag](var batchNormParams: BatchNormParams[T] = null)
      * identical elements T(output, output). One of the elements from the cell output is
      * the updated hidden. Thus the currentInput will update its hidden element with this output.
      */
+
+    beginPack(cells.head)
+
     var i = 1
     // init state
     currentInput(hidDim) = if (initState != null) initState
      else hidden
+
+    if (i == 1) {
+      currentInput(inputDim) = Recurrent.selectCopy(outputCell, i, outputBuffer)
+      cells(i - 1).forward(currentInput)
+      val tmp = cells(i-1).cell.getSubModules()
+      currentInput(hidDim) = cells(i - 1).output.toTable(hidDim)
+      i += 1
+    }
+
+    val all1 = cells(0).cell.getSubModule("celllinear").getOrElse(null)
+    all1.asInstanceOf[Linear[Float]].needPack = true
+    all1.asInstanceOf[Linear[Float]].packAgain = true
+
+    // cell pack memory
+    var m = 0
+    while (m < cells.length) {
+      val all2 = cells(i).cell.getSubModule("celllinear").getOrElse(null)
+      all2.asInstanceOf[Linear[Float]].packMem = all1.asInstanceOf[Linear[Float]].packMem
+      m += 1
+    }
+
     while (i <= times) {
       currentInput(inputDim) = Recurrent.selectCopy(outputCell, i, outputBuffer)
       cells(i - 1).forward(currentInput)
+      val tmp = cells(i-1).cell.getSubModules()
       currentInput(hidDim) = cells(i - 1).output.toTable(hidDim)
       i += 1
     }
@@ -368,6 +428,9 @@ class Recurrent[T : ClassTag](var batchNormParams: BatchNormParams[T] = null)
       gradInput = preTopology.backward(input, gradInputCell).toTensor[T]
     }
 
+//    if (pack) {
+//      resetPack(cells.head)
+//    }
     this.backwardTime = System.nanoTime - st
     gradInput
   }
@@ -483,9 +546,9 @@ object Recurrent extends ContainerSerializable {
   private val timeDim = 2
 
   def apply[@specialized(Float, Double) T: ClassTag](
-    batchNormParams: BatchNormParams[T] = null)
+    batchNormParams: BatchNormParams[T] = null, pack: Boolean = false)
     (implicit ev: TensorNumeric[T]) : Recurrent[T] = {
-    new Recurrent[T](batchNormParams)
+    new Recurrent[T](batchNormParams, pack)
   }
 
   /**
