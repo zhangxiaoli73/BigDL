@@ -183,8 +183,8 @@ class Recurrent[T : ClassTag](var batchNormParams: BatchNormParams[T] = null,
     var t = cells.length
     if (t < times) {
       val cloneCell = cells.head.cloneModule()
-      cloneCell.parameters()._1.map(_.set())
-      cloneCell.parameters()._2.map(_.set())
+//       cloneCell.parameters()._1.map(_.set())
+//       cloneCell.parameters()._2.map(_.set())
 
       while (t < times) {
         cells += cloneCell.cloneModule()
