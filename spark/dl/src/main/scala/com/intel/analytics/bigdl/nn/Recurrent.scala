@@ -191,7 +191,7 @@ class Recurrent[T : ClassTag](var batchNormParams: BatchNormParams[T] = null,
           .asInstanceOf[Cell[T]]
         t += 1
       }
-      share(cells)
+      // share(cells)
     }
   }
 
