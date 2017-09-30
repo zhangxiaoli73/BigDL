@@ -214,20 +214,20 @@ class Recurrent[T : ClassTag](var batchNormParams: BatchNormParams[T] = null,
           i += 1
         }
 
-        dropouts.append(findDropouts(c))
+        // dropouts.append(findDropouts(c))
       }
     })
 
-    val stepLength = dropouts.length
-    for (i <- dropouts.head.indices) {
-      val head = dropouts.head(i)
-      val noise = head.noise
-      for (j <- 1 until stepLength) {
-        val current = dropouts(j)(i)
-        current.noise = noise
-        current.isResampling = false
-      }
-    }
+//     val stepLength = dropouts.length
+//     for (i <- dropouts.head.indices) {
+//       val head = dropouts.head(i)
+//       val noise = head.noise
+//       for (j <- 1 until stepLength) {
+//         val current = dropouts(j)(i)
+//         current.noise = noise
+//         current.isResampling = false
+//       }
+//     }
   }
 
   def findDropouts(cell: Cell[T]): Array[Dropout[T]] = {
