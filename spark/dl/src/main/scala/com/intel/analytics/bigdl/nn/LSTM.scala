@@ -115,7 +115,7 @@ class LSTM[T : ClassTag] (
     } else {
       i2g = Identity()
       h2g = Linear(hiddenSize, 4 * hiddenSize,
-        withBias = false, wRegularizer = uRegularizer)
+        withBias = false, wRegularizer = uRegularizer).setName("celllinear")
     }
 
     gates
