@@ -353,10 +353,10 @@ case class LocalOptimizerPerfParam(
   coreNumber: Int = Runtime.getRuntime.availableProcessors() / 2,
   iteration: Int = 50,
   dataType: String = "float",
-  module: String = "lstmpack",
+  module: String = "lstm",
   inputData: String = "random",
   inference: Boolean = true,
   inputSize: Int = 650,
   hiddenSize: Int = 650,
-  sequenceLen: Int = 3
+  sequenceLen: Int = 35
 )

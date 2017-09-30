@@ -119,12 +119,12 @@ class Linear[T: ClassTag](
 //      println(s"in linear $packMem")
 
       if (packMem == 0) {
-//        println("only once")
+        println("memory only once")
         packMem = MKL.sgemmAlloc('A', m, n, k)
       }
 
       if (packAgain) {
-//        println("only once")
+        println("pack again only once")
         MKL.sgemmPack('A', 'T', m, n, k, alpha, a, 0, lda, packMem)
         packAgain = false
       }
@@ -150,9 +150,11 @@ class Linear[T: ClassTag](
       val ldc: Int = output.size(2)
 
       if (packMem == 0) {
+        println("memory backward only once")
         packMem = MKL.sgemmAlloc('A', m, n, k)
       }
       if (packAgain) {
+        println("pack again only once backward")
         MKL.sgemmPack('A', 'N', m, n, k, alpha, a, 0, lda, packMem)
         packAgain = false
       }

@@ -218,16 +218,16 @@ class Recurrent[T : ClassTag](var batchNormParams: BatchNormParams[T] = null,
       }
     })
 
-//    val stepLength = dropouts.length
-//    for (i <- dropouts.head.indices) {
-//      val head = dropouts.head(i)
-//      val noise = head.noise
-//      for (j <- 1 until stepLength) {
-//        val current = dropouts(j)(i)
-//        current.noise = noise
-//        current.isResampling = false
-//      }
-//    }
+    val stepLength = dropouts.length
+    for (i <- dropouts.head.indices) {
+      val head = dropouts.head(i)
+      val noise = head.noise
+      for (j <- 1 until stepLength) {
+        val current = dropouts(j)(i)
+        current.noise = noise
+        current.isResampling = false
+      }
+    }
   }
 
   def findDropouts(cell: Cell[T]): Array[Dropout[T]] = {
@@ -289,14 +289,16 @@ class Recurrent[T : ClassTag](var batchNormParams: BatchNormParams[T] = null,
     }
 
     val all1 = cells(0).cell.getSubModule("celllinear").getOrElse(null)
-    all1.asInstanceOf[Linear[Float]].needPack = true
-    all1.asInstanceOf[Linear[Float]].packAgain = true
+    // all1.asInstanceOf[Linear[Float]].needPack = true
+    // all1.asInstanceOf[Linear[Float]].packAgain = true
 
+    println("needPack " + all1.asInstanceOf[Linear[Float]].needPack + " packAgain " + all1.asInstanceOf[Linear[Float]].packAgain)
     // cell pack memory
     var m = 0
     while (m < cells.length) {
       val all2 = cells(i).cell.getSubModule("celllinear").getOrElse(null)
       all2.asInstanceOf[Linear[Float]].packMem = all1.asInstanceOf[Linear[Float]].packMem
+      all2.asInstanceOf[Linear[Float]].packAgain = all1.asInstanceOf[Linear[Float]].packAgain
       m += 1
     }
 
