@@ -58,7 +58,9 @@ object Utils {
                           interNum: Int = 0,
                           clipNorm: Float = 5.0f,
                           startEpoch: Int = 1,
-                          keepProb: Float = 2.0f)
+                          endEpoch: Int = -1,
+                          keepProb: Float = 2.0f,
+                          lrType: String = "adagrad")
 
   val trainParser = new OptionParser[TrainParams]("BigDL SimpleRNN Train Example") {
     opt[String]('f', "dataFolder")
@@ -150,9 +152,17 @@ object Utils {
       .text("startEpoch")
       .action((x, c) => c.copy(startEpoch = x))
 
+    opt[Int]("endEpoch")
+      .text("endEpoch")
+      .action((x, c) => c.copy(endEpoch = x))
+
     opt[Double]("keepProb")
       .text("keepProb")
       .action((x, c) => c.copy(keepProb = x.toFloat))
+
+    opt[String]("lrType")
+      .text("lrType")
+      .action((x, c) => c.copy(lrType = x))
   }
 
   case class TestParams(

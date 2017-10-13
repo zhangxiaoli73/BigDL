@@ -85,10 +85,20 @@ object PTBWordLM {
 
       val optimMethod = if (param.stateSnapshot.isDefined) {
         OptimMethod.load[Float](param.stateSnapshot.get)
+      } else if (param.lrType == "adam") {
+        new Adam[Float](learningRate = param.learningRate,
+          learningRateDecay = param.learningRateDecay)
+      } else if (param.lrType == "adagrad") {
+        new Adagrad[Float](learningRate = param.learningRate,
+          learningRateDecay = param.learningRateDecay)
       } else {
+        val endEpoch = if (param.endEpoch < 0) {
+          param.nEpochs
+        } else param.endEpoch
         new SGD[Float](learningRate = param.learningRate, clipNorm = param.clipNorm,
           learningRateDecay = param.learningRateDecay,
-          learningRateSchedule = EpochLearningDecay(param.startEpoch, param.nEpochs))
+          learningRateSchedule = EpochLearningDecay(param.startEpoch, endEpoch),
+          momentum = param.momentum)
       }
 
       val logdir = "ptbModel"
