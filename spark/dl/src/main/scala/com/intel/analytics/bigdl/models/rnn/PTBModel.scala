@@ -19,8 +19,6 @@ package com.intel.analytics.bigdl.models.rnn
 import com.intel.analytics.bigdl.Module
 import com.intel.analytics.bigdl.nn.Graph._
 import com.intel.analytics.bigdl.nn.{TimeDistributed, _}
-import org.apache.spark.internal
-import org.apache.spark.internal.config
 
 object PTBModel {
   def apply(

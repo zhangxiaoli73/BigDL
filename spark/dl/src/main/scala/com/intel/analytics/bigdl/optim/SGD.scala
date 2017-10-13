@@ -16,7 +16,8 @@
 
 package com.intel.analytics.bigdl.optim
 
-import breeze.linalg.{clip, max, norm}
+import breeze.linalg.{*, clip, max, norm}
+import breeze.numerics.abs
 import com.intel.analytics.bigdl.nn
 import com.intel.analytics.bigdl.nn.ops
 import com.intel.analytics.bigdl.optim.SGD.{Default, LearningRateSchedule}
@@ -529,17 +530,12 @@ object SGD {
   case class EpochLearningDecay(startEpoch: Int, endEpoch: Int) extends LearningRateSchedule {
     override def updateHyperParameter[T](optimMethod: SGD[T]): Unit = {
       val lrd = optimMethod.learningRateDecay
-      val lr = if (currentRate > 0) {
-        currentRate
-      } else {
-        optimMethod.learningRate
-      }
       val epoch = optimMethod.state[Int]("epoch")
       if ((epoch >= startEpoch) && (epoch <= endEpoch)) {
         val lrd2 = math.pow(lrd, max(epoch + 1 - startEpoch, 0))
-        currentRate = -lr * lrd2
-      } else {
-        currentRate = -lr
+        currentRate = -optimMethod.learningRate * lrd2
+      } else if (math.abs(currentRate) == 0.0) {
+        currentRate = -optimMethod.learningRate
       }
     }
   }
