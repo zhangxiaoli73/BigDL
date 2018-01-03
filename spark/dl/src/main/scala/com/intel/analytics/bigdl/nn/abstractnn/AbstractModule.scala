@@ -28,6 +28,9 @@ import org.apache.commons.lang3.SerializationUtils
 import org.apache.spark.rdd.RDD
 import com.intel.analytics.bigdl.optim._
 import com.intel.analytics.bigdl.dataset.{LocalDataSet, MiniBatch, PaddingParam, Sample}
+import com.intel.analytics.bigdl.dataset.{LocalDataSet, MiniBatch, Sample}
+import com.intel.analytics.bigdl.mkl.MklDnn
+import com.intel.analytics.bigdl.mkl.MklDnn.MemoryFormat
 import com.intel.analytics.bigdl.nn.Graph.ModuleNode
 import com.intel.analytics.bigdl.nn.quantized.Quantization
 import com.intel.analytics.bigdl.transform.vision.image.{DistributedImageFrame, ImageFeature, ImageFrame, LocalImageFrame}
@@ -816,5 +819,40 @@ abstract class AbstractModule[A <: Activity: ClassTag, B <: Activity: ClassTag, 
   def getClassTagNumerics() : (Array[ClassTag[_]], Array[TensorNumeric[_]]) = {
     (Array(scala.reflect.classTag[T]), Array(ev))
   }
+
+  // for mkl dnn engine
+  private val mkldnn_engine_type: Int = MklDnn.EngineType.cpu
+  private var engineLocation: Long = 0L
+  def getDnnEngine(index : Int): Long = {
+    if (engineLocation == 0L) {
+      require(MklDnn.isLoaded, "mkldnn isn't loaded")
+      engineLocation = MklDnn.EngineCreate(mkldnn_engine_type, index)
+    }
+    engineLocation
+  }
+
+  def createDnnEngine(index : Int): Unit = {
+    require(MklDnn.isLoaded, "mkldnn isn't loaded")
+    engineLocation = MklDnn.EngineCreate(mkldnn_engine_type, index)
+  }
+
+  // for mkl dnn stream
+  private var streamLocation: Long = 0L
+  def getStream(): Long = {
+    if (streamLocation == 0L) {
+      require(MklDnn.isLoaded, "mkldnn isn't loaded")
+      streamLocation = MklDnn.StreamCreate(MklDnn.StreamType.eager)
+    }
+    streamLocation
+  }
+
+  def createStream(): Unit = {
+    require(MklDnn.isLoaded, "mkldnn isn't loaded")
+    streamLocation = MklDnn.StreamCreate(MklDnn.StreamType.eager)
+  }
+
+  // for mkl dnn format
+  var output_format : Int = MklDnn.MemoryFormat.nchw
+
 }
 
