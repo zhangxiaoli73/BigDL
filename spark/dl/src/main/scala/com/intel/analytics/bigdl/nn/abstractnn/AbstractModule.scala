@@ -820,6 +820,9 @@ abstract class AbstractModule[A <: Activity: ClassTag, B <: Activity: ClassTag, 
     (Array(scala.reflect.classTag[T]), Array(ev))
   }
 
+  // for mkl dnn model
+  val isMklDnnModel = false
+
   // for mkl dnn engine
   private val mkldnn_engine_type: Int = MklDnn.EngineType.cpu
   private var engineLocation: Long = 0L
@@ -852,7 +855,7 @@ abstract class AbstractModule[A <: Activity: ClassTag, B <: Activity: ClassTag, 
   }
 
   // for mkl dnn format
-  var output_format : Int = MklDnn.MemoryFormat.nchw
+  var output_format : Int = MklDnn.MemoryFormat.any
 
 }
 
