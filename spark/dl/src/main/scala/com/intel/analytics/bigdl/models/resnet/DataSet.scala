@@ -81,3 +81,58 @@ object Cifar10DataSet extends ResNetDataSet {
       .transform(BGRImgToBatch(batchSize))
   }
 }
+
+object ImageNetDataSet extends ResNetDataSet {
+
+  val trainMean = (0.485, 0.456, 0.406)
+  val trainStd = (0.229, 0.224, 0.225)
+  val testMean = trainMean
+  val testStd = trainStd
+
+  override def trainDataSet(path: String, batchSize: Int, size: Int)
+  : DataSet[MiniBatch[Float]] = {
+
+    DataSet.array(Utils.loadTrain(path))
+      .transform(BytesToBGRImg())
+      .transform(BGRImgNormalizer(trainMean, trainStd))
+      .transform(HFlip(0.5))
+      .transform(BGRImgRdmCropper(cropWidth = 32, cropHeight = 32, padding = 4))
+      .transform(BGRImgToBatch(batchSize))
+  }
+
+  override def valDataSet(path: String, batchSize: Int, size: Int)
+  : DataSet[MiniBatch[Float]] = {
+
+    DataSet.array(Utils.loadTest(path))
+      .transform(BytesToBGRImg())
+      .transform(BGRImgNormalizer(testMean, testStd))
+      .transform(BGRImgToBatch(batchSize))
+  }
+
+  override def valDataSet(path: String, sc: SparkContext, imageSize: Int, batchSize: Int)
+  : DataSet[MiniBatch[Float]] = {
+    DataSet.SeqFileFolder.files(path, sc, 1000).transform(
+      MTLabeledBGRImgToBatch[ByteRecord](
+        width = imageSize,
+        height = imageSize,
+        batchSize = batchSize,
+        transformer = (BytesToBGRImg()
+          -> BGRImgNormalizer(0.485, 0.456, 0.406, 0.229, 0.224, 0.225))
+          -> BGRImgCropper(imageSize, imageSize, CropCenter)
+      ))
+  }
+
+  override def trainDataSet(path: String, sc: SparkContext, imageSize: Int, batchSize: Int)
+  : DataSet[MiniBatch[Float]] = {
+    DataSet.SeqFileFolder.files(path, sc, 1000).transform(
+      MTLabeledBGRImgToBatch[ByteRecord](
+        width = imageSize,
+        height = imageSize,
+        batchSize = batchSize,
+        transformer = (BytesToBGRImg() -> BGRImgCropper(imageSize, imageSize)
+          -> ColorJitter() -> Lighting()
+          -> BGRImgNormalizer(0.485, 0.456, 0.406, 0.229, 0.224, 0.225))
+          -> HFlip(0.5)
+      ))
+  }
+}
