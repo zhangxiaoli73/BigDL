@@ -39,17 +39,16 @@ import org.apache.log4j.Logger
 import org.apache.spark.sql.execution.streaming
 import org.apache.spark.sql.execution.streaming.state
 import scopt.OptionParser
-import spire.syntax.module
 
 import scala.collection.mutable.ArrayBuffer
 import scala.util.Random
 
-object LocalOptimizerPerf2 {
+object LocalOptimizerPerf {
   val modelSupported = Set("inception_v1","inception_v2", "vgg16", "vgg19", "alexnet", "resnet_50",
     "lstm", "lstmpeephole", "simplernn", "gru", "convlstmpeephole")
   val logger = Logger.getLogger(getClass)
 
-  val parser = new OptionParser[LocalOptimizerPerfParam2]("BigDL Local Performance Test") {
+  val parser = new OptionParser[LocalOptimizerPerfParam]("BigDL Local Performance Test") {
     head("Performance Test of Local Optimizer")
     opt[Int]('b', "batchSize")
       .text("Batch size of input data")
@@ -85,7 +84,7 @@ object LocalOptimizerPerf2 {
     (_model, input, criterion)
   }
 
-  def performance(param: LocalOptimizerPerfParam2): Unit = {
+  def performance(param: LocalOptimizerPerfParam): Unit = {
 
     def all(model: Module[Float], dataset: LocalDataSet[MiniBatch[Float]], iteration: Int): Unit = {
       val coreNumber = Engine.coreNumber()
@@ -249,7 +248,7 @@ object LocalOptimizerPerf2 {
   }
 
   def main(args: Array[String]): Unit = {
-    parser.parse(args, new LocalOptimizerPerfParam2()).foreach(performance)
+    parser.parse(args, new LocalOptimizerPerfParam()).foreach(performance)
   }
 
 }
@@ -263,7 +262,7 @@ object LocalOptimizerPerf2 {
 * @param dataType data type (double / float)
 * @param module module name
   */
-case class LocalOptimizerPerfParam2(
+case class LocalOptimizerPerfParam(
     batchSize: Int = 16, // 16,
     coreNumber: Int = Runtime.getRuntime.availableProcessors() / 2,
     iteration: Int = 80,
