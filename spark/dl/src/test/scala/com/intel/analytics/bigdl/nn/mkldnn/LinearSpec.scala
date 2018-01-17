@@ -507,13 +507,14 @@ class LinearSpec extends FlatSpec with Matchers {
   }
 
   "AlexNet perf" should "work correctly" in {
+    System.setProperty("bigdl.mklNumThreads", "4")
     val blas = AlexNet(1000, hasDropout = false)
     val dnn = AlexNet.dnn(1000, hasDropout = false)
 
     blas.training()
     dnn.training()
 
-    val input = Tensor(4, 3, 227, 227).rand()
+    val input = Tensor(16, 3, 227, 227).rand()
     blas.forward(input)
     dnn.forward(input)
 
@@ -544,7 +545,6 @@ class LinearSpec extends FlatSpec with Matchers {
     while (i < iters) {
       blas.forward(input)
       blas.backward(input, gradOutput)
-
       dnn.forward(input)
       dnn.backward(input, gradOutput)
       i += 1
@@ -584,6 +584,33 @@ class LinearSpec extends FlatSpec with Matchers {
     println(Tabulator.format(header:: backwardTime))
   }
 
+  "AlexNet single thread testing" should "work correctly" in {
+    System.setProperty("bigdl.mklNumThreads", "4")
+    val batchSize = 16
+    val model = AlexNet.dnn(1000)
+    model.createDnnEngine(0)
+    model.createStream()
+    model.training()
+
+    val input = Tensor(batchSize, 3, 227, 227).rand()
+    val gradOutput = Tensor(batchSize, 1000).rand()
+    model.resetTimes()
+
+    val warm = 10
+    val iters = 50
+
+    val time = manyTimes {
+      model.forward(input)
+      model.backward(input, gradOutput)
+    } _
+
+    val (_, _) = time(warm)
+    model.resetTimes()
+    val taken = time(iters)._1
+
+    println(taken / iters)
+  }
+
   "the num of omp threads" should "be 1" in {
     val threads = MKL.getNumThreads
     println(threads)
@@ -605,7 +632,7 @@ class LinearSpec extends FlatSpec with Matchers {
     Engine.init
 
     val batchSize = 16
-    val model = AlexNet(1000)
+    val model = AlexNet.dnn(1000)
     println(model)
     val criterion = ClassNLLCriterion()
     val miniBatch = MiniBatch[Float](Tensor(batchSize, 3, 227, 227), Tensor(batchSize).fill(1))

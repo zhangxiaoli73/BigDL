@@ -21,7 +21,7 @@ object Utils {
     val t0 = System.nanoTime()
     val result = block
     val t1 = System.nanoTime()
-    val takes = (t1 - t0) / 1e9
+    val takes = (t1 - t0) / 1e6
 //    println(s"time elpased: ${takes}")
     (takes, result)
   }
