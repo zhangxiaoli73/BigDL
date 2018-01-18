@@ -72,14 +72,14 @@ object TrainImageNet {
         if (param.optnet) {
           ResNet.shareGradInput(curModel)
         }
-//        ResNet.modelInit(curModel)
+        ResNet.modelInit(curModel)
         curModel
       }
 
       println(model)
 
       val optimMethod = if (param.stateSnapshot.isDefined) {
-        val optim = OptimMethod.load[Float](param.stateSnapshot.get).asInstanceOf[SGD[Float]]
+        val optim = OptimMethod.load[Float](param.stateSnapshot.get).asInstanceOf[LarsSGD[Float]]
         val baseLr = param.learningRate
         val iterationsPerEpoch = math.ceil(1281167 / param.batchSize).toInt
         val warmUpIteration = iterationsPerEpoch * param.warmupEpoch
@@ -97,10 +97,11 @@ object TrainImageNet {
         logger.info(s"warmUpIteraion: $warmUpIteration, startLr: ${param.learningRate}, " +
           s"maxLr: $maxLr, " +
           s"delta: $delta, nesterov: ${param.nesterov}")
-        new SGD[Float](learningRate = param.learningRate, learningRateDecay = 0.0,
-          momentum = param.momentum, dampening = param.dampening,
-          nesterov = param.nesterov,
-            learningRateSchedule = SGD.EpochDecayWithWarmUp(warmUpIteration, delta, imageNetDecay))
+        new LarsSGD[Float](learningRate = param.learningRate, learningRateDecay = 0.0,
+          momentum = param.momentum,
+          larsLearningRateSchedule = SGD.EpochDecayWithWarmUp(warmUpIteration, delta, imageNetDecay),
+          gwRation = 0.001
+        )
       }
 
       val optimizer = Optimizer(

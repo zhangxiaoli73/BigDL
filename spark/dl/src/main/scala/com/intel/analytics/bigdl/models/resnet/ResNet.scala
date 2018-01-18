@@ -56,8 +56,8 @@ object Convolution {
       SpatialConvolution[T](nInputPlane, nOutputPlane, kernelW, kernelH,
         strideW, strideH, padW, padH, nGroup, propagateBack, wReg, bReg)
     }
-//    conv.setInitMethod(MsraFiller(false), Zeros)
-    conv.setInitMethod(MsraFiller(false))
+    conv.setInitMethod(MsraFiller(false), Zeros)
+//    conv.setInitMethod(MsraFiller(false))
     conv
   }
 }
@@ -70,8 +70,8 @@ object Sbn {
 //    momentum: Double = 0.9,
     affine: Boolean = true)
   (implicit ev: TensorNumeric[T]): SpatialBatchNormalization[T] = {
-//    SpatialBatchNormalization[T](nOutput, eps, momentum, affine).setInitMethod(Ones, Zeros)
-    SpatialBatchNormalization[T](nOutput, eps, momentum, affine).setInitMethod(Ones)
+    SpatialBatchNormalization[T](nOutput, eps, momentum, affine).setInitMethod(Ones, Zeros)
+//    SpatialBatchNormalization[T](nOutput, eps, momentum, affine).setInitMethod(Ones)
   }
 }
 
@@ -208,8 +208,8 @@ object ResNet {
         .add(Sbn(n))
         .add(ReLU(true))
         .add(Convolution(n, n*4, 1, 1, 1, 1, 0, 0, optnet = optnet))
-//        .add(Sbn(n * 4).setInitMethod(Zeros, Zeros))
-        .add(Sbn(n * 4).setInitMethod(Zeros))
+        .add(Sbn(n * 4).setInitMethod(Zeros, Zeros))
+//        .add(Sbn(n * 4).setInitMethod(Zeros))
 
       Sequential()
         .add(ConcatTable()
@@ -262,8 +262,8 @@ object ResNet {
         .add(SpatialAveragePooling(7, 7, 1, 1))
         .add(View(nFeatures).setNumInputDims(3))
         .add(Linear(nFeatures, classNum, true, L2Regularizer(1e-4), L2Regularizer(1e-4))
-//          .setInitMethod(RandomNormal(0.0, 0.01), Zeros))
-          .setInitMethod(RandomNormal(0.0, 0.01)))
+          .setInitMethod(RandomNormal(0.0, 0.01), Zeros))
+//          .setInitMethod(RandomNormal(0.0, 0.01)))
     } else if (dataSet == DatasetType.CIFAR10) {
       require((depth - 2)%6 == 0,
         "depth should be one of 20, 32, 44, 56, 110, 1202")
