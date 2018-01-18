@@ -703,15 +703,19 @@ object DistriOptimizer {
         parameters.squarePerLayer(lookupDic).iterator
       }).reduceByKey((a, b) => (a._1 + b._1, a._2 + b._2)).sortByKey(true).collect()
 
+      val parameterPerLayer = dataset.originRDD().mapPartitions( _ => {
+        parameters.parametersPerLayer(lookupDic).iterator
+      }).reduceByKey((a, b) => a ++ b).sortByKey(true).collect
+
       require(parameterPerLayerSizes.length == norm2PerLayer.length,
         "lookupDic length is not correct!")
-//      for((parameter, i) <- model.parameters()._1.view.zipWithIndex) {
-//        require(ev.isGreater(ev.fromType(1e-3),
-//          (ev.minus(parameter.sumSquare(), ev.fromType(norm2PerLayer(i)._2._1)))),
-//          s"lookupDic value is not correct! ori is ${parameter.sumSquare()}" +
-//            s" now is ${norm2PerLayer(i)._2._1}")
-//      }
-//      logger.info("lookupDic check pass!!")
+      for((parameter, i) <- model.parameters()._1.view.zipWithIndex) {
+        require(ev.nearlyEqual(parameter.sumSquare(), ev.fromType(norm2PerLayer(i)._2._1), 1e-3),
+          s"lookupDic value is not correct! ori_norm2 is ${parameter.sumSquare()}," +
+            s"now norm2 is ${norm2PerLayer(i)._2._1}, ori is ${parameter.toString()}" +
+            s" now is ${parameterPerLayer(i).toString()}, i is ${i}")
+      }
+      logger.info("lookupDic check pass!!")
     }
 
     val models = dataset.originRDD().mapPartitions(_ => {
