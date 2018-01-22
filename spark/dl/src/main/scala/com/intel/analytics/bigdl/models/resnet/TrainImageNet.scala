@@ -97,11 +97,15 @@ object TrainImageNet {
         logger.info(s"warmUpIteraion: $warmUpIteration, startLr: ${param.learningRate}, " +
           s"maxLr: $maxLr, " +
           s"delta: $delta, nesterov: ${param.nesterov}")
-        new LarsSGD[Float](learningRate = param.learningRate, learningRateDecay = 0.0,
-          momentum = param.momentum,
-          larsLearningRateSchedule = SGD.EpochDecayWithWarmUp(warmUpIteration, delta, imageNetDecay),
-          gwRation = 0.001
-        )
+//        new LarsSGD[Float](learningRate = param.learningRate, learningRateDecay = 0.0,
+//          momentum = param.momentum,
+//          larsLearningRateSchedule = SGD.EpochDecayWithWarmUp(warmUpIteration, delta, imageNetDecay),
+//          gwRation = 0.001
+//        )
+        new SGD[Float](learningRate = param.learningRate, learningRateDecay = 0.0,
+          momentum = param.momentum, dampening = param.dampening,
+          nesterov = param.nesterov,
+          learningRateSchedule = SGD.EpochDecayWithWarmUp(warmUpIteration, delta, imageNetDecay))
       }
 
       val optimizer = Optimizer(
