@@ -16,14 +16,16 @@
 
 package com.intel.analytics.bigdl.nn.mkldnn
 
+import com.intel.analytics.bigdl.mkl.{MKL, MklDnn}
 import com.intel.analytics.bigdl.nn
+import com.intel.analytics.bigdl.nn.Sequential
 import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.numeric.NumericFloat
 import org.scalatest.{FlatSpec, Matchers}
 
 class SpatialBatchNormalizationSpec extends FlatSpec with Matchers {
   "bn updateOutput" should "work correctly" in {
-    val (batchSize, channel, height, width) = (2, 3, 4, 4)
+    val (batchSize, channel, height, width) = (2, 16, 1, 1)
     val epsilon = 1e-5
 
     val initWeight = Tensor(channel).rand()
@@ -90,9 +92,9 @@ class SpatialBatchNormalizationSpec extends FlatSpec with Matchers {
     val gradInput = bn.backward(input, gradOutput)
     val nnGradInput = nnBn.backward(input, gradOutput)
 
-    gradInput shouldEqual nnGradInput
     bn.gradWeight shouldEqual nnBn.gradWeight
     bn.gradBias shouldEqual nnBn.gradBias
+    gradInput should be (nnGradInput)
   }
 
   "bn backward multi times" should "work correctly" in {
@@ -119,5 +121,65 @@ class SpatialBatchNormalizationSpec extends FlatSpec with Matchers {
     bn.gradInput shouldEqual nnBn.gradInput
     bn.gradWeight shouldEqual nnBn.gradWeight
     bn.gradBias shouldEqual nnBn.gradBias
+  }
+
+  "bn perf" should "work correctly" in {
+    val (batchSize, channel, height, width) = (4, 64, 112, 112)
+    val epsilon = 0.0f
+
+    val initWeight = Tensor(channel).rand(-1, 1)
+    val initBias = Tensor(channel).rand(-1, 1)
+
+    val bn = SpatialBatchNormalization(channel, epsilon, initWeight = initWeight,
+      initBias = initBias)
+    val input = Tensor(batchSize, channel, height, width).rand(-1, 1)
+    val gradOutput = Tensor().resizeAs(input).rand(-1, 1)
+
+    val nnBn = nn.SpatialBatchNormalization(channel, epsilon,
+      initWeight = initWeight, initBias = initBias)
+
+    val times = Utils.manyTimes {
+      bn.forward(input)
+//      bn.backward(input, gradOutput)
+    } _
+
+    val nnTimes = Utils.manyTimes {
+      nnBn.forward(input)
+//      nnBn.backward(input, gradOutput)
+    } _
+
+    times(10)
+    nnTimes(10)
+
+    val costs = times(50)._1
+    val nnCosts = nnTimes(50)._1
+
+    println(costs)
+    println(nnCosts)
+  }
+
+  "Convolution + SpatialBarchNormalization" should "work correctly" in {
+    MKL.setNumThreads(1)
+    import MklDnn.{MemoryFormat => format}
+    val dnn = Sequential()
+      .add(ConvolutionDnn(3, 64, 7, 7, 2, 2, 3, 3).setName("conv1/7x7_s2"))
+      .add(SpatialBatchNormalization(64, 1e-3).setName("conv1/7x7_s2/bn"))
+      .add(MemoryReOrder(inputFormat = format.any, outputFormat = format.nchw))
+
+    val blas = Sequential()
+      .add(nn.SpatialConvolution(3, 64, 7, 7, 2, 2, 3, 3).setName("conv1/7x7_s2"))
+      .add(nn.SpatialBatchNormalization(64, 1e-3).setName("conv1/7x7_s2/bn"))
+
+    for (i <- dnn.parameters()._1.indices) {
+      blas.parameters()._1(i).rand(-1, 1)
+      dnn.parameters()._1(i).copy(blas.parameters()._1(i))
+    }
+
+    val input = Tensor(4, 3, 224, 224).rand()
+
+    blas.forward(input)
+    dnn.forward(input)
+
+    dnn.output.toTensor should be (blas.output.toTensor)
   }
 }

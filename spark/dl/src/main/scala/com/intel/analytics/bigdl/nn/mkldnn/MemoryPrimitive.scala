@@ -93,6 +93,8 @@ class MemoryPrimitive[T: ClassTag]()(implicit ev: TensorNumeric[T]) extends Seri
       val (dim, size) = if (tensor.dim() == 1 && (format == MklDnn.MemoryFormat.nc ||
         format == MklDnn.MemoryFormat.oi)) {
         (2, Array(1) ++ tensor.size())
+      } else if (tensor.dim() == 2 && (format == MklDnn.MemoryFormat.oihw)) {
+        (4, tensor.size() ++ Array(1, 1))
       } else {
         (tensor.dim(), tensor.size())
       }

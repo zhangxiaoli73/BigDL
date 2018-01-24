@@ -136,7 +136,7 @@ class MemoryReOrder(inputFormat: Int = MklDnn.MemoryFormat.any,
 
 object MemoryReOrder {
   def apply[T: ClassTag](inputFormat: Int = MklDnn.MemoryFormat.any,
-                         outputFormat: Int = MklDnn.MemoryFormat.nhwc): MemoryReOrder = {
+                         outputFormat: Int = MklDnn.MemoryFormat.nchw): MemoryReOrder = {
     new MemoryReOrder(inputFormat, outputFormat)
   }
 }

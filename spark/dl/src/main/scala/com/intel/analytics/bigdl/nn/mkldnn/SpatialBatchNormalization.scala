@@ -17,11 +17,12 @@
 package com.intel.analytics.bigdl.nn.mkldnn
 
 import com.intel.analytics.bigdl.mkl.MklDnn
-import com.intel.analytics.bigdl.mkl.MklDnn.{EngineType, StreamType}
 import com.intel.analytics.bigdl.nn.abstractnn.{Initializable, TensorModule}
 import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
+import com.intel.analytics.bigdl.utils.{T, Table}
 
+import scala.collection.mutable.ArrayBuffer
 import scala.reflect.ClassTag
 
 class SpatialBatchNormalization[T: ClassTag](
@@ -42,46 +43,16 @@ class SpatialBatchNormalization[T: ClassTag](
   val (gradAll, gradWeight, gradBias) = createParams(initGradWeight, initGradBias)
   val (diffAll, diffWeight, diffBias) = createParams(initGradWeight, initGradBias)
 
-  // TODO should be refactored to on module
-  val engine = MklDnn.EngineCreate(EngineType.cpu, 0)
+  @transient var engine = 0L
+  @transient var stream = 0L
 
-  var forwardStream = 0L
-  var backwardStream = 0L
+  @transient var forwardPrims: ArrayBuffer[Long] = ArrayBuffer.empty
+  @transient var backwardPrims: ArrayBuffer[Long] = ArrayBuffer.empty
+  @transient var forwardPrimDesc = 0L
 
-  var forwardPrim = 0L
-  var backwardPrim = 0L
-  var forwardPrimDesc = 0L
-
-  // forward memory primitive
-  @transient var userSrcMemoryPrim = 0L
-  @transient var userWeightMemoryPrim = 0L
-  @transient var userMeanMemoryPrim = 0L
-  @transient var userVarMemoryPrim = 0L
-  @transient var userDstMemoryPrim = 0L
-
-  @transient var userDiffSrcMemoryPrim = 0L
-  @transient var userDiffWeightMemoryPrim = 0L
-  @transient var userDiffDstMemoryPrim = 0L
-
-  private def initDataMemory(dim: Int, dims: Array[Int], format: Int,
-    dataType: Int, engine: Long, tensor: Tensor[T]): Long = {
-    val primMd = MklDnn.MemoryDescInit(dim, dims, dataType, format)
-    val userPd = MklDnn.MemoryPrimitiveDescCreate(primMd, engine)
-    val memory = MklDnn.PrimitiveCreate0(userPd)
-
-    MklDnn.PrimitiveDescDestroy(userPd)
-    memory
-  }
-
-  private def setHandle(tensor: Tensor[T], primitive: Long): Unit = {
-    val data = tensor.storage().array().asInstanceOf[Array[Float]]
-    val offset = tensor.storageOffset() - 1
-    MklDnn.MemorySetDataHandle(primitive, data, offset)
-  }
-
-  private def releaseHandles(input: Tensor[T], ptr: Long): Unit = {
-    MklDnn.MemoryReleaseDataHandle(
-      input.storage().array().asInstanceOf[Array[Float]], ptr)
+  object OpPrim {
+    val input, output, weightAndBias, mean, variance,
+        diffInput, diffOutput, diffWeightAndBias = new MemoryPrimitive[T]()
   }
 
   // TODO train and inference mode ???
@@ -89,123 +60,129 @@ class SpatialBatchNormalization[T: ClassTag](
   override def updateOutput(input: Tensor[T]): Tensor[T] = {
     output.resizeAs(input)
 
-    if (forwardPrim == 0L) {
-      val srcMemDesc = MklDnn.MemoryDescInit(input.dim(), input.size(),
-        MklDnn.DataType.f32, MklDnn.MemoryFormat.nchw)
+    if (forwardPrims.isEmpty) {
+      engine = this.getDnnEngine(0)
+      stream = this.getStream()
 
-      val allMemDesc = MklDnn.MemoryDescInit(all.dim(), all.size(),
-        MklDnn.DataType.f32, MklDnn.MemoryFormat.x)
-
-      val meanMemDesc = MklDnn.MemoryDescInit(mean.dim(), mean.size(),
-        MklDnn.DataType.f32, MklDnn.MemoryFormat.x)
-        val varMemDesc = MklDnn.MemoryDescInit(variance.dim(), variance.size(),
-        MklDnn.DataType.f32, MklDnn.MemoryFormat.x)
-
-      val dstMemDesc = MklDnn.MemoryDescInit(output.dim(), output.size(),
-        MklDnn.DataType.f32, MklDnn.MemoryFormat.nchw)
+      val srcMemDesc = if (input.getPrimitiveDesc() == 0L) {
+        MklDnn.MemoryDescInit(input.dim(), input.size(),
+          MklDnn.DataType.f32, MklDnn.MemoryFormat.nChw8c) // TODO
+      } else {
+        MklDnnOps.primitiveDescQueryMemory(input.getPrimitiveDesc())
+      }
 
       val opDesc = MklDnn.BatchNormForwardDescInit(MklDnn.PropKind.forward,
         srcMemDesc, eps.toFloat, MklDnn.BatchNormFlag.mkldnn_use_scaleshift)
       val opPrimDesc = MklDnn.PrimitiveDescCreate(opDesc, engine, 0)
       forwardPrimDesc = opPrimDesc
 
-      userSrcMemoryPrim = initDataMemory(input.dim(), input.size(),
-        MklDnn.MemoryFormat.nchw, MklDnn.DataType.f32, engine, input)
-      userWeightMemoryPrim = initDataMemory(all.dim(), all.size(),
-        MklDnn.MemoryFormat.x, MklDnn.DataType.f32, engine, all)
-      userDstMemoryPrim = initDataMemory(output.dim(), output.size(),
-        MklDnn.MemoryFormat.nchw, MklDnn.DataType.f32, engine, output)
-      userMeanMemoryPrim = initDataMemory(mean.dim(), mean.size(),
-        MklDnn.MemoryFormat.x, MklDnn.DataType.f32, engine, mean)
-      userVarMemoryPrim = initDataMemory(variance.dim(), variance.size(),
-        MklDnn.MemoryFormat.x, MklDnn.DataType.f32, engine, variance)
+      val dataFormat = MklDnn.MemoryFormat.nchw
+      val paramsFormat = MklDnn.MemoryFormat.x
+      val dataType = MklDnn.DataType.f32
+      OpPrim.input.initUser(input, dataType, dataFormat, engine)
+      OpPrim.input.initInternal(opPrimDesc, MklDnn.Query.src_pd)
+      OpPrim.output.initUser(output, opPrimDesc, MklDnn.Query.dst_pd, 0)
 
-      val srcs = Array(userSrcMemoryPrim, userWeightMemoryPrim)
-      val indexes = Array(0, 0)
-      val dsts = Array(userDstMemoryPrim, userMeanMemoryPrim, userVarMemoryPrim)
+      // because they're 1-d, so we need not to initialize it.
+      OpPrim.weightAndBias.initUser(all, dataType, paramsFormat, engine)
+      OpPrim.mean.initUser(mean, dataType, paramsFormat, engine)
+      OpPrim.variance.initUser(variance, dataType, paramsFormat, engine)
 
-      forwardPrim = MklDnn.PrimitiveCreate2(opPrimDesc, srcs, indexes, srcs.length,
+      val srcs = Array(OpPrim.input.workPrim(), OpPrim.weightAndBias.workPrim())
+      val indexes = Array.fill(srcs.length)(0)
+      val dsts = Array(OpPrim.output.workPrim(), OpPrim.mean.workPrim(), OpPrim.variance.workPrim())
+
+      if (OpPrim.input.reorder != 0L) {
+        forwardPrims += OpPrim.input.reorder
+      }
+
+      forwardPrims += MklDnn.PrimitiveCreate2(opPrimDesc, srcs, indexes, srcs.length,
         dsts, dsts.length)
     }
 
-    if (forwardStream == 0L) {
-      forwardStream = MklDnn.StreamCreate(StreamType.eager)
-    }
+    OpPrim.input.setHandle(input)
+    OpPrim.weightAndBias.setHandle(all)
+    OpPrim.output.setHandle(output)
+    OpPrim.mean.setHandle(mean)
+    OpPrim.variance.setHandle(variance)
 
-    setHandle(input, userSrcMemoryPrim)
-    setHandle(all, userWeightMemoryPrim)
-    setHandle(output, userDstMemoryPrim)
-    setHandle(mean, userMeanMemoryPrim)
-    setHandle(variance, userVarMemoryPrim)
+    MklDnn.StreamSubmit(stream, forwardPrims.length, forwardPrims.toArray)
 
-    MklDnn.StreamSubmit(forwardStream, 1, Array(forwardPrim))
+    OpPrim.input.releaseHandle()
+    OpPrim.weightAndBias.releaseHandle()
+    OpPrim.output.releaseHandle()
+    OpPrim.mean.releaseHandle()
+    OpPrim.variance.releaseHandle()
 
-    releaseHandles(input, userSrcMemoryPrim)
-    releaseHandles(all, userWeightMemoryPrim)
-    releaseHandles(output, userDstMemoryPrim)
-    releaseHandles(mean, userMeanMemoryPrim)
-    releaseHandles(variance, userVarMemoryPrim)
     output
   }
 
   override def backward(input: Tensor[T], gradOutput: Tensor[T]): Tensor[T] = {
     gradInput.resizeAs(input)
 
-    if (backwardPrim == 0L) {
-      val srcMemDesc = MklDnn.MemoryDescInit(input.dim(), input.size(),
-        MklDnn.DataType.f32, MklDnn.MemoryFormat.nchw)
+    if (backwardPrims.isEmpty) {
+      val srcMemDesc = if (input.getPrimitiveDesc() == 0) {
+        MklDnn.MemoryDescInit(input.dim(), input.size(),
+          MklDnn.DataType.f32, MklDnn.MemoryFormat.nchw)
+      } else {
+        MklDnnOps.primitiveDescQueryMemory(input.getPrimitiveDesc())
+      }
 
-      val diffDstMemDesc = MklDnn.MemoryDescInit(gradOutput.dim(), gradOutput.size(),
-        MklDnn.DataType.f32, MklDnn.MemoryFormat.nchw)
+      val diffDstMemDesc = if (gradOutput.getPrimitiveDesc() == 0L) {
+        MklDnn.MemoryDescInit(gradOutput.dim(), gradOutput.size(),
+          MklDnn.DataType.f32, MklDnn.MemoryFormat.nchw)
+      } else {
+        MklDnnOps.primitiveDescQueryMemory(gradOutput.getPrimitiveDesc())
+      }
 
       val desc = MklDnn.BatchNormBackwardDescInit(MklDnn.PropKind.backward,
-        diffDstMemDesc,
-        srcMemDesc,
-        eps.toFloat,
-        MklDnn.BatchNormFlag.mkldnn_use_scaleshift)
+        diffDstMemDesc, srcMemDesc, eps.toFloat, MklDnn.BatchNormFlag.mkldnn_use_scaleshift)
       val primDesc = MklDnn.PrimitiveDescCreate(desc, engine, forwardPrimDesc)
 
-      userDiffDstMemoryPrim = initDataMemory(gradOutput.dim(), gradOutput.size(),
-        MklDnn.MemoryFormat.nchw, MklDnn.DataType.f32, engine, gradOutput)
+      val dataFormat = MklDnn.MemoryFormat.nchw
+      val paramsFormat = MklDnn.MemoryFormat.x
+      val dataType = MklDnn.DataType.f32
 
-      userDiffSrcMemoryPrim = initDataMemory(gradInput.dim(), gradInput.size(),
-        MklDnn.MemoryFormat.nchw, MklDnn.DataType.f32, engine, gradInput)
+      OpPrim.diffOutput.initUser(gradOutput, dataType, dataFormat, engine)
+      OpPrim.diffOutput.initInternal(primDesc, MklDnn.Query.diff_dst_pd)
+      OpPrim.diffWeightAndBias.initUser(diffAll, dataType, paramsFormat, engine)
+      OpPrim.diffInput.initUser(gradInput, primDesc, MklDnn.Query.diff_src_pd, 0)
 
-      userDiffWeightMemoryPrim = initDataMemory(all.dim(), all.size(),
-        MklDnn.MemoryFormat.x, MklDnn.DataType.f32, engine, all)
-
-      val dataSrcs = Array(userSrcMemoryPrim, userMeanMemoryPrim, userVarMemoryPrim,
-        userDiffDstMemoryPrim, userWeightMemoryPrim)
+      val dataSrcs = Array(OpPrim.input.workPrim(), OpPrim.mean.workPrim(),
+        OpPrim.variance.workPrim(), OpPrim.diffOutput.workPrim(),
+        OpPrim.weightAndBias.workPrim())
       val dataIndexes = Array.fill(dataSrcs.length)(0)
-      val dataDsts = Array(userDiffSrcMemoryPrim, userDiffWeightMemoryPrim)
+      val dataDsts = Array(OpPrim.diffInput.workPrim(), OpPrim.diffWeightAndBias.workPrim())
 
-      backwardPrim = MklDnn.PrimitiveCreate2(primDesc, dataSrcs, dataIndexes, dataSrcs.length,
+      if (OpPrim.diffOutput.reorder != 0) {
+        backwardPrims += OpPrim.diffOutput.reorder
+      }
+
+      backwardPrims += MklDnn.PrimitiveCreate2(primDesc, dataSrcs, dataIndexes, dataSrcs.length,
         dataDsts, dataDsts.length)
 
-      MklDnn.PrimitiveDescDestroy(primDesc)
+      if (OpPrim.diffWeightAndBias.reorder != 0) {
+        backwardPrims += OpPrim.diffWeightAndBias.reorder
+      }
     }
 
-    if (backwardStream == 0) {
-      backwardStream = MklDnn.StreamCreate(StreamType.eager)
-    }
+    OpPrim.input.setHandle(input)
+    OpPrim.weightAndBias.setHandle(all)
+    OpPrim.mean.setHandle(mean)
+    OpPrim.variance.setHandle(variance)
+    OpPrim.diffOutput.setHandle(gradOutput)
+    OpPrim.diffInput.setHandle(gradInput)
+    OpPrim.diffWeightAndBias.setHandle(diffAll)
 
-    setHandle(input, userSrcMemoryPrim)
-    setHandle(all, userWeightMemoryPrim)
-    setHandle(mean, userMeanMemoryPrim)
-    setHandle(variance, userVarMemoryPrim)
-    setHandle(gradOutput, userDiffDstMemoryPrim)
-    setHandle(gradInput, userDiffSrcMemoryPrim)
-    setHandle(diffAll, userDiffWeightMemoryPrim)
+    MklDnn.StreamSubmit(stream, backwardPrims.length, backwardPrims.toArray)
 
-    MklDnn.StreamSubmit(backwardStream, 1, Array(backwardPrim))
-
-    releaseHandles(input, userSrcMemoryPrim)
-    releaseHandles(all, userWeightMemoryPrim)
-    releaseHandles(mean, userMeanMemoryPrim)
-    releaseHandles(variance, userVarMemoryPrim)
-    releaseHandles(gradOutput, userDiffDstMemoryPrim)
-    releaseHandles(gradInput, userDiffSrcMemoryPrim)
-    releaseHandles(diffAll, userDiffWeightMemoryPrim)
+    OpPrim.input.releaseHandle()
+    OpPrim.weightAndBias.releaseHandle()
+    OpPrim.mean.releaseHandle()
+    OpPrim.variance.releaseHandle()
+    OpPrim.diffOutput.releaseHandle()
+    OpPrim.diffInput.releaseHandle()
+    OpPrim.diffWeightAndBias.releaseHandle()
 
     gradAll.add(diffAll)
 
@@ -250,6 +227,35 @@ class SpatialBatchNormalization[T: ClassTag](
     }
 
     (all, weight, bias)
+  }
+
+  override def zeroGradParameters(): Unit = {
+    if (affine) {
+      gradWeight.zero()
+      gradBias.zero()
+    }
+  }
+
+  override def parameters(): (Array[Tensor[T]], Array[Tensor[T]]) = {
+    if (affine) {
+      (Array(this.weight, this.bias), Array(this.gradWeight, this.gradBias))
+    } else {
+      null
+    }
+  }
+
+  override def getParametersTable(): Table = {
+    if (affine) {
+      T(getName() -> T("weight" -> weight, "bias" -> bias,
+        "gradWeight" -> gradWeight, "gradBias" -> gradBias,
+        "runningMean" -> mean , "runningVar" -> variance))
+    } else {
+      T(getName() -> T("runningMean" -> mean, "runningVar" -> variance))
+    }
+  }
+
+  override def toString(): String = {
+    s"nn.BatchNormalization($nOutput, $eps, $momentum, $affine)"
   }
 }
 

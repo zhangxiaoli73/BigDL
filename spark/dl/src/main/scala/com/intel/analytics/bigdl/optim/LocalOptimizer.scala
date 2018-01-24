@@ -87,6 +87,9 @@ class LocalOptimizer[T: ClassTag] (
   private val workingCriterion =
     (1 to subModelNumber).map(_ => criterion.cloneCriterion()).toArray
 
+  private val default = new ThreadPool(1)
+  default.setMKLThread(4)
+
   override def optimize(): Module[T] = {
     var wallClockTime = 0L
     var count = 0
@@ -117,7 +120,7 @@ class LocalOptimizer[T: ClassTag] (
       }
       val dataFetchTime = System.nanoTime()
 
-      val lossSum = Engine.default.invokeAndWait(
+      val lossSum = default.invokeAndWait(
         (0 until parallelism).map(i =>
           () => {
             val localModel = workingModels(i)
@@ -135,24 +138,26 @@ class LocalOptimizer[T: ClassTag] (
       ).sum
 
       // copy multi-model gradient to the buffer
-      Engine.default.invokeAndWait(
-        (0 until syncGradParallelNum).map(tid =>
-          () => {
-            val offset = tid * syncGradTaskSize + math.min(tid, syncGradExtraTask)
-            val length = syncGradTaskSize + (if (tid < syncGradExtraTask) 1 else 0)
-            var i = 0
-            while (i < parallelism) {
-              if (i == 0) {
-                grad.narrow(1, offset + 1, length)
-                  .copy(workingModelWAndG(i)._2.narrow(1, offset + 1, length))
-              } else {
-                grad.narrow(1, offset + 1, length)
-                  .add(workingModelWAndG(i)._2.narrow(1, offset + 1, length))
+      if (syncGradParallelNum != 1) {
+        Engine.default.invokeAndWait(
+          (0 until syncGradParallelNum).map(tid =>
+            () => {
+              val offset = tid * syncGradTaskSize + math.min(tid, syncGradExtraTask)
+              val length = syncGradTaskSize + (if (tid < syncGradExtraTask) 1 else 0)
+              var i = 0
+              while (i < parallelism) {
+                if (i == 0) {
+                  grad.narrow(1, offset + 1, length)
+                    .copy(workingModelWAndG(i)._2.narrow(1, offset + 1, length))
+                } else {
+                  grad.narrow(1, offset + 1, length)
+                    .add(workingModelWAndG(i)._2.narrow(1, offset + 1, length))
+                }
+                i += 1
               }
-              i += 1
-            }
-          })
-      )
+            })
+        )
+      }
       val loss = lossSum / parallelism
       var scale = ev.fromType(parallelism)
       if (gradientClippingParams.enableL2NormClipping) {

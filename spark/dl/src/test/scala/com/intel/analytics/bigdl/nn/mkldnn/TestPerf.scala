@@ -23,6 +23,7 @@ import breeze.linalg.all
 import com.intel.analytics.bigdl._
 import com.intel.analytics.bigdl.dataset.{LocalDataSet, MiniBatch}
 import com.intel.analytics.bigdl.example.loadmodel.AlexNet
+import com.intel.analytics.bigdl.mkl.MKL
 import com.intel.analytics.bigdl.models.inception.Inception_v2
 import com.intel.analytics.bigdl.models.lenet.LeNet5
 import com.intel.analytics.bigdl.models.resnet.ResNet
@@ -43,12 +44,12 @@ import scopt.OptionParser
 import scala.collection.mutable.ArrayBuffer
 import scala.util.Random
 
-object LocalOptimizerPerf {
+object LocalOptimizerPerf2 {
   val modelSupported = Set("inception_v1","inception_v2", "vgg16", "vgg19", "alexnet", "resnet_50",
     "lstm", "lstmpeephole", "simplernn", "gru", "convlstmpeephole")
   val logger = Logger.getLogger(getClass)
 
-  val parser = new OptionParser[LocalOptimizerPerfParam]("BigDL Local Performance Test") {
+  val parser = new OptionParser[LocalOptimizerPerfParam2]("BigDL Local Performance Test") {
     head("Performance Test of Local Optimizer")
     opt[Int]('b', "batchSize")
       .text("Batch size of input data")
@@ -84,7 +85,7 @@ object LocalOptimizerPerf {
     (_model, input, criterion)
   }
 
-  def performance(param: LocalOptimizerPerfParam): Unit = {
+  def performance(param: LocalOptimizerPerfParam2): Unit = {
 
     def all(model: Module[Float], dataset: LocalDataSet[MiniBatch[Float]], iteration: Int): Unit = {
       val coreNumber = Engine.coreNumber()
@@ -147,7 +148,8 @@ object LocalOptimizerPerf {
     }
 
     class TaskWithResult extends Callable[String] {
-      val model = DnnUtils.dnnAlexNet(1000)
+//      val model = DnnUtils.dnnAlexNet(1000)
+      val model = AlexNet(1000)
       model.createDnnEngine(0)
       model.createStream()
       val batchSize = 4
@@ -209,7 +211,7 @@ object LocalOptimizerPerf {
       executorService.shutdown()
     }
 
-    // System.setProperty("bigdl.mklNumThreads", "4")
+    System.setProperty("bigdl.mklNumThreads", "1")
     Engine.setCoreNumber(param.coreNumber)
 
     val (_model, miniBatch, criterion) = getModel(param.module, param.batchSize)
@@ -243,12 +245,12 @@ object LocalOptimizerPerf {
       optimizer.setEndWhen(Trigger.maxIteration(param.iteration)).optimize()
     } else {
       all(model, dummyDataSet, param.iteration)
-      // allNew(model, dummyDataSet, param.iteration)
+//       allNew(model, dummyDataSet, param.iteration)
     }
   }
 
   def main(args: Array[String]): Unit = {
-    parser.parse(args, new LocalOptimizerPerfParam()).foreach(performance)
+    parser.parse(args, new LocalOptimizerPerfParam2()).foreach(performance)
   }
 
 }
@@ -262,7 +264,7 @@ object LocalOptimizerPerf {
 * @param dataType data type (double / float)
 * @param module module name
   */
-case class LocalOptimizerPerfParam(
+case class LocalOptimizerPerfParam2(
     batchSize: Int = 16, // 16,
     coreNumber: Int = Runtime.getRuntime.availableProcessors() / 2,
     iteration: Int = 80,
