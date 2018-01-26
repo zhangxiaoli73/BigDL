@@ -178,10 +178,15 @@ class Linear[T: ClassTag](
       forwardPrimBuffer += forwardPrim
     }
 
-    inputPrim.setHandle(input)
-    weightPrim.setHandle(weight)
-    biasPrim.setHandle(bias)
-    outputPrim.setHandle(output)
+    inputPrim.tensor(input)
+    weightPrim.tensor(weight)
+    biasPrim.tensor(bias)
+    outputPrim.tensor(output)
+
+    inputPrim.setHandle()
+    weightPrim.setHandle()
+    biasPrim.setHandle()
+    outputPrim.setHandle()
 
     MklDnn.StreamSubmit(stream, forwardPrimBuffer.length, forwardPrimBuffer.toArray)
 
@@ -259,9 +264,13 @@ class Linear[T: ClassTag](
       backwardDataPrimBuffer += backDataPrim
     }
 
-    gradOutputPrim.setHandle(gradOutput)
-    weightPrim.setHandle(weight)
-    gradInputPrim.setHandle(gradInput)
+    gradOutputPrim.tensor(gradOutput)
+    weightPrim.tensor(weight)
+    gradInputPrim.tensor(gradInput)
+
+    gradOutputPrim.setHandle()
+    weightPrim.setHandle()
+    gradInputPrim.setHandle()
 
     MklDnn.StreamSubmit(stream, backwardDataPrimBuffer.length, backwardDataPrimBuffer.toArray)
 
@@ -349,10 +358,15 @@ class Linear[T: ClassTag](
       }
     }
 
-    inputPrim.setHandle(input)
-    gradOutputPrim.setHandle(gradOutput)
-    gradWeightPrim.setHandle(diffWeight)
-    gradBiasPrim.setHandle(diffBias)
+    inputPrim.tensor(input)
+    gradOutputPrim.tensor(gradOutput)
+    gradWeightPrim.tensor(diffWeight)
+    gradBiasPrim.tensor(diffBias)
+
+    inputPrim.setHandle()
+    gradOutputPrim.setHandle()
+    gradWeightPrim.setHandle()
+    gradBiasPrim.setHandle()
 
     MklDnn.StreamSubmit(stream, backwardWeightPrimBuffer.length, backwardWeightPrimBuffer.toArray)
 

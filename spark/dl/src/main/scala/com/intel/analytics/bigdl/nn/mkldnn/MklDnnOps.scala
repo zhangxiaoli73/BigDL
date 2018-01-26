@@ -17,7 +17,7 @@ package com.intel.analytics.bigdl.nn.mkldnn
 
 import com.intel.analytics.bigdl.mkl.MklDnn
 import com.intel.analytics.bigdl.mkl.MklDnn.EngineType
-import com.intel.analytics.bigdl.tensor.Tensor
+import com.intel.analytics.bigdl.tensor.{Tensor, UnsafeDirectByteBuffer}
 
 object MklDnnOps {
 
@@ -239,19 +239,60 @@ object MklDnnOps {
     require(memory_primitives.length == buffers.length)
 
     val handle = new Array[Long](memory_primitives.length)
+    val byteBuffers = new Array[UnsafeDirectByteBuffer](handle.length)
+
     for (i <- 0 to memory_primitives.length - 1) {
       if (memory_primitives(i) != 0L) {
+        val offset = buffers(i).storageOffset() - 1
         handle(i) = MklDnnOps.memorySetDataHandle(
-          memory_primitives(i), buffers(i), buffers(i).storageOffset() - 1)
+          memory_primitives(i), buffers(i), offset)
+        if (!UnsafeDirectByteBuffer.isCacheAligned(handle(i) + offset)) {
+          val length = buffers(i).nElement()
+          byteBuffers(i) = new UnsafeDirectByteBuffer(length * 4,
+            UnsafeDirectByteBuffer.CACHE_LINE_SIZE)
+          MklDnn.MemorySetDataHandleWithPtr(memory_primitives(i), handle(i), offset, length,
+            byteBuffers(i).ptr, byteBuffers(i).position)
+        }
       }
     }
 
     MklDnn.StreamSubmit(loc, block, primitives)
 
-    for (i <- 0 to memory_primitives.length - 1) {
+    for (i <- memory_primitives.indices) {
       if (memory_primitives(i) != 0L) {
          MklDnnOps.memoryReleaseDataHandle(buffers(i), handle(i))
       }
+    }
+
+    // copy back the data to array
+    for (i <- byteBuffers.indices) {
+      if (byteBuffers(i) != null) {
+        val buffer = byteBuffers(i).ptr
+        val position = byteBuffers(i).position
+        val data = buffers(i).storage().array()
+        val offset = buffers(i).storageOffset() - 1
+        val nums = buffers(i).nElement()
+
+        MklDnn.copyPtr2Array(buffer, position, data, offset, nums)
+        byteBuffers(i).releaseWithPtr()
+      }
+    }
+  }
+
+  def submit[T](stream: Long, primitives: Array[Long], inputs: Array[MemoryPrimitive[T]],
+    outputs: Array[MemoryPrimitive[T]]): Unit = {
+    for (mp <- inputs ++ outputs) {
+      mp.setHandle()
+    }
+
+    MklDnn.StreamSubmit(stream, primitives.length, primitives)
+
+    for (mp <- inputs) {
+      mp.releaseHandle()
+    }
+
+    for (mp <- outputs) {
+      mp.releaseHandle(isCopy = true)
     }
   }
 

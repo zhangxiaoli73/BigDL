@@ -180,6 +180,13 @@ class SpatialBatchNormalizationSpec extends FlatSpec with Matchers {
     blas.forward(input)
     dnn.forward(input)
 
-    dnn.output.toTensor should be (blas.output.toTensor)
+    DnnUtils.nearequals(dnn.output.toTensor, blas.output.toTensor)
+
+    val gradOutput = Tensor().resizeAs(blas.output.toTensor).rand()
+
+    blas.backward(input, gradOutput)
+    dnn.backward(input, gradOutput)
+
+    DnnUtils.nearequals(dnn.gradInput.toTensor, blas.gradInput.toTensor)
   }
 }

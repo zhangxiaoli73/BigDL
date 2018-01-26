@@ -66,7 +66,7 @@ class SpatialBatchNormalization[T: ClassTag](
 
       val srcMemDesc = if (input.getPrimitiveDesc() == 0L) {
         MklDnn.MemoryDescInit(input.dim(), input.size(),
-          MklDnn.DataType.f32, MklDnn.MemoryFormat.nChw8c) // TODO
+          MklDnn.DataType.f32, MklDnn.MemoryFormat.nchw) // TODO
       } else {
         MklDnnOps.primitiveDescQueryMemory(input.getPrimitiveDesc())
       }
@@ -100,19 +100,16 @@ class SpatialBatchNormalization[T: ClassTag](
         dsts, dsts.length)
     }
 
-    OpPrim.input.setHandle(input)
-    OpPrim.weightAndBias.setHandle(all)
-    OpPrim.output.setHandle(output)
-    OpPrim.mean.setHandle(mean)
-    OpPrim.variance.setHandle(variance)
+    OpPrim.input.tensor(input)
+    OpPrim.weightAndBias.tensor(all)
+    OpPrim.output.tensor(output)
+    OpPrim.mean.tensor(mean)
+    OpPrim.variance.tensor(variance)
 
-    MklDnn.StreamSubmit(stream, forwardPrims.length, forwardPrims.toArray)
+    val inputs = Array(OpPrim.input, OpPrim.weightAndBias)
+    val outputs = Array(OpPrim.output, OpPrim.mean, OpPrim.variance)
 
-    OpPrim.input.releaseHandle()
-    OpPrim.weightAndBias.releaseHandle()
-    OpPrim.output.releaseHandle()
-    OpPrim.mean.releaseHandle()
-    OpPrim.variance.releaseHandle()
+    MklDnnOps.submit(stream, forwardPrims.toArray, inputs, outputs)
 
     output
   }
@@ -166,23 +163,18 @@ class SpatialBatchNormalization[T: ClassTag](
       }
     }
 
-    OpPrim.input.setHandle(input)
-    OpPrim.weightAndBias.setHandle(all)
-    OpPrim.mean.setHandle(mean)
-    OpPrim.variance.setHandle(variance)
-    OpPrim.diffOutput.setHandle(gradOutput)
-    OpPrim.diffInput.setHandle(gradInput)
-    OpPrim.diffWeightAndBias.setHandle(diffAll)
+    OpPrim.input.tensor(input)
+    OpPrim.weightAndBias.tensor(all)
+    OpPrim.mean.tensor(mean)
+    OpPrim.variance.tensor(variance)
+    OpPrim.diffOutput.tensor(gradOutput)
+    OpPrim.diffInput.tensor(gradInput)
+    OpPrim.diffWeightAndBias.tensor(diffAll)
 
-    MklDnn.StreamSubmit(stream, backwardPrims.length, backwardPrims.toArray)
+    val inputs = Array(OpPrim.input, OpPrim.weightAndBias, OpPrim.mean, OpPrim.variance)
+    val outputs = Array(OpPrim.diffOutput, OpPrim.diffInput, OpPrim.diffWeightAndBias)
 
-    OpPrim.input.releaseHandle()
-    OpPrim.weightAndBias.releaseHandle()
-    OpPrim.mean.releaseHandle()
-    OpPrim.variance.releaseHandle()
-    OpPrim.diffOutput.releaseHandle()
-    OpPrim.diffInput.releaseHandle()
-    OpPrim.diffWeightAndBias.releaseHandle()
+    MklDnnOps.submit(stream, backwardPrims.toArray, inputs, outputs)
 
     gradAll.add(diffAll)
 
@@ -248,7 +240,7 @@ class SpatialBatchNormalization[T: ClassTag](
     if (affine) {
       T(getName() -> T("weight" -> weight, "bias" -> bias,
         "gradWeight" -> gradWeight, "gradBias" -> gradBias,
-        "runningMean" -> mean , "runningVar" -> variance))
+        "runningMean" -> mean, "runningVar" -> variance))
     } else {
       T(getName() -> T("runningMean" -> mean, "runningVar" -> variance))
     }

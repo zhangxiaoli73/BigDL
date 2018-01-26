@@ -16,6 +16,8 @@
 
 package com.intel.analytics.bigdl.tensor
 
+import com.intel.analytics.bigdl.utils.{Aligned, Engine, Unaligned}
+
 import scala.reflect.ClassTag
 
 /**
