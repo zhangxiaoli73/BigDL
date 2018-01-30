@@ -55,7 +55,7 @@ object TrainImageNet {
 
       val batchSize = param.batchSize
       val (imageSize, dataSetType, maxEpoch, dataSet) =
-        (224, DatasetType.ImageNet, 90, ImageNetDataSet)
+        (224, DatasetType.ImageNet, param.nepochs, ImageNetDataSet)
 
       val trainDataSet = dataSet.trainDataSet(param.folder + "/train", sc, imageSize, batchSize)
 
@@ -72,14 +72,14 @@ object TrainImageNet {
         if (param.optnet) {
           ResNet.shareGradInput(curModel)
         }
-        ResNet.modelInit(curModel)
+//        ResNet.modelInit(curModel)
         curModel
       }
 
       println(model)
 
       val optimMethod = if (param.stateSnapshot.isDefined) {
-        val optim = OptimMethod.load[Float](param.stateSnapshot.get).asInstanceOf[LarsSGD[Float]]
+        val optim = OptimMethod.load[Float](param.stateSnapshot.get).asInstanceOf[SGD[Float]]
         val baseLr = param.learningRate
         val iterationsPerEpoch = math.ceil(1281167 / param.batchSize).toInt
         val warmUpIteration = iterationsPerEpoch * param.warmupEpoch
@@ -99,7 +99,9 @@ object TrainImageNet {
           s"delta: $delta, nesterov: ${param.nesterov}")
 //        new LarsSGD[Float](learningRate = param.learningRate, learningRateDecay = 0.0,
 //          momentum = param.momentum,
-//          larsLearningRateSchedule = SGD.EpochDecayWithWarmUp(warmUpIteration, delta, imageNetDecay),
+////          larsLearningRateSchedule = SGD.EpochDecayWithWarmUp(warmUpIteration, delta, imageNetDecay),
+//          larsLearningRateSchedule =
+//          SGD.Poly(2, math.ceil(1281167.toDouble / param.batchSize).toInt * maxEpoch),
 //          gwRation = 0.001
 //        )
         new SGD[Float](learningRate = param.learningRate, learningRateDecay = 0.0,
