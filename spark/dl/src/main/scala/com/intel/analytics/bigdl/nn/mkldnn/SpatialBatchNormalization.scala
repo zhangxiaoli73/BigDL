@@ -18,7 +18,7 @@ package com.intel.analytics.bigdl.nn.mkldnn
 
 import com.intel.analytics.bigdl.mkl.MklDnn
 import com.intel.analytics.bigdl.nn.abstractnn.{Initializable, TensorModule}
-import com.intel.analytics.bigdl.tensor.Tensor
+import com.intel.analytics.bigdl.tensor.{AlignedStorage, MklDnnTensor, MklDnnType, Tensor}
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
 import com.intel.analytics.bigdl.utils.{T, Table}
 
@@ -35,13 +35,12 @@ class SpatialBatchNormalization[T: ClassTag](
   private val initGradWeight: Tensor[T] = null,
   private val initGradBias: Tensor[T] = null
 )(implicit ev: TensorNumeric[T]) extends TensorModule[T] with Initializable {
+  val mean: MklDnnTensor[T] = MklDnnTensor[T](Array(nOutput))
+  val variance: MklDnnTensor[T] = MklDnnTensor[T](Array(nOutput))
 
-  val mean: Tensor[T] = Tensor[T](nOutput)
-  val variance: Tensor[T] = Tensor[T](nOutput)
-
-  val (all, weight, bias) = createParams(initWeight, initBias)
-  val (gradAll, gradWeight, gradBias) = createParams(initGradWeight, initGradBias)
-  val (diffAll, diffWeight, diffBias) = createParams(initGradWeight, initGradBias)
+  val all = createParams(initWeight, initBias)
+  val gradAll = createParams(initGradWeight, initGradBias)
+  val diffAll = createParams(initGradWeight, initGradBias)
 
   @transient var engine = 0L
   @transient var stream = 0L
@@ -55,9 +54,31 @@ class SpatialBatchNormalization[T: ClassTag](
         diffInput, diffOutput, diffWeightAndBias = new MemoryPrimitive[T]()
   }
 
-  // TODO train and inference mode ???
+  // TODO train and inference mode
+
+  @transient var internalInput, internalOutput: MklDnnTensor[T] = _
+
+  val defaultFormat = MklDnn.MemoryFormat.nchw
+
+  private def toMklDnnTensor(t: Tensor[T]): MklDnnTensor[T] = t.asInstanceOf[MklDnnTensor[T]]
 
   override def updateOutput(input: Tensor[T]): Tensor[T] = {
+    input.getTensorType match {
+      case MklDnnType => internalInput = input.asInstanceOf[MklDnnTensor[T]]
+      case _ =>
+        if (internalInput == null) {
+          internalInput = MklDnnTensor[T](input.size())
+        } else if (internalInput.size().deep != input.size().deep) {
+          internalInput.resize(input.size())
+        }
+
+        internalInput.copy(input)
+    }
+
+    if (!output.isInstanceOf[MklDnnTensor[T]]) {
+      output = MklDnnTensor[T](input.size())
+    }
+
     output.resizeAs(input)
 
     if (forwardPrims.isEmpty) {
@@ -66,7 +87,7 @@ class SpatialBatchNormalization[T: ClassTag](
 
       val srcMemDesc = if (input.getPrimitiveDesc() == 0L) {
         MklDnn.MemoryDescInit(input.dim(), input.size(),
-          MklDnn.DataType.f32, MklDnn.MemoryFormat.nchw) // TODO
+          MklDnn.DataType.f32, defaultFormat) // TODO
       } else {
         MklDnnOps.primitiveDescQueryMemory(input.getPrimitiveDesc())
       }
@@ -76,7 +97,7 @@ class SpatialBatchNormalization[T: ClassTag](
       val opPrimDesc = MklDnn.PrimitiveDescCreate(opDesc, engine, 0)
       forwardPrimDesc = opPrimDesc
 
-      val dataFormat = MklDnn.MemoryFormat.nchw
+      val dataFormat = defaultFormat
       val paramsFormat = MklDnn.MemoryFormat.x
       val dataType = MklDnn.DataType.f32
       OpPrim.input.initUser(input, dataType, dataFormat, engine)
@@ -100,34 +121,48 @@ class SpatialBatchNormalization[T: ClassTag](
         dsts, dsts.length)
     }
 
-    OpPrim.input.tensor(input)
-    OpPrim.weightAndBias.tensor(all)
-    OpPrim.output.tensor(output)
-    OpPrim.mean.tensor(mean)
-    OpPrim.variance.tensor(variance)
+    OpPrim.input.setHandle(internalInput)
+    OpPrim.weightAndBias.setHandle(all)
+    OpPrim.output.setHandle(toMklDnnTensor(output), needUpdate = true)
+    OpPrim.mean.setHandle(mean, needUpdate = true)
+    OpPrim.variance.setHandle(variance, needUpdate = true)
 
-    val inputs = Array(OpPrim.input, OpPrim.weightAndBias)
-    val outputs = Array(OpPrim.output, OpPrim.mean, OpPrim.variance)
-
-    MklDnnOps.submit(stream, forwardPrims.toArray, inputs, outputs)
+    MklDnnOps.submit(stream, forwardPrims.toArray)
+    require(mean.storage().asInstanceOf[AlignedStorage[T]].needConversion == true)
 
     output
   }
 
-  override def backward(input: Tensor[T], gradOutput: Tensor[T]): Tensor[T] = {
+  @transient var internalGradInput, internalGradOutput: MklDnnTensor[T] = _
+  def backward1(input: Tensor[T], gradOutput: Tensor[T]): Tensor[T] = {
+    if (!gradInput.isInstanceOf[MklDnnTensor[T]]) {
+      gradInput = MklDnnTensor[T](input.size())
+    }
     gradInput.resizeAs(input)
+
+    gradOutput.getTensorType match {
+      case MklDnnType => internalGradOutput = gradOutput.asInstanceOf[MklDnnTensor[T]]
+      case _ =>
+        if (internalGradOutput == null) {
+          internalGradOutput = MklDnnTensor[T](input.size())
+        } else if (internalGradOutput.size().deep != input.size().deep) {
+          internalGradOutput.resize(input.size())
+        }
+
+        internalGradOutput.copy(gradOutput)
+    }
 
     if (backwardPrims.isEmpty) {
       val srcMemDesc = if (input.getPrimitiveDesc() == 0) {
         MklDnn.MemoryDescInit(input.dim(), input.size(),
-          MklDnn.DataType.f32, MklDnn.MemoryFormat.nchw)
+          MklDnn.DataType.f32, defaultFormat)
       } else {
         MklDnnOps.primitiveDescQueryMemory(input.getPrimitiveDesc())
       }
 
       val diffDstMemDesc = if (gradOutput.getPrimitiveDesc() == 0L) {
         MklDnn.MemoryDescInit(gradOutput.dim(), gradOutput.size(),
-          MklDnn.DataType.f32, MklDnn.MemoryFormat.nchw)
+          MklDnn.DataType.f32, defaultFormat)
       } else {
         MklDnnOps.primitiveDescQueryMemory(gradOutput.getPrimitiveDesc())
       }
@@ -136,7 +171,7 @@ class SpatialBatchNormalization[T: ClassTag](
         diffDstMemDesc, srcMemDesc, eps.toFloat, MklDnn.BatchNormFlag.mkldnn_use_scaleshift)
       val primDesc = MklDnn.PrimitiveDescCreate(desc, engine, forwardPrimDesc)
 
-      val dataFormat = MklDnn.MemoryFormat.nchw
+      val dataFormat = defaultFormat
       val paramsFormat = MklDnn.MemoryFormat.x
       val dataType = MklDnn.DataType.f32
 
@@ -163,18 +198,15 @@ class SpatialBatchNormalization[T: ClassTag](
       }
     }
 
-    OpPrim.input.tensor(input)
-    OpPrim.weightAndBias.tensor(all)
-    OpPrim.mean.tensor(mean)
-    OpPrim.variance.tensor(variance)
-    OpPrim.diffOutput.tensor(gradOutput)
-    OpPrim.diffInput.tensor(gradInput)
-    OpPrim.diffWeightAndBias.tensor(diffAll)
+    OpPrim.input.setHandle(internalInput)
+    OpPrim.weightAndBias.setHandle(all)
+    OpPrim.mean.setHandle(mean)
+    OpPrim.variance.setHandle(variance)
+    OpPrim.diffOutput.setHandle(internalGradOutput)
+    OpPrim.diffInput.setHandle(toMklDnnTensor(gradInput), needUpdate = true)
+    OpPrim.diffWeightAndBias.setHandle(diffAll, needUpdate = true)
 
-    val inputs = Array(OpPrim.input, OpPrim.weightAndBias, OpPrim.mean, OpPrim.variance)
-    val outputs = Array(OpPrim.diffOutput, OpPrim.diffInput, OpPrim.diffWeightAndBias)
-
-    MklDnnOps.submit(stream, backwardPrims.toArray, inputs, outputs)
+    MklDnnOps.submit(stream, backwardPrims.toArray)
 
     gradAll.add(diffAll)
 
@@ -182,7 +214,7 @@ class SpatialBatchNormalization[T: ClassTag](
   }
 
   override def updateGradInput(input: Tensor[T], gradOutput: Tensor[T]): Tensor[T] = {
-    gradInput
+    backward1(input, gradOutput)
   }
 
   // there's no relavant accGrasdParameters in mkl-dnn. we use @backward instead of
@@ -192,45 +224,38 @@ class SpatialBatchNormalization[T: ClassTag](
 
   private type Params[R] = (Tensor[R], Tensor[R], Tensor[R])
   // in mkl dnn, the weight and bias should be all in the same array
-  private def createParams(initWeight: Tensor[T], initBias: Tensor[T]): Params[T] = {
-    val weightAndBias: Tensor[T] = if (affine) {
-      Tensor[T](2, nOutput)
+  private def createParams(initWeight: Tensor[T], initBias: Tensor[T]): MklDnnTensor[T] = {
+    val weightAndBias: MklDnnTensor[T] = if (affine) {
+      MklDnnTensor[T](Array(2 * nOutput))
     } else {
       null
     }
-    weightAndBias.fill(ev.fromType(0)) // by default, we init them with 0
 
-    // we should delete the first dim which is 1 after narrow.
-    val weight: Tensor[T] = weightAndBias.narrow(1, 1, 1).squeeze(1)
-    val bias: Tensor[T] = weightAndBias.narrow(1, 2, 1).squeeze(1)
-
-    // weightAndBias should be 1-dim, which will be used for creating primitive.
-    val all = weightAndBias.view(2 * nOutput)
-
+    val concat = Tensor[T]().resize(Array(2, nOutput)).fill(ev.fromType(0))
 
     if (initWeight != null) {
       require(initWeight.size(1) == nOutput)
-      weight.copy(initWeight)
+      concat.select(1, 1).copy(initWeight)
     }
 
     if (initBias != null) {
       require(initBias.size(1) == nOutput)
-      bias.copy(initBias)
+      concat.select(1, 2).copy(initBias)
     }
 
-    (all, weight, bias)
+    weightAndBias.copy(concat.view(Array(2 * nOutput)))
+    weightAndBias
   }
 
   override def zeroGradParameters(): Unit = {
     if (affine) {
-      gradWeight.zero()
-      gradBias.zero()
+      gradAll.zero()
     }
   }
 
   override def parameters(): (Array[Tensor[T]], Array[Tensor[T]]) = {
     if (affine) {
-      (Array(this.weight, this.bias), Array(this.gradWeight, this.gradBias))
+      (Array(all), Array(gradAll))
     } else {
       null
     }
@@ -238,8 +263,8 @@ class SpatialBatchNormalization[T: ClassTag](
 
   override def getParametersTable(): Table = {
     if (affine) {
-      T(getName() -> T("weight" -> weight, "bias" -> bias,
-        "gradWeight" -> gradWeight, "gradBias" -> gradBias,
+      T(getName() -> T("weight" -> all,
+        "gradWeight" -> gradAll,
         "runningMean" -> mean, "runningVar" -> variance))
     } else {
       T(getName() -> T("runningMean" -> mean, "runningVar" -> variance))

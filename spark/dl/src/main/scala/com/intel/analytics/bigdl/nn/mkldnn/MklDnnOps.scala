@@ -15,9 +15,9 @@
  */
 package com.intel.analytics.bigdl.nn.mkldnn
 
-import com.intel.analytics.bigdl.mkl.MklDnn
+import com.intel.analytics.bigdl.mkl.{Memory, MklDnn}
 import com.intel.analytics.bigdl.mkl.MklDnn.EngineType
-import com.intel.analytics.bigdl.tensor.{Tensor, UnsafeDirectByteBuffer}
+import com.intel.analytics.bigdl.tensor.{MklDnnTensor, Tensor, UnsafeDirectByteBuffer}
 
 object MklDnnOps {
 
@@ -234,66 +234,40 @@ object MklDnnOps {
 
 
   def streamSubmit(loc: Long, block: Int, primitives: Array[Long], length: Int,
-                   memory_primitives: Array[Long], buffers: Array[Tensor[Float]]): Unit = {
+                   memory_primitives: Array[Long], buffers: Array[Tensor[Float]],
+    inputLen: Int = 0): Unit = {
     require(MklDnn.isLoaded, "mkldnn isn't loaded")
     require(memory_primitives.length == buffers.length)
 
-    val handle = new Array[Long](memory_primitives.length)
-    val byteBuffers = new Array[UnsafeDirectByteBuffer](handle.length)
+    val ins = if (inputLen == 0) { buffers.length } else { inputLen }
 
+    val handle = new Array[Long](memory_primitives.length)
     for (i <- 0 to memory_primitives.length - 1) {
       if (memory_primitives(i) != 0L) {
+        val tensor = buffers(i).asInstanceOf[MklDnnTensor[Float]]
         val offset = buffers(i).storageOffset() - 1
-        handle(i) = MklDnnOps.memorySetDataHandle(
-          memory_primitives(i), buffers(i), offset)
-        if (!UnsafeDirectByteBuffer.isCacheAligned(handle(i) + offset)) {
-          val length = buffers(i).nElement()
-          byteBuffers(i) = new UnsafeDirectByteBuffer(length * 4,
-            UnsafeDirectByteBuffer.CACHE_LINE_SIZE)
-          MklDnn.MemorySetDataHandleWithPtr(memory_primitives(i), handle(i), offset, length,
-            byteBuffers(i).ptr, byteBuffers(i).position)
+        if (i < ins) {
+          tensor.sync()
+        } else {
+          tensor.nativeStorage.setConversion(true)
         }
+        handle(i) = Memory.SetDataHandle(
+          memory_primitives(i), buffers(i).asInstanceOf[MklDnnTensor[Float]].nativeStorage.native,
+          offset)
       }
     }
 
     MklDnn.StreamSubmit(loc, block, primitives)
 
-    for (i <- memory_primitives.indices) {
-      if (memory_primitives(i) != 0L) {
-         MklDnnOps.memoryReleaseDataHandle(buffers(i), handle(i))
-      }
-    }
-
-    // copy back the data to array
-    for (i <- byteBuffers.indices) {
-      if (byteBuffers(i) != null) {
-        val buffer = byteBuffers(i).ptr
-        val position = byteBuffers(i).position
-        val data = buffers(i).storage().array()
-        val offset = buffers(i).storageOffset() - 1
-        val nums = buffers(i).nElement()
-
-        MklDnn.copyPtr2Array(buffer, position, data, offset, nums)
-        byteBuffers(i).releaseWithPtr()
-      }
-    }
+//    for (i <- memory_primitives.indices) {
+//      if (memory_primitives(i) != 0L) {
+//         MklDnnOps.memoryReleaseDataHandle(buffers(i), handle(i))
+//      }
+//    }
   }
 
-  def submit[T](stream: Long, primitives: Array[Long], inputs: Array[MemoryPrimitive[T]],
-    outputs: Array[MemoryPrimitive[T]]): Unit = {
-    for (mp <- inputs ++ outputs) {
-      mp.setHandle()
-    }
-
+  def submit[T](stream: Long, primitives: Array[Long]): Unit = {
     MklDnn.StreamSubmit(stream, primitives.length, primitives)
-
-    for (mp <- inputs) {
-      mp.releaseHandle()
-    }
-
-    for (mp <- outputs) {
-      mp.releaseHandle(isCopy = true)
-    }
   }
 
   def getFormat(memoryDesc: Long): Int = {

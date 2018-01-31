@@ -16,127 +16,110 @@
 
 package com.intel.analytics.bigdl.tensor
 
-import java.nio.ByteBuffer
-
-import com.intel.analytics.bigdl.mkl.MklDnn
+import com.intel.analytics.bigdl.mkl.Memory
 
 import scala.reflect.ClassTag
 
-class AlignedStorage[T: ClassTag](size: Int) extends Storage[T] {
-  require(size > 0, s"[AlignedStorage] size should be more than 0")
-
-  val errorMsg = s"AlignedStorage only supports float"
-
-  private var _buffer: ByteBuffer = _
-  private val dataType = scala.reflect.classTag[T]
-
-  // init
-  resize(size)
-
-  def buffer: ByteBuffer = _buffer
-
-  def this(data: Array[T]) = {
-    this(data.length)
-
-    dataType.toString() match {
-      case "Float" =>
-        _buffer.asFloatBuffer().put(data.asInstanceOf[Array[Float]])
-      case "Int" =>
-        _buffer.asIntBuffer().put(data.asInstanceOf[Array[Int]])
-      case "Double" =>
-        _buffer.asDoubleBuffer().put(data.asInstanceOf[Array[Double]])
+class AlignedStorage[T: ClassTag](v: Array[T])
+  extends ArrayStorage[T](v) {
+  private val ELEMENT_SIZE: Int = {
+    scala.reflect.classTag[T].toString() match {
+      case "Float" => 4
+      case "Double" => 8
+      case _ => throw new IllegalArgumentException(errorMsg)
     }
   }
+  private val CACHE_LINE_SIZE = 64
+  private val DEBUG = false
 
-  override def length(): Int = {
-    buffer.capacity()
+  private val errorMsg = s"AlignedStorage only supports float"
+  @transient private var _pointer = 0L
+  @transient private var _conversion = false
+
+  // initialize
+  if (v != null) {
+    allocate(v.length)
   }
 
-  override def apply(index: Int): T = {
-    dataType.toString match {
-      case "Float" => buffer.asFloatBuffer().get(index).asInstanceOf[T]
-      case _ => throw new UnsupportedOperationException(errorMsg)
-    }
+  private def toFloat: Array[Float] = values.asInstanceOf[Array[Float]]
+  private def toAlignedStorage(s: Storage[T]): AlignedStorage[T] = s.asInstanceOf[AlignedStorage[T]]
+  private def allocate(capacity: Int): this.type = {
+    require(capacity != 0, s"capacity should not be 0")
+    require(_pointer == 0L, s"native storage should be freed first")
+    val ptr = Memory.AlignedMalloc(capacity * ELEMENT_SIZE, CACHE_LINE_SIZE)
+    _pointer = ptr
+    require(_pointer != 0L, s"allocate native aligned memory failed")
+    this
   }
-
-  override def update(index: Int, value: T): Unit = {
-    value match {
-      case v: Float => buffer.asFloatBuffer().put(index, v)
-      case _ => throw new UnsupportedOperationException(errorMsg)
-    }
-  }
-
-  override def copy(source: Storage[T], offset: Int, sourceOffset: Int, length: Int): this.type = {
-    source match {
-      case s: ArrayStorage[T] =>
-        dataType.toString() match {
-          case "Float" =>
-            MklDnn.copyArray2FloatBuffer(buffer.asFloatBuffer(), offset,
-              s.array().asInstanceOf[Array[Float]], sourceOffset, length)
-          case _ => throw new UnsupportedOperationException(errorMsg)
-        }
-      case as: AlignedStorage[T] =>
-        if (length == as.buffer.capacity() && sourceOffset == 0) {
-          this.buffer.put(as.buffer)
-        } else {
-          // TODO refactor && performance.
-          dataType.toString() match {
-            case "Float" =>
-              val src = as.buffer.asFloatBuffer()
-              val dst = buffer.asFloatBuffer()
-              var i = 0
-              while (i < length) {
-                src.put(offset + i, dst.get(sourceOffset + i))
-                i += 1
-              }
-            case _ => throw new UnsupportedOperationException(errorMsg)
-          }
-        }
-      case _ =>
-        val errorMsg = s"AlignedStorage doesn't support this type of Storage"
-        throw new UnsupportedOperationException(errorMsg)
-    }
+  private def release(): this.type = {
+    Memory.AlignedFree(native)
+    _pointer = 0L
     this
   }
 
-  override def fill(value: T, offset: Int, length: Int): this.type = {
-    value match {
-      case v: Float => MklDnn.fillFloatBuffer(buffer.asFloatBuffer(), offset, v, length)
-      case _ => throw new UnsupportedOperationException(errorMsg)
+  def native: Long = _pointer
+  def sync(): Unit = {
+    require(native != 0, s"native storage has not been allocated")
+    println("sync from heap array -> native storage")
+    if (DEBUG) {
+      for (ste <- Thread.currentThread().getStackTrace) {
+        if (ste.toString.contains("com.intel.analytics.bigdl.")) {
+          println("\t|----> " + ste)
+        }
+      }
+    }
+    Memory.CopyArray2Ptr(toFloat, 0, native, 0, length(), ELEMENT_SIZE)
+  }
+  def needConversion: Boolean = _conversion
+  def setConversion(b: Boolean): Unit = { _conversion = b}
+
+  override def apply(index: Int): T = array()(index)
+
+  override def iterator: Iterator[T] = array().iterator
+
+  override def array(): Array[T] = {
+    if (needConversion) {
+      println("convert from native storage -> heap array")
+      if (DEBUG) {
+        for (ste <- Thread.currentThread().getStackTrace) {
+          if (ste.toString.contains("com.intel.analytics.bigdl.")) {
+            println("\t|----> " + ste)
+          }
+        }
+      }
+      Memory.CopyPtr2Array(native, 0, toFloat, 0, length(), ELEMENT_SIZE)
+      setConversion(false)
     }
 
+    values
+  }
+
+  override def copy(source: Storage[T], offset: Int, sourceOffset: Int,
+    length: Int): this.type = {
+    source match {
+      case s: ArrayStorage[T] =>
+        System.arraycopy(s.array(), sourceOffset, array(), offset, length)
+      case s: AlignedStorage[T] =>
+        Memory.CopyPtr2Array(toAlignedStorage(source).native, sourceOffset, toFloat, offset, length,
+          ELEMENT_SIZE)
+      case s: Storage[T] =>
+        var i = 0
+        while (i < length) {
+          this.values(i + offset) = s(i + sourceOffset)
+          i += 1
+        }
+    }
     this
   }
 
   override def resize(size: Long): this.type = {
-    if (size != buffer.capacity()) {
-      val capacity = dataType.toString() match {
-        case "Float" => 4
-        case "Int" => 4
-        case "Double" => 8
-        case _ => throw new UnsupportedOperationException(errorMsg)
-      }
-      val directByteBuffer = new UnsafeDirectByteBuffer(size.toInt * capacity, 64)
-      _buffer = directByteBuffer.buffer
-    }
-    this
-  }
-
-  override def array(): Array[T] = {
-    val errorMsg = s"AlignedStorage doesn't support array method"
-    throw new UnsupportedOperationException(errorMsg)
+    this.values = new Array[T](size.toInt)
+    this.release().allocate(size.toInt)
   }
 
   override def set(other: Storage[T]): this.type = {
     require(other.length() == this.length())
-    require(other.isInstanceOf[AlignedStorage[T]], s"Only support AlignedStorage now.")
-
-    _buffer = other.asInstanceOf[AlignedStorage[T]].buffer
+    this.values = other.array
     this
-  }
-
-  override def iterator: Iterator[T] = {
-    val errorMsg = s"AlignedStorage doesn't support iterator method"
-    throw new UnsupportedOperationException(errorMsg)
   }
 }

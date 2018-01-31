@@ -21,51 +21,29 @@ import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
 
 import scala.reflect.ClassTag
 
-class MklDnnTensor[T: ClassTag](
-  private[tensor] var _size: Array[Int],
-  private[tensor] var _stride: Array[Int],
-  var nDimension: Int)(implicit ev: TensorNumeric[T])
-  extends QuantizedTensorUnsupported[T] {
+class MklDnnTensor[T: ClassTag](storage: Storage[T], storageOffset: Int,
+  size: Array[Int], stride: Array[Int], nDimension: Int)(
+  implicit ev: TensorNumeric[T])
+  extends DenseTensor[T](storage, storageOffset, size, stride, nDimension) {
 
-  @transient var _pointer = allocate(size().product)
+  def nativeStorage: AlignedStorage[T] = this.storage().asInstanceOf[AlignedStorage[T]]
 
-  val CACHE_LINE_SIZE = 64
-
-  def allocate(capacity: Int): Long = {
-    MklDnn.MemoryAlignedMalloc(capacity, CACHE_LINE_SIZE)
+  def sync(): Unit = {
+    this.nativeStorage.sync()
   }
 
-  def release(): Unit = {
-    MklDnn.MemoryAlignedFree(_pointer)
-  }
-
-  override def dim(): Int = nDimension
-
-  override def size(): Array[Int] = _size
-
-  override def size(dim: Int): Int = _size(dim)
-
-  override def stride(): Array[Int] = _stride
-
-  override def stride(dim: Int): Int = _stride(dim)
-
-  override def nElement(): Int = _size.product
-
-  override def set(other: Tensor[T]): Tensor[T] = {
-    throw new UnsupportedOperationException
-  }
-
-  override def set(): Tensor[T] = {
-    throw new UnsupportedOperationException
-    this
-  }
-
-  override def copy(other: Tensor[T]): Tensor[T] = {
-    throw new UnsupportedOperationException
-    this
-  }
-
-  override def getTensorNumeric(): TensorNumeric[T] = ev
 
   override def getTensorType: TensorType = MklDnnType
+}
+
+object MklDnnTensor {
+  MklDnn.isLoaded
+  def apply[T: ClassTag](size: Array[Int])(implicit ev: TensorNumeric[T]): MklDnnTensor[T] = {
+    val array = new Array[T](size.product)
+    val storage = new AlignedStorage[T](array)
+    val storageOffset = 0
+    val stride = DenseTensor.size2Stride(size)
+    val dim = size.length
+    new MklDnnTensor[T](storage, storageOffset, size, stride, dim)
+  }
 }

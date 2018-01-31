@@ -16,9 +16,9 @@
 
 package com.intel.analytics.bigdl.nn.mkldnn
 
-import com.intel.analytics.bigdl.mkl.MklDnn
+import com.intel.analytics.bigdl.mkl.{Memory, MklDnn}
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
-import com.intel.analytics.bigdl.tensor.{FloatType, Tensor, UnsafeDirectByteBuffer}
+import com.intel.analytics.bigdl.tensor._
 
 import scala.reflect.ClassTag
 
@@ -26,11 +26,11 @@ class MemoryPrimitive[T: ClassTag]()(implicit ev: TensorNumeric[T]) extends Seri
   class Primitive extends Serializable {
     @transient var aligned: UnsafeDirectByteBuffer = _
     @transient var primitive: Long = 0L
+    @transient val tensor: MklDnnTensor[T] = MklDnnTensor[T](Array(1))
   }
 
   class User extends Primitive {
     @transient var handle: Long = 0L
-    val tensor: Tensor[T] = Tensor[T]()
   }
 
   class Internal extends Primitive
@@ -45,76 +45,37 @@ class MemoryPrimitive[T: ClassTag]()(implicit ev: TensorNumeric[T]) extends Seri
     val tensor = userPrimitive.tensor
     val primitive = userPrimitive.primitive
 
-    val data = tensor.storage().array().asInstanceOf[Array[Float]]
-    val offset = tensor.storageOffset() - 1
-
     require(userPrimitive.handle == 0L, s"You should release this handle first")
-    userPrimitive.handle = MklDnn.MemorySetDataHandle(primitive, data, offset)
-
-    // if the user storage is not cache aligned, we should reset the data handle
-    if (!UnsafeDirectByteBuffer.isCacheAligned(userPrimitive.handle + offset)) {
-      val handle = userPrimitive.handle
-      val length = tensor.nElement()
-      val buffer = new UnsafeDirectByteBuffer(length * 4, UnsafeDirectByteBuffer.CACHE_LINE_SIZE)
-      MklDnn.MemorySetDataHandleWithBuffer(primitive, handle, offset, length,
-        buffer.asFloatBuffer(), buffer.position)
-
-      userPrimitive.aligned = buffer
-    }
-  }
-
-  private def releaseUserHandle(userPrimitive: User): Unit = {
-    val handle = userPrimitive.handle
-    // we only need release the array
-    if (handle != 0) {
-      val data = userPrimitive.tensor.storage().array().asInstanceOf[Array[Float]]
-      MklDnn.MemoryReleaseDataHandle(data, handle)
-      userPrimitive.handle = 0L
-    }
-    userPrimitive.aligned = null
+    userPrimitive.handle = Memory.SetDataHandle(primitive, tensor.nativeStorage.native, 0)
   }
 
   def tensor(t: Tensor[T]): Unit = {
     user.tensor.set(t)
   }
 
-  def setHandle(): Unit = {
+  def setHandle(tensor: MklDnnTensor[T], needUpdate: Boolean = false): Unit = {
     require(ev.getType() == FloatType, s"only support float tensor currently")
-
-    setUserHandle(user)
+    if (!tensor.storage().asInstanceOf[AlignedStorage[T]].needConversion) {
+      if (!needUpdate) {
+        tensor.sync()
+      } else {
+        tensor.storage().asInstanceOf[AlignedStorage[T]].setConversion(needUpdate)
+      }
+    }
+    Memory.SetDataHandle(user.primitive, tensor.nativeStorage.native, 0)
 
     if (internal.primitive != 0L) {
-      val length = user.tensor.nElement()
-      if (internal.aligned == null ||
-        internal.aligned.asFloatBuffer().capacity() != user.tensor.nElement()) {
-        internal.aligned = new UnsafeDirectByteBuffer(length * 4,
-          UnsafeDirectByteBuffer.CACHE_LINE_SIZE)
-      }
+      internal.tensor.resize(tensor.size())
 
-      user.tensor.getTensorNumeric().getType() match {
+      tensor.getTensorNumeric().getType() match {
         case FloatType =>
-          MklDnn.MemorySetDataHandleWithBuffer(internal.primitive,
-            0, 0, length,
-            internal.aligned.buffer.asFloatBuffer(),
-            internal.aligned.position)
+          Memory.SetDataHandle(internal.primitive, internal.tensor.nativeStorage.native, 0)
         case _ => throw new UnsupportedOperationException
       }
     }
   }
 
   def releaseHandle(isCopy: Boolean = false): Unit = {
-    releaseUserHandle(user)
-
-    if (isCopy && user.aligned != null) {
-      MklDnn.copyFloatBuffer2Array(user.aligned.buffer.asFloatBuffer(), user.aligned.position,
-        user.tensor.storage().array().asInstanceOf[Array[Float]],
-        user.tensor.storageOffset() - 1,
-        user.tensor.nElement())
-    }
-
-    // we do not reset the aligned buffer, because it costs too much every iteration.
-    // by default, we think the size of buffer should be the same. If it's not the same,
-    // we remalloc a new one, whose process is in `setUserHandle`
   }
 
   def workPrim(): Long = {
