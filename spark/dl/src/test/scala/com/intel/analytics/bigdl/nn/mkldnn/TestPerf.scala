@@ -23,6 +23,7 @@ import breeze.linalg.all
 import com.intel.analytics.bigdl._
 import com.intel.analytics.bigdl.dataset.{LocalDataSet, MiniBatch}
 import com.intel.analytics.bigdl.example.loadmodel.AlexNet
+import com.intel.analytics.bigdl.mkl.MKL
 import com.intel.analytics.bigdl.models.inception.Inception_v2
 import com.intel.analytics.bigdl.models.lenet.LeNet5
 import com.intel.analytics.bigdl.models.resnet.ResNet
@@ -39,7 +40,6 @@ import org.apache.log4j.Logger
 import org.apache.spark.sql.execution.streaming
 import org.apache.spark.sql.execution.streaming.state
 import scopt.OptionParser
-import spire.syntax.module
 
 import scala.collection.mutable.ArrayBuffer
 import scala.util.Random
@@ -148,7 +148,8 @@ object LocalOptimizerPerf2 {
     }
 
     class TaskWithResult extends Callable[String] {
-      val model = DnnUtils.dnnAlexNet(1000)
+//      val model = DnnUtils.dnnAlexNet(1000)
+      val model = AlexNet(1000)
       model.createDnnEngine(0)
       model.createStream()
       val batchSize = 4
@@ -210,7 +211,7 @@ object LocalOptimizerPerf2 {
       executorService.shutdown()
     }
 
-    // System.setProperty("bigdl.mklNumThreads", "4")
+    System.setProperty("bigdl.mklNumThreads", "1")
     Engine.setCoreNumber(param.coreNumber)
 
     val (_model, miniBatch, criterion) = getModel(param.module, param.batchSize)
@@ -244,7 +245,7 @@ object LocalOptimizerPerf2 {
       optimizer.setEndWhen(Trigger.maxIteration(param.iteration)).optimize()
     } else {
       all(model, dummyDataSet, param.iteration)
-      // allNew(model, dummyDataSet, param.iteration)
+//       allNew(model, dummyDataSet, param.iteration)
     }
   }
 

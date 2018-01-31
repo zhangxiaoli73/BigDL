@@ -99,6 +99,7 @@ object AlexNet {
     model.add(SpatialConvolution(384, 256, 3, 3, 1, 1, 1, 1, 2).setName("conv5"))
     model.add(ReLU(true).setName("relu5"))
     model.add(SpatialMaxPooling(3, 3, 2, 2).setName("pool5"))
+    model.add(Identity())
     model.add(View(256 * 6 * 6))
     model.add(Linear(256 * 6 * 6, 4096).setName("fc6"))
     model.add(ReLU(true).setName("relu6"))
@@ -140,7 +141,7 @@ object AlexNet {
     Graph(conv1, loss)
   }
 
-  def dnn(classNum: Int, hasDropout : Boolean = true): Module[Float] = {
+  def dnn(classNum: Int, hasDropout : Boolean = false): Module[Float] = {
     val model = Sequential()
     model.add(mkldnn.ConvolutionDnn(3, 96, 11, 11, 4, 4, 0, 0, 1, false).setName("conv1"))
     model.add(mkldnn.ReLUDnn(true).setName("relu1"))
@@ -157,14 +158,15 @@ object AlexNet {
     model.add(mkldnn.ConvolutionDnn(384, 256, 3, 3, 1, 1, 1, 1, 2).setName("conv5"))
     model.add(mkldnn.ReLUDnn(true).setName("relu5"))
     model.add(mkldnn.PoolingDnn(3, 3, 2, 2).setName("pool5"))
+    model.add(mkldnn.MemoryReOrder())
     model.add(View(256 * 6 * 6))
-    model.add(mkldnn.Linear(256 * 6 * 6, 4096).setName("fc6"))
+    model.add(Linear(256 * 6 * 6, 4096).setName("fc6"))
     model.add(mkldnn.ReLUDnn(true).setName("relu6"))
     if (hasDropout) model.add(Dropout(0.5).setName("drop6"))
-    model.add(mkldnn.Linear(4096, 4096).setName("fc7"))
+    model.add(Linear(4096, 4096).setName("fc7"))
     model.add(mkldnn.ReLUDnn(true).setName("relu7"))
     if (hasDropout) model.add(Dropout(0.5).setName("drop7"))
-    model.add(mkldnn.Linear(4096, classNum).setName("fc8"))
+    model.add(Linear(4096, classNum).setName("fc8"))
     model.add(LogSoftMax().setName("loss"))
     model
   }

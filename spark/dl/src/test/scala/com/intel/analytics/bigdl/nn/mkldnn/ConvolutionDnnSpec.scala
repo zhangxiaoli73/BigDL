@@ -27,23 +27,23 @@ import scala.util.Random
 class ConvolutionDnnSpec extends FlatSpec with Matchers {
 
   "ConvolutionDnn with format=nchw and ngroup=1" should "work correctly" in {
-      val nInputPlane = 2
-      val nOutputPlane = 4
-      val kW = 3
-      val kH = 3
+      val nInputPlane = 3
+      val nOutputPlane = 96
+      val kW = 11
+      val kH = 11
       val dW = 4
       val dH = 4
       val padW = 0
       val padH = 0
 
-      val input = Tensor[Float](2, 2, 23, 23).apply1(e => Random.nextFloat())
-      val gradOutput = Tensor[Float](2, 4, 6, 6).apply1(e => Random.nextFloat())
+      val input = Tensor[Float](4, 3, 227, 227).apply1(e => Random.nextFloat())
       RNG.setSeed(100)
       val conv = ConvolutionDnn(nInputPlane, nOutputPlane, kW, kH, dW, dH, padW, padH)
       RNG.setSeed(100)
       val layer = SpatialConvolution[Float](nInputPlane, nOutputPlane, kW, kH, dW, dH, padW, padH)
 
       val output = conv.forward(input)
+    val gradOutput = Tensor[Float]().resizeAs(output).apply1(e => Random.nextFloat())
       val grad1 = conv.updateGradInput(input, gradOutput)
       conv.accGradParameters(input, gradOutput)
       conv.accGradParameters(input, gradOutput)
@@ -61,10 +61,10 @@ class ConvolutionDnnSpec extends FlatSpec with Matchers {
       val gradbias2 = conv.gradBias
 
       DnnUtils.nearequals(weight1, weight2) should be(true)
+    DnnUtils.nearequals(output, output2) should be(true)
       DnnUtils.nearequals(gradweight1, gradweight2) should be(true)
       DnnUtils.nearequals(bias1, bias2) should be(true)
       DnnUtils.nearequals(gradbias1, gradbias2) should be(true)
-      DnnUtils.nearequals(output, output2) should be(true)
       DnnUtils.nearequals(grad1, grad2) should be(true)
   }
 

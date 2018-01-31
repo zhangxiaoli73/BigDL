@@ -31,6 +31,10 @@ sealed trait EngineType
 
 case object MklBlas extends EngineType
 
+sealed trait AlignType
+case object Unaligned extends AlignType
+case object Aligned extends AlignType
+
 
 object Engine {
   @deprecated(
@@ -135,6 +139,13 @@ object Engine {
     }
   }
 
+  private var alignType: AlignType = {
+    System.getProperty("bigdl.alignType", "align").toLowerCase(Locale.ROOT) match {
+      case "align" => Aligned
+      case _ => throw new IllegalArgumentException(s"Unknown engine type $alignType")
+    }
+  }
+
   // Thread pool for default use
   @volatile private var _default: ThreadPool = null
 
@@ -225,6 +236,14 @@ object Engine {
 
   private[bigdl] def getEngineType(): EngineType = {
     this.engineType
+  }
+
+  private[bigdl] def setAlignType(alignType: AlignType): Unit = {
+    this.alignType = alignType
+  }
+
+  private[bigdl] def getAlignType(): AlignType = {
+    this.alignType
   }
 
   private[bigdl] def model: ThreadPool = {

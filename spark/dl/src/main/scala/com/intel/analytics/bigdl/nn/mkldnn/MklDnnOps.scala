@@ -15,9 +15,9 @@
  */
 package com.intel.analytics.bigdl.nn.mkldnn
 
-import com.intel.analytics.bigdl.mkl.MklDnn
+import com.intel.analytics.bigdl.mkl.{Memory, MklDnn}
 import com.intel.analytics.bigdl.mkl.MklDnn.EngineType
-import com.intel.analytics.bigdl.tensor.Tensor
+import com.intel.analytics.bigdl.tensor.{MklDnnTensor, Tensor, UnsafeDirectByteBuffer}
 
 object MklDnnOps {
 
@@ -234,25 +234,40 @@ object MklDnnOps {
 
 
   def streamSubmit(loc: Long, block: Int, primitives: Array[Long], length: Int,
-                   memory_primitives: Array[Long], buffers: Array[Tensor[Float]]): Unit = {
+                   memory_primitives: Array[Long], buffers: Array[Tensor[Float]],
+    inputLen: Int = 0): Unit = {
     require(MklDnn.isLoaded, "mkldnn isn't loaded")
     require(memory_primitives.length == buffers.length)
+
+    val ins = if (inputLen == 0) { buffers.length } else { inputLen }
 
     val handle = new Array[Long](memory_primitives.length)
     for (i <- 0 to memory_primitives.length - 1) {
       if (memory_primitives(i) != 0L) {
-        handle(i) = MklDnnOps.memorySetDataHandle(
-          memory_primitives(i), buffers(i), buffers(i).storageOffset() - 1)
+        val tensor = buffers(i).asInstanceOf[MklDnnTensor[Float]]
+        val offset = buffers(i).storageOffset() - 1
+        if (i < ins) {
+          tensor.sync()
+        } else {
+          tensor.nativeStorage.setConversion(true)
+        }
+        handle(i) = Memory.SetDataHandle(
+          memory_primitives(i), buffers(i).asInstanceOf[MklDnnTensor[Float]].nativeStorage.native,
+          offset)
       }
     }
 
     MklDnn.StreamSubmit(loc, block, primitives)
 
-    for (i <- 0 to memory_primitives.length - 1) {
-      if (memory_primitives(i) != 0L) {
-         MklDnnOps.memoryReleaseDataHandle(buffers(i), handle(i))
-      }
-    }
+//    for (i <- memory_primitives.indices) {
+//      if (memory_primitives(i) != 0L) {
+//         MklDnnOps.memoryReleaseDataHandle(buffers(i), handle(i))
+//      }
+//    }
+  }
+
+  def submit[T](stream: Long, primitives: Array[Long]): Unit = {
+    MklDnn.StreamSubmit(stream, primitives.length, primitives)
   }
 
   def getFormat(memoryDesc: Long): Int = {
