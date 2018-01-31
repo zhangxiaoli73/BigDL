@@ -236,11 +236,15 @@ class SpatialBatchNormalization[T: ClassTag](
     if (initWeight != null) {
       require(initWeight.size(1) == nOutput)
       concat.select(1, 1).copy(initWeight)
+    } else {
+      concat.select(1, 1).fill(ev.fromType(1))
     }
 
     if (initBias != null) {
       require(initBias.size(1) == nOutput)
       concat.select(1, 2).copy(initBias)
+    } else {
+      concat.select(1, 2).fill(ev.fromType(0))
     }
 
     weightAndBias.copy(concat.view(Array(2 * nOutput)))
