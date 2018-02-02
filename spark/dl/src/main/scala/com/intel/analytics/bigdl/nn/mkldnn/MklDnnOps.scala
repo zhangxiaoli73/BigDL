@@ -244,15 +244,9 @@ object MklDnnOps {
     val handle = new Array[Long](memory_primitives.length)
     for (i <- 0 to memory_primitives.length - 1) {
       if (memory_primitives(i) != 0L) {
-        val tensor = buffers(i).asInstanceOf[MklDnnTensor[Float]]
         val offset = buffers(i).storageOffset() - 1
-        if (i < ins) {
-          tensor.sync()
-        } else {
-          tensor.nativeStorage.setConversion(true)
-        }
         handle(i) = Memory.SetDataHandle(
-          memory_primitives(i), buffers(i).asInstanceOf[MklDnnTensor[Float]].nativeStorage.native,
+          memory_primitives(i), buffers(i).asInstanceOf[MklDnnTensor[Float]].nativeStorage,
           offset)
       }
     }

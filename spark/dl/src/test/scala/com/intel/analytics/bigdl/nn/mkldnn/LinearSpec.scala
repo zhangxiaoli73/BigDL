@@ -248,6 +248,7 @@ class LinearSpec extends FlatSpec with Matchers {
     val nnOutput = nnLinear.forward(input)
     val nnGradInput = nnLinear.updateGradInput(input, gradOutput)
 
+    println("=" * 80)
     linear.accGradParameters(input, gradOutput)
     nnLinear.accGradParameters(input, gradOutput)
 
@@ -257,8 +258,8 @@ class LinearSpec extends FlatSpec with Matchers {
     println(nnLinear.gradWeight)
     println(nnLinear.gradBias)
 
-    linear.gradWeight should be (nnLinear.gradWeight)
     linear.gradBias should be (nnLinear.gradBias)
+    linear.gradWeight should be (nnLinear.gradWeight)
   }
 
   "linear accGradParameters multi times" should "work correctly" in {
@@ -302,8 +303,8 @@ class LinearSpec extends FlatSpec with Matchers {
   }
 
   "linear accGradParameters multi times" should "work much faster than blas" in {
-    val inputSize = 64
-    val outputSize = 64
+    val inputSize = 4096
+    val outputSize = 4096
     val batchSize = 4
 
     val initWeight = Tensor[Float](outputSize, inputSize).rand()

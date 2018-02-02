@@ -46,7 +46,7 @@ class MemoryPrimitive[T: ClassTag]()(implicit ev: TensorNumeric[T]) extends Seri
     val primitive = userPrimitive.primitive
 
     require(userPrimitive.handle == 0L, s"You should release this handle first")
-    userPrimitive.handle = Memory.SetDataHandle(primitive, tensor.nativeStorage.native, 0)
+    userPrimitive.handle = Memory.SetDataHandle(primitive, tensor.nativeStorage, 0)
   }
 
   def tensor(t: Tensor[T]): Unit = {
@@ -57,19 +57,19 @@ class MemoryPrimitive[T: ClassTag]()(implicit ev: TensorNumeric[T]) extends Seri
     require(ev.getType() == FloatType, s"only support float tensor currently")
     if (!tensor.storage().asInstanceOf[AlignedStorage[T]].needConversion) {
       if (!needUpdate) {
-        tensor.sync()
+        tensor.syncFromHeap()
       } else {
         tensor.storage().asInstanceOf[AlignedStorage[T]].setConversion(needUpdate)
       }
     }
-    Memory.SetDataHandle(user.primitive, tensor.nativeStorage.native, 0)
+    Memory.SetDataHandle(user.primitive, tensor.nativeStorage, 0)
 
     if (internal.primitive != 0L) {
       internal.tensor.resize(tensor.size())
 
       tensor.getTensorNumeric().getType() match {
         case FloatType =>
-          Memory.SetDataHandle(internal.primitive, internal.tensor.nativeStorage.native, 0)
+          Memory.SetDataHandle(internal.primitive, internal.tensor.nativeStorage, 0)
         case _ => throw new UnsupportedOperationException
       }
     }

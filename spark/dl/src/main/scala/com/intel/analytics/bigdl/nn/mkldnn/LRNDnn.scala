@@ -61,6 +61,12 @@ class LRNDnn[T: ClassTag](
   @transient
   private var update_primitive: Boolean = true
 
+  var _shouldConvert: Boolean = true
+  def shouldConvert: Boolean = _shouldConvert
+  def setShouldConvert(v: Boolean): Unit = {
+    _shouldConvert = v
+  }
+
   val stream_fwd = new ArrayBuffer[Long]
   val stream_bwd = new ArrayBuffer[Long]
   val stream_acc = new ArrayBuffer[Long]
@@ -69,7 +75,7 @@ class LRNDnn[T: ClassTag](
   private var input_format = MklDnn.MemoryFormat.nchw
   private val dataType = MklDnn.DataType.f32
 
-  private var workSpace = MklDnnTensor[Float](Array(1))
+  private var workSpace = MklDnnTensor[Float]()
 
   // test
   private var dst_pd: Long = 0L
@@ -86,7 +92,8 @@ class LRNDnn[T: ClassTag](
           internalInput.resize(input.size())
         }
 
-        internalInput.copy(input)
+        internalInput.set(input)
+        internalInput.syncFromHeap()
     }
 
     if (!output.isInstanceOf[MklDnnTensor[Float]]) {
@@ -157,6 +164,10 @@ class LRNDnn[T: ClassTag](
 
     val end1 = (System.nanoTime() - s1)/1e9
     // println(s"lrn dnn forward ${end1}")
+
+    if (shouldConvert) {
+      output.asInstanceOf[MklDnnTensor[T]].syncToHeap()
+    }
     output
   }
 
@@ -176,7 +187,8 @@ class LRNDnn[T: ClassTag](
           internalGradOutput.resize(input.size())
         }
 
-        internalGradOutput.copy(gradOutput)
+        internalGradOutput.set(gradOutput)
+        internalGradOutput.syncFromHeap()
     }
 
     val s1 = System.nanoTime()
@@ -220,6 +232,9 @@ class LRNDnn[T: ClassTag](
 
     val end1 = (System.nanoTime() - s1)/1e9
     // println(s"lrn dnn backward ${end1}")
+    if (shouldConvert) {
+      gradInput.asInstanceOf[MklDnnTensor[T]].syncToHeap()
+    }
     gradInput
   }
 }
