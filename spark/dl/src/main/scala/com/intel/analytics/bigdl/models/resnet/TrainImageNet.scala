@@ -72,7 +72,6 @@ object TrainImageNet {
         if (param.optnet) {
           ResNet.shareGradInput(curModel)
         }
-//        ResNet.modelInit(curModel)
         curModel
       }
 
@@ -97,16 +96,9 @@ object TrainImageNet {
         logger.info(s"warmUpIteraion: $warmUpIteration, startLr: ${param.learningRate}, " +
           s"maxLr: $maxLr, " +
           s"delta: $delta, nesterov: ${param.nesterov}")
-//        new LarsSGD[Float](learningRate = param.learningRate, learningRateDecay = 0.0,
-//          momentum = param.momentum,
-////          larsLearningRateSchedule = SGD.EpochDecayWithWarmUp(warmUpIteration, delta, imageNetDecay),
-//          larsLearningRateSchedule =
-//          SGD.Poly(2, math.ceil(1281167.toDouble / param.batchSize).toInt * maxEpoch),
-//          gwRation = 0.001
-//        )
         new SGD[Float](learningRate = param.learningRate, learningRateDecay = 0.0,
           momentum = param.momentum, dampening = param.dampening,
-          nesterov = param.nesterov,
+          nesterov = param.nesterov, weightDecay = 0.0001,
           learningRateSchedule = SGD.EpochDecayWithWarmUp(warmUpIteration, delta, imageNetDecay))
       }
 
