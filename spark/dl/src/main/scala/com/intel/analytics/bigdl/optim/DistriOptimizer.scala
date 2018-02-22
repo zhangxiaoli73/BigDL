@@ -17,11 +17,10 @@
 package com.intel.analytics.bigdl.optim
 
 import com.intel.analytics.bigdl.{Module, _}
-import com.intel.analytics.bigdl.dataset.{DataSet, DistributedDataSet,
-                        MiniBatch, SampleToMiniBatch, Sample, PaddingParam}
+import com.intel.analytics.bigdl.dataset.{DataSet, DistributedDataSet, MiniBatch, PaddingParam, Sample, SampleToMiniBatch}
 import com.intel.analytics.bigdl.nn.{Module, Utils}
 import com.intel.analytics.bigdl.parameters.AllReduceParameter
-import com.intel.analytics.bigdl.tensor.Tensor
+import com.intel.analytics.bigdl.tensor.{MklDnnTensor, MklDnnType, Tensor}
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
 import com.intel.analytics.bigdl.utils._
 import java.io.{File, FilenameFilter}
@@ -248,6 +247,9 @@ object DistriOptimizer {
               val input = miniBatchBuffer(i).getInput()
               val target = miniBatchBuffer(i).getTarget()
               val output = localModel.forward(input)
+              if (output.toTensor.getTensorType == MklDnnType) {
+                output.asInstanceOf[MklDnnTensor[T]].syncToHeap()
+              }
               lossArray(i) = ev.toType[Double](localCriterion.forward(output, target))
               val errors = localCriterion.backward(output, target)
               localModel.backward(input, errors)
