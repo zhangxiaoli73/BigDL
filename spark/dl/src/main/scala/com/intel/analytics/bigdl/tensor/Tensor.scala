@@ -817,6 +817,9 @@ trait Tensor[T] extends Serializable with TensorMath[T] with Activity {
     format
   }
 
+  def setFormat(f: Int): Unit = {
+    format = f
+  }
   // test for debug
   var layer_name : String = ""
 }
