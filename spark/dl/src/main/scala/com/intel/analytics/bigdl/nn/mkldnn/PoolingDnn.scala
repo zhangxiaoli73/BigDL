@@ -304,14 +304,10 @@ class PoolingDnn[T: ClassTag](
     }
     val n_bwd = stream_bwd.length
     val (memoryPrimitives, buffer) =
-      if (reorder_gradOutput_memory == 0L) {
+      if (reorder_gradOutput_memory == 0L && gradOutput.getTensorType != MklDnnType) {
       // sync here
-        if (gradOutput.getTensorType != MklDnnType) {
-          MklDnnTensor.syncFromHeap(
-            gradOutputBuffer, gradOutput.storage().array(), gradOutput.storageOffset() - 1)
-        } else {
-          gradOutputBuffer = gradOutput.asInstanceOf[MklDnnTensor[Float]]
-        }
+      MklDnnTensor.syncFromHeap(
+        gradOutputBuffer, gradOutput.storage().array(), gradOutput.storageOffset() - 1)
       (Array(gradOutput_memory, work_memory, gradInput_memory),
       Array(gradOutputBuffer, workSpace, gradInput))
     } else {
