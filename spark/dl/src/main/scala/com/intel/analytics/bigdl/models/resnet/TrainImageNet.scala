@@ -70,9 +70,8 @@ object TrainImageNet {
         Module.load[Float](param.modelSnapshot.get)
       } else if (param.graphModel) {
         val curModel = ResNet_dnn(classNum = param.classes,
-          T("shortcutType" -> shortcut, "depth" -> param.depth,
-            "optnet" -> param.optnet, "dataSet" -> dataSetType))
-
+          T("shortcutType" -> ResNet_dnn.ShortcutType.B, "depth" -> param.depth,
+            "optnet" -> param.optnet, "dataSet" -> ResNet_dnn.DatasetType.ImageNet))
 //        val model = ResNet_dnn(classNum = 1000, T("depth" -> 50, "optnet" -> true,
 //          "dataset" -> ResNet_dnn.DatasetType.ImageNet))
         ResNet_dnn.modelInit(curModel)

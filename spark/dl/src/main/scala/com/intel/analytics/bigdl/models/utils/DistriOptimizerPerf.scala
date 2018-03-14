@@ -151,9 +151,9 @@ object DistriOptimizerPerf {
  * @param inputData inputData input data type (constant / random)
  */
 case class DistriOptimizerPerfParam(
-  batchSize: Int = 8,
-  maxEpoch: Int = 2,
+  batchSize: Int = 128,
+  maxEpoch: Int = 5,
   dataType: String = "float",
-  module: String = "inception_no_dnn",
+  module: String = "resnet_50_dnn",
   inputData: String = "random"
 )

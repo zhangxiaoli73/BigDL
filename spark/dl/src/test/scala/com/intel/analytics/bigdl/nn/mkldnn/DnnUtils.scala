@@ -60,9 +60,27 @@ object DnnUtils {
   def getunequals(t1: Tensor[Float], t2: Tensor[Float],
                   epsilon: Double = DenseTensorMath.floatEpsilon): Boolean = {
     var result = true
+    var num = 0
     t1.map(t2, (a, b) => {
       if (true) {
         result = nearlyEqual(a, b, epsilon)
+        if (!result) {
+          num += 1
+          val diff = math.abs(a - b)
+          println("epsilon " + a + "***" + b + "***" + diff / (abs(a) + abs(b)) + "***" + diff)
+        }
+      }
+      a
+    })
+    println("diff num " + num)
+    return true
+  }
+
+  def isEquals(t1: Tensor[Float], t2: Tensor[Float]): Boolean = {
+    var result = true
+    t1.map(t2, (a, b) => {
+      if (result) {
+        result = if (a == b) true else false
         if (!result) {
           val diff = math.abs(a - b)
           println("epsilon " + a + "***" + b + "***" + diff / (abs(a) + abs(b)) + "***" + diff)
@@ -70,7 +88,7 @@ object DnnUtils {
       }
       a
     })
-    return true
+    return result
   }
 
   def reorderToUser(input: Tensor[Float], output: Tensor[Float], outputFormat: Int): Unit = {
@@ -167,14 +185,17 @@ object DnnUtils {
     model.add(PoolingDnn[Float](3, 3, 2, 2).setName("pool5"))
     model.add(MemoryReOrder())
     model.add(View(256 * 6 * 6))
-    model.add(Linear[Float](256 * 6 * 6, 4096).setName("fc6"))
-    model.add(ReLU[Float](true).setName("relu6"))
+    model.add(nn.Linear[Float](256 * 6 * 6, 4096).setName("fc6"))
+    model.add(ReLUDnn[Float](true).setName("relu6"))
     if (hasDropout) model.add(Dropout[Float](0.5).setName("drop6"))
-    model.add(Linear[Float](4096, 4096).setName("fc7"))
-    model.add(ReLU[Float](true).setName("relu7"))
+    model.add(nn.Linear[Float](4096, 4096).setName("fc7"))
+    model.add(ReLUDnn[Float](true).setName("relu7"))
     if (hasDropout) model.add(Dropout[Float](0.5).setName("drop7"))
-    model.add(Linear[Float](4096, classNum).setName("fc8"))
+    model.add(nn.Linear[Float](4096, classNum).setName("fc8"))
     model.add(LogSoftMax[Float]().setName("loss"))
+
+    model.createDnnEngine(0)
+    model.createStream()
     model
   }
 }

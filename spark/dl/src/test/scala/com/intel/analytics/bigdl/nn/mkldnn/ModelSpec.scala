@@ -70,7 +70,7 @@ class ModelSpec extends FlatSpec with Matchers {
           .apply1(e => RNG.uniform(0, 1).toFloat), Tensor[Float](batchSize, 1000).randn()))
       case "resnet_50" =>
         val model = ResNet(classNum = 1000, T("depth" -> 50, "optnet" -> true,
-          "dataset" -> DatasetType.ImageNet))
+          "dataSet" -> DatasetType.ImageNet))
 //        ResNet.shareGradInput(model)
 //        ResNet.modelInit(model)
         (model, MiniBatch(Tensor[Float](batchSize, 3, 224, 224)
@@ -78,9 +78,9 @@ class ModelSpec extends FlatSpec with Matchers {
 
       case "resnet_50_dnn" =>
         val model = ResNet_dnn(classNum = 1000, T("depth" -> 50, "optnet" -> true,
-          "dataset" -> ResNet_dnn.DatasetType.ImageNet))
+          "dataSet" -> ResNet_dnn.DatasetType.ImageNet))
         //        ResNet_dnn.shareGradInput(model)
-        //        ResNet_dnn.modelInit(model)
+//        ResNet_dnn.modelInit(model)
         (model, MiniBatch(Tensor[Float](batchSize, 3, 224, 224)
           .apply1(e => RNG.uniform(0, 1).toFloat), Tensor[Float](batchSize, 1000).randn()))
     }
@@ -258,62 +258,29 @@ class ModelSpec extends FlatSpec with Matchers {
 
 
   }
-
-  "Pooling-dnn" should "be same with resnet-50" in {
-    val batchSize = 2
-//    val (model1, batch1) = getModel("resnet_50", batchSize)
-//    val (model2, batch2) = getModel("resnet_50_dnn", batchSize)
-
-    RNG.setSeed(100)
-    val model1 = SpatialMaxPooling[Float](3, 3, 2, 2, 1, 1) // .ceil()
-    RNG.setSeed(100)
-    val model2 = PoolingDnn[Float](3, 3, 2, 2, 1, 1)
-
-    RNG.setSeed(1)
-    val input = Tensor[Float](batchSize, 64, 112, 112).rand()
-
-//    val (weight1, bias1) = model1.getParameters()
-//    val (weight2, bias2) = model2.getParameters()
-
-//    DnnUtils.nearequals(weight1, weight2, 1e-4) should be(true)
-//    DnnUtils.nearequals(bias1, bias2, 1e-4) should be(true)
-
-    val out1 = model1.forward(input).toTensor[Float]
-    val out2 = model2.forward(input).toTensor[Float]
-    // formatEqual(out1, out2, 1e-4)
-    DnnUtils.getunequals(out1, out2, 1e-4) should be(true)
-    println("done")
-
-    // DnnUtils.nearequals(out1, out2, 1e-4) should be(true)
-//    DnnUtils.nearequals(weight1, weight2, 1e-4) should be(true)
-//    DnnUtils.nearequals(bias1, bias2, 1e-4) should be(true)
-
-    //    val grad1 = model1.backward(input, out1).toTensor[Float]
-    //    val grad2 = model2.backward(input, out1).toTensor[Float]
-    //    // DnnUtils.nearequals(grad1, grad2)
-    //    DnnUtils.nearequals(weight1, weight2, 1e-4) should be(true)
-    //    DnnUtils.nearequals(bias1, bias2, 1e-4) should be(true)
-
-
-    println("done")
-  }
   "Resnet50-dnn" should "be same with resnet-50" in {
     val batchSize = 2
     val (model1, batch1) = getModel("resnet_50", batchSize)
     val (model2, batch2) = getModel("resnet_50_dnn", batchSize)
 
     RNG.setSeed(1)
-    val input = Tensor[Float](batchSize, 3, 224, 224).fill(1.0f)
+    val input = Tensor[Float](batchSize, 3, 224, 224).apply1(e => RNG.uniform(0, 1).toFloat)
 
     val (weight1, bias1) = model1.getParameters()
     val (weight2, bias2) = model2.getParameters()
 
-    DnnUtils.nearequals(weight1, weight2, 1e-4) should be(true)
-    DnnUtils.nearequals(bias1, bias2, 1e-4) should be(true)
+    DnnUtils.isEquals(weight1, weight2) should be(true)
+    DnnUtils.isEquals(bias1, bias2) should be(true)
 
     val out1 = model1.forward(input).toTensor[Float]
     val out2 = model2.forward(input).toTensor[Float]
-    DnnUtils.nearequals(out1, out2, 1e-4) should be(true)
+
+    if (out1.dim() < 4) {
+      DnnUtils.nearequals(out1, out2, 1e-4) should be(true)
+    } else {
+      formatEqual(out1, out2, 1e-4)
+    }
+
     DnnUtils.nearequals(weight1, weight2, 1e-4) should be(true)
     DnnUtils.nearequals(bias1, bias2, 1e-4) should be(true)
 
@@ -321,7 +288,7 @@ class ModelSpec extends FlatSpec with Matchers {
     val grad2 = model2.backward(input, out1).toTensor[Float]
     // DnnUtils.nearequals(grad1, grad2)
     DnnUtils.nearequals(weight1, weight2, 1e-4) should be(true)
-    DnnUtils.nearequals(bias1, bias2, 1e-4) should be(true)
+    DnnUtils.getunequals(bias1, bias2, 1e-2) should be(true)
 
 
     println("done")
