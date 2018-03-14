@@ -70,6 +70,54 @@ class SpatialMaxPoolingSpec extends TorchSpec {
       scalaTime / 1e9 + " s")
   }
 
+  "A SpatialMaxPooling 111" should "generate correct output and gradInput" in {
+    torchCheck()
+    val batchSize = 2
+    RNG.setSeed(100)
+    val module = new SpatialMaxPooling[Double](3, 3, 2, 2, 1, 1)
+    RNG.setSeed(1)
+    val input = Tensor[Double](batchSize, 64, 112, 112).rand()
+//    input(Array(1, 1, 1)) = 0.53367262030952
+//    input(Array(1, 1, 2)) = 0.79637692729011
+//    input(Array(1, 1, 3)) = 0.56747663160786
+//    input(Array(1, 2, 1)) = 0.18039962812327
+//    input(Array(1, 2, 2)) = 0.24608615692705
+//    input(Array(1, 2, 3)) = 0.22956256521866
+//    input(Array(1, 3, 1)) = 0.30736334621906
+//    input(Array(1, 3, 2)) = 0.59734606579877
+//    input(Array(1, 3, 3)) = 0.42989541869611
+    val gradOutput = Tensor[Double](2, 64, 56, 56).rand()
+
+    val start = System.nanoTime()
+    val output = module.forward(input).toTensor[Double]
+    val gradInput = module.backward(input, gradOutput).toTensor[Double]
+    val end = System.nanoTime()
+    val scalaTime = end - start
+
+    val code = "module = nn.SpatialMaxPooling(3, 3, 2, 2, 1, 1)\n" +
+      "output = module:forward(input)\n" +
+      "gradInput = module:backward(input,gradOutput)"
+
+    val (luaTime, torchResult) = TH.run(code, Map("input" -> input,
+      "gradOutput" -> gradOutput), Array("output", "gradInput"))
+    val luaOutput1 = torchResult("output").asInstanceOf[Tensor[Double]]
+    val luaOutput2 = torchResult("gradInput").asInstanceOf[Tensor[Double]]
+
+    println("done")
+
+    luaOutput1.map(output, (v1, v2) => {
+      assert(abs(v1 - v2) == 0);
+      v1
+    })
+    luaOutput2.map(gradInput, (v1, v2) => {
+      assert(abs(v1 - v2) == 0);
+      v1
+    })
+
+    println("Test case : SpatialMaxPooling, Torch : " + luaTime + " s, Scala : " +
+      scalaTime / 1e9 + " s")
+  }
+
   "A SpatialMaxPooling" should "be good in gradient check for input" in {
     torchCheck()
     val seed = 100

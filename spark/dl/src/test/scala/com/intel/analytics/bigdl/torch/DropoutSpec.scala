@@ -17,13 +17,14 @@
 package com.intel.analytics.bigdl.torch
 
 import com.intel.analytics.bigdl.nn.Dropout
+import com.intel.analytics.bigdl.nn.mkldnn.DropoutDnn
 import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.utils.Engine
 import com.intel.analytics.bigdl.utils.RandomGenerator._
 
 @com.intel.analytics.bigdl.tags.Serial
 class DropoutSpec extends TorchSpec {
-    "Dropout module with continuous input" should "converge to correct weight and bias" in {
+  "Dropout module with continuous input" should "converge to correct weight and bias" in {
     torchCheck()
     val module = new Dropout[Double](0.7, false, true)
     val input = Tensor[Double](100, 100)
@@ -52,6 +53,30 @@ class DropoutSpec extends TorchSpec {
     luaOutput2 should be(output2)
 
     println("Test case : Dropout, Torch : " + luaTime + " s, Scala : " + scalaTime / 1e9 + " s")
+  }
+
+  "Dropoutdnn module with continuous input" should "converge to correct weight and bias" in {
+    torchCheck()
+    val module = new Dropout[Float](0.7, false, true)
+    val module2 = new DropoutDnn(0.7, false, true)
+    val input = Tensor[Float](100, 100).rand()
+    val seed = 100
+
+    val start = System.nanoTime()
+    RNG.setSeed(seed)
+    val output1 = module.forward(input)
+    val output2 = module.backward(input, input.clone().fill(1))
+    val end = System.nanoTime()
+    val scalaTime = end - start
+
+    RNG.setSeed(seed)
+    val luaOutput1 = module2.forward(input)
+    val luaOutput2 = module2.backward(input, input.clone().fill(1))
+
+    luaOutput1 should be(output1)
+    luaOutput2 should be(output2)
+
+    println("done")
   }
 
   "Dropout module with discontinuous input" should "converge to correct weight and bias" in {
