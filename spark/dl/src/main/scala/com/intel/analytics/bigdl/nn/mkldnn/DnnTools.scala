@@ -617,22 +617,19 @@ object ResNet_dnn {
       model match {
         case container: Container[Activity, Activity, Float]
         => container.modules.foreach(m => initModules(m))
-        case spatialShareConvolution
-          if (spatialShareConvolution.isInstanceOf[SpatialShareConvolution[Float]]) =>
-          val curModel = spatialShareConvolution.asInstanceOf[SpatialShareConvolution[Float]]
+        case convolutionDnn
+          if (convolutionDnn.isInstanceOf[mkldnn.ConvolutionDnn[Float]]) =>
+          val curModel = convolutionDnn.asInstanceOf[mkldnn.ConvolutionDnn[Float]]
           val n: Float = curModel.kernelW * curModel.kernelW * curModel.nOutputPlane
           curModel.weight.apply1(_ => RNG.normal(0, Math.sqrt(2.0f / n)).toFloat)
           curModel.bias.apply1(_ => 0.0f)
-        case spatialConvolution
-          if (spatialConvolution.isInstanceOf[SpatialConvolution[Float]]) =>
-          val curModel = spatialConvolution.asInstanceOf[SpatialConvolution[Float]]
-          val n: Float = curModel.kernelW * curModel.kernelW * curModel.nOutputPlane
-          curModel.weight.apply1(_ => RNG.normal(0, Math.sqrt(2.0f / n)).toFloat)
-          curModel.bias.apply1(_ => 0.0f)
+          curModel
         case spatialBatchNormalization
-          if (spatialBatchNormalization.isInstanceOf[SpatialBatchNormalization[Float]]) =>
-          val curModel = spatialBatchNormalization.asInstanceOf[SpatialBatchNormalization[Float]]
-        case linear if (linear.isInstanceOf[Linear[Float]]) =>
+          if (spatialBatchNormalization.isInstanceOf[mkldnn.SpatialBatchNormalization[Float]]) =>
+          val curModel =
+            spatialBatchNormalization.asInstanceOf[mkldnn.SpatialBatchNormalization[Float]]
+        case linear
+          if (linear.isInstanceOf[mkldnn.Linear[Float]]) =>
           linear.asInstanceOf[Linear[Float]].bias.apply1(_ => 0.0f)
         case _ => Unit
       }

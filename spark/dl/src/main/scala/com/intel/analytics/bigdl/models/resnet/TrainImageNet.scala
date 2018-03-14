@@ -18,6 +18,7 @@ package com.intel.analytics.bigdl.models.resnet
 
 import com.intel.analytics.bigdl._
 import com.intel.analytics.bigdl.models.resnet.ResNet.{DatasetType, ShortcutType}
+import com.intel.analytics.bigdl.nn.mkldnn.ResNet_dnn
 import com.intel.analytics.bigdl.nn.{CrossEntropyCriterion, Module}
 import com.intel.analytics.bigdl.optim._
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric._
@@ -63,8 +64,19 @@ object TrainImageNet {
 
       val shortcut: ShortcutType = ShortcutType.B
 
+      println("opt value " + param.optnet)
+
       val model = if (param.modelSnapshot.isDefined) {
         Module.load[Float](param.modelSnapshot.get)
+      } else if (param.graphModel) {
+        val curModel = ResNet_dnn(classNum = param.classes,
+          T("shortcutType" -> shortcut, "depth" -> param.depth,
+            "optnet" -> param.optnet, "dataSet" -> dataSetType))
+
+//        val model = ResNet_dnn(classNum = 1000, T("depth" -> 50, "optnet" -> true,
+//          "dataset" -> ResNet_dnn.DatasetType.ImageNet))
+        ResNet_dnn.modelInit(curModel)
+        curModel
       } else {
         val curModel =
           ResNet(classNum = param.classes, T("shortcutType" -> shortcut, "depth" -> param.depth,
