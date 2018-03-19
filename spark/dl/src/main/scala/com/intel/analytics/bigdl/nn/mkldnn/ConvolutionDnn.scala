@@ -242,6 +242,11 @@ class ConvolutionDnn[T: ClassTag](
   val stream_fwd = new ArrayBuffer[Long]
   val stream_bwd = new ArrayBuffer[Long]
   val stream_acc = new ArrayBuffer[Long]
+  val stream_reOrder = new ArrayBuffer[Long]
+  @transient
+  private var reorder_input_memory : Long = 0L // src
+  @transient
+  private var reorder_output_memory : Long = 0L // dst
 
   var dataTime: Long = 0L
 
@@ -277,25 +282,28 @@ class ConvolutionDnn[T: ClassTag](
     // val dataType = MklDnn.DataType.f32
     // val engine = MklDnn.EngineCreate( MklDnn.EngineType.cpu, 0)
     // val stream = MklDnn.StreamCreate(MklDnn.StreamType.eager)
-    val stream_fwd = new ArrayBuffer[Long]
-    val sizes = input.size()
-    val dim = input.dim()
-    output.resizeAs(input)
+    // val stream_fwd = new ArrayBuffer[Long]
 
-    val src_md = MklDnnOps.memoryDescInit(dim, sizes, dataType, inputFormat)
-    val src_pd = MklDnnOps.memoryPrimitiveDescCreate(src_md, engine)
+    if (update_primitive) {
+      val sizes = input.size()
+      val dim = input.dim()
+      output.resizeAs(input)
 
-    val dst_memory = MklDnnOps.initDataMemory(dim, sizes, outputFormat, dataType, engine)
-    val res = MklDnnOps.prepareReorder(dst_memory, src_pd, false)
-    val src_memory = res._2
+      val src_md = MklDnnOps.memoryDescInit(dim, sizes, dataType, inputFormat)
+      val src_pd = MklDnnOps.memoryPrimitiveDescCreate(src_md, engine)
 
-    stream_fwd.clear()
-    stream_fwd.append(res._1)
+      reorder_output_memory = MklDnnOps.initDataMemory(dim, sizes, outputFormat, dataType, engine)
+      val res = MklDnnOps.prepareReorder(reorder_output_memory, src_pd, false)
+      reorder_input_memory = res._2
+
+      stream_reOrder.clear()
+      stream_reOrder.append(res._1)
+    }
 
     /* build a simple net */
-    val memoryPrimitives = Array(src_memory, dst_memory)
+    val memoryPrimitives = Array(reorder_input_memory, reorder_output_memory)
     val buffer = Array(input, output)
-    MklDnnOps.streamSubmit(stream, 1, stream_fwd.toArray, 1, memoryPrimitives, buffer)
+    MklDnnOps.streamSubmit(stream, 1, stream_reOrder.toArray, 1, memoryPrimitives, buffer)
   }
 
   override def updateOutput(input: Tensor[Float]): Tensor[Float] = {

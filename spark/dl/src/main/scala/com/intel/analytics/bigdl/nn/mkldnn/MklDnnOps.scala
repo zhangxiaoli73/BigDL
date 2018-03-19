@@ -25,6 +25,7 @@ object MklDnnOps {
 
   def engineCreate(index : Int) : Long = {
     require(MklDnn.isLoaded, "mkldnn isn't loaded")
+    println("$$$$$$$$$$$$ 111")
     MklDnn.EngineCreate(engineType, index)
   }
 
@@ -34,6 +35,7 @@ object MklDnnOps {
   }
 
   def streamCreate(streamKind: Int): Long = {
+    println("$$$$$$$$$$$$ 222")
     require(MklDnn.isLoaded, "mkldnn isn't loaded")
     MklDnn.StreamCreate(streamKind)
   }
@@ -54,11 +56,13 @@ object MklDnnOps {
   }
 
   def memoryDescInit(ndims: Int, dims: Array[Int], dataType: Int, dataFormat: Int): Long = {
+    println("$$$$$$$$$$$$ 333")
     require(MklDnn.isLoaded, "mkldnn isn't loaded")
     MklDnn.MemoryDescInit(ndims, dims, dataType, dataFormat)
   }
 
   def memoryPrimitiveDescCreate(desc: Long, engine: Long): Long = {
+    println("$$$$$$$$$$$$ 444")
     require(MklDnn.isLoaded, "mkldnn isn't loaded")
     MklDnn.MemoryPrimitiveDescCreate(desc, engine)
   }
@@ -79,17 +83,20 @@ object MklDnnOps {
   }
 
   def primitiveCreate0(desc: Long): Long = {
+    println("$$$$$$$$$$$$ 555")
     require(MklDnn.isLoaded, "mkldnn isn't loaded")
     MklDnn.PrimitiveCreate0(desc)
   }
 
   def primitiveCreate2(desc: Long, inputs: Array[Long], indexes: Array[Int], length1: Int,
                        outputs: Array[Long], lenght2 : Int): Long = {
+    println("$$$$$$$$$$$$ 666")
     require(MklDnn.isLoaded, "mkldnn isn't loaded")
     MklDnn.PrimitiveCreate2(desc, inputs, indexes, length1, outputs, lenght2)
   }
 
   def primitiveDescCreate(opDesc: Long, engine: Long, hingForwardPrimitiveDesc: Long): Long = {
+    println("$$$$$$$$$$$$ 777")
     require(MklDnn.isLoaded, "mkldnn isn't loaded")
     MklDnn.PrimitiveDescCreate(opDesc, engine, hingForwardPrimitiveDesc)
   }
@@ -106,6 +113,7 @@ object MklDnnOps {
 
   def eltwiseForwardDescInit(propKind: Int, algKind: Int, srcDesc: Long,
                              alpha: Float, beta: Float): Long = {
+    println("$$$$$$$$$$$$ 888")
     require(MklDnn.isLoaded, "mkldnn isn't loaded")
     MklDnn.EltwiseForwardDescInit(propKind, algKind, srcDesc,
       alpha, beta)
@@ -113,6 +121,7 @@ object MklDnnOps {
 
   def eltwiseBackwardDescInit(algKind: Int, diffDataDesc: Long, dataDesc: Long,
                               alpha: Float, beta: Float): Long = {
+    println("$$$$$$$$$$$$ 999")
     require(MklDnn.isLoaded, "mkldnn isn't loaded")
     MklDnn.EltwiseBackwardDescInit(algKind, diffDataDesc, dataDesc,
       alpha, beta)
@@ -121,6 +130,7 @@ object MklDnnOps {
   def convForwardDescInit(prop_kind: Int, alg_kind: Int, src_desc: Long, weights_desc: Long,
     bias_desc: Long, dst_desc: Long, strides: Array[Int],
     padding_l: Array[Int], padding_r: Array[Int], padding_kind: Int): Long = {
+    println("$$$$$$$$$$$$ 1010")
     require(MklDnn.isLoaded, "mkldnn isn't loaded")
       MklDnn.ConvForwardDescInit(prop_kind, alg_kind, src_desc, weights_desc,
         bias_desc, dst_desc, strides, padding_l, padding_r, padding_kind)
@@ -129,6 +139,7 @@ object MklDnnOps {
   def convBackwardWeightsDescInit(alg_kind: Int, src_desc: Long, diff_weights_desc: Long,
     diff_bias_desc: Long, diff_dst_desc: Long, strides: Array[Int],
     padding_l: Array[Int], padding_r: Array[Int], padding_kind: Int): Long = {
+    println("$$$$$$$$$$$$ 1111")
     require(MklDnn.isLoaded, "mkldnn isn't loaded")
     MklDnn.ConvBackwardWeightsDescInit(alg_kind, src_desc, diff_weights_desc,
       diff_bias_desc, diff_dst_desc, strides, padding_l, padding_r, padding_kind)
@@ -137,6 +148,7 @@ object MklDnnOps {
   def convBackwardDataDescInit(alg_kind: Int, diff_src_desc: Long, weights_desc: Long,
     diff_dst_desc: Long, strides: Array[Int], padding_l: Array[Int], padding_r: Array[Int],
     padding_kind: Int): Long = {
+    println("$$$$$$$$$$$$ 1212")
     require(MklDnn.isLoaded, "mkldnn isn't loaded")
     MklDnn.ConvBackwardDataDescInit(alg_kind, diff_src_desc, weights_desc,
       diff_dst_desc, strides, padding_l, padding_r, padding_kind)
@@ -145,6 +157,7 @@ object MklDnnOps {
   def poolingForwardDescInit(prop_kind: Int, alg_kind: Int, src_desc: Long, dst_desc: Long,
                              strides: Array[Int], kernel: Array[Int], padding_l: Array[Int],
                              padding_r: Array[Int], padding_kind: Int): Long = {
+    println("$$$$$$$$$$$$ 1313")
     MklDnn.PoolingForwardDescInit(prop_kind, alg_kind, src_desc, dst_desc, strides, kernel,
       padding_l, padding_r, padding_kind)
   }
@@ -152,31 +165,37 @@ object MklDnnOps {
   def poolingBackwardDescInit(alg_kind: Int, diff_src_desc: Long, diff_dst_desc: Long,
                               strides: Array[Int], kernel: Array[Int], padding_l: Array[Int],
                               padding_r: Array[Int], padding_kind: Int): Long = {
+    println("$$$$$$$$$$$$ 1414")
     MklDnn.PoolingBackwardDescInit(alg_kind, diff_src_desc, diff_dst_desc, strides, kernel,
       padding_l, padding_r, padding_kind)
   }
 
   def reorderPrimitiveDescCreate(input: Long, output: Long): Long = {
+    println("$$$$$$$$$$$$ 1515")
     require(MklDnn.isLoaded, "mkldnn isn't loaded")
     MklDnn.ReorderPrimitiveDescCreate(input, output)
   }
 
   def memoryPrimitiveDescEqual(lhs: Long, rhs: Long): Int = {
+    println("$$$$$$$$$$$$ 1616")
     require(MklDnn.isLoaded, "mkldnn isn't loaded")
     MklDnn.MemoryPrimitiveDescEqual(lhs, rhs)
   }
 
   def primitiveGetPrimitiveDesc(primitive: Long): Long = {
+    println("$$$$$$$$$$$$ 1717")
     require(MklDnn.isLoaded, "mkldnn isn't loaded")
     MklDnn.PrimitiveGetPrimitiveDesc(primitive)
   }
 
   def primitiveDescQueryPd(primitive: Long, what: Int, index: Int): Long = {
+    println("$$$$$$$$$$$$ 1818")
     require(MklDnn.isLoaded, "mkldnn isn't loaded")
     MklDnn.PrimitiveDescQueryPd(primitive, what, index)
   }
 
   def primitiveDescQueryMemory(primitive_desc: Long): Long = {
+//    println("$$$$$$$$$$$$ 1919")
     require(MklDnn.isLoaded, "mkldnn isn't loaded")
     MklDnn.PrimitiveDescQueryMemory(primitive_desc)
   }
@@ -189,6 +208,7 @@ object MklDnnOps {
    */
   def prepareReorder(user_memory: Long, prim_memory_pd: Long,
                      user_to_prim: Boolean): (Long, Long) = {
+    println("$$$$$$$$$$$$ 2020")
     require(MklDnn.isLoaded, "mkldnn isn't loaded")
     val user_memory_pd = MklDnn.PrimitiveGetPrimitiveDesc(user_memory)
     var reorder: Long = 0L
@@ -216,6 +236,7 @@ object MklDnnOps {
 
   def initDataMemory(dim: Int, dims: Array[Int], memoryFormat: Int,
                      dataType: Int, engine: Long): Long = {
+    println("$$$$$$$$$$$$ 2121")
     require(MklDnn.isLoaded, "mkldnn isn't loaded")
     val prim_md = MklDnn.MemoryDescInit(dim, dims, dataType, memoryFormat)
     val user_pd = MklDnn.MemoryPrimitiveDescCreate(prim_md, engine)
@@ -225,6 +246,7 @@ object MklDnnOps {
   }
 
   def createMemoryPrimitive(prim_md: Long, engine: Long): Long = {
+    println("$$$$$$$$$$$$ 2222")
     require(MklDnn.isLoaded, "mkldnn isn't loaded")
     val user_pd = MklDnn.MemoryPrimitiveDescCreate(prim_md, engine)
     val memory = MklDnn.PrimitiveCreate0(user_pd)
@@ -261,18 +283,21 @@ object MklDnnOps {
   }
 
   def getFormat(memoryDesc: Long): Int = {
+//    println("$$$$$$$$$$$$ 2323")
     require(MklDnn.isLoaded, "mkldnn isn't loaded")
     MklDnn.getFormat(memoryDesc)
   }
 
   def reorderToInternal(user_md: Long, pd: Long, queryType: Int, data: Tensor[Float],
                         data_size: Array[Int], index: Int = 0): (Long, Long, Long) = {
+    println("$$$$$$$$$$$$ 2424")
     val internal_pd = MklDnnOps.primitiveDescQueryPd(pd, queryType, index)
     val res = MklDnnOps.prepareReorder(user_md, internal_pd, true)
     (res._1, res._2, internal_pd)
   }
 
   def queryFormat(pd: Long, queryType: Int, index: Int = 0): Int = {
+    println("$$$$$$$$$$$$ 2525")
     val internal_pd = MklDnnOps.primitiveDescQueryPd(pd, queryType, index)
     val mpd = MklDnnOps.primitiveDescQueryMemory(internal_pd)
     val format = MklDnnOps.getFormat(mpd)
