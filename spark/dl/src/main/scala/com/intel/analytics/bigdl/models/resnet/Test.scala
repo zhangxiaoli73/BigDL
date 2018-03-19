@@ -17,11 +17,14 @@
 package com.intel.analytics.bigdl.models.resnet
 
 import com.intel.analytics.bigdl.Module
+import com.intel.analytics.bigdl.dataset.{ByteRecord, DataSet}
 import com.intel.analytics.bigdl.nn.Module
 import com.intel.analytics.bigdl.utils.Engine
 import com.intel.analytics.bigdl.models.resnet.Utils._
 import com.intel.analytics.bigdl.optim.{Top1Accuracy, ValidationMethod, ValidationResult}
-import com.intel.analytics.bigdl.dataset.image.{BGRImgNormalizer, BGRImgToSample, BytesToBGRImg}
+import com.intel.analytics.bigdl.dataset.image.{HFlip, _}
+import com.intel.analytics.bigdl.models.resnet.ResNet.DatasetType
+import org.apache.hadoop.io.Text
 import org.apache.log4j.{Level, Logger}
 import org.apache.spark.SparkContext
 
@@ -31,6 +34,9 @@ object Test {
   Logger.getLogger("breeze").setLevel(Level.ERROR)
 
   def main(args: Array[String]): Unit = {
+
+    val imageSize = 224
+
     testParser.parse(args, TestParams()).foreach { param =>
       val conf = Engine.createSparkConf().setAppName("Test ResNet on Cifar10")
         .set("spark.akka.frameSize", 64.toString)
@@ -40,10 +46,26 @@ object Test {
       Engine.init
       val partitionNum = Engine.nodeNumber() * Engine.coreNumber()
 
-      val rddData = sc.parallelize(loadTest(param.folder), partitionNum)
-      val transformer = BytesToBGRImg() -> BGRImgNormalizer(Cifar10DataSet.trainMean,
-          Cifar10DataSet.trainStd) -> BGRImgToSample()
+      val batchSize = param.batchSize
+      val (imageSize, dataSetType, maxEpoch, dataSet) =
+        (224, DatasetType.ImageNet, 90, ImageNetDataSet)
+
+      val rawData = sc.sequenceFile(param.folder, classOf[Text], classOf[Text], partitionNum)
+        .map(image => {
+          ByteRecord(image._2.copyBytes(), DataSet.SeqFileFolder.readLabel(image._1).toFloat)
+        }).coalesce(partitionNum, true)
+
+      val rddData = DataSet.SeqFileFolder.filesToRdd(param.folder, sc, 1000)
+      val transformer = (BytesToBGRImg() -> BGRImgCropper(imageSize, imageSize)
+        -> ColorJitter() -> Lighting() -> BGRImgNormalizer(0.485, 0.456, 0.406, 0.229, 0.224, 0.225)
+        ) -> HFlip(0.5) -> BGRImgToSample()
+
       val evaluationSet = transformer(rddData)
+
+//      val rddData = sc.parallelize(loadTest(param.folder), partitionNum)
+//      val transformer = BytesToBGRImg() -> BGRImgNormalizer(Cifar10DataSet.trainMean,
+//          Cifar10DataSet.trainStd) -> BGRImgToSample()
+//      val evaluationSet = transformer(rddData)
 
       val model = Module.load[Float](param.model)
       println(model)
