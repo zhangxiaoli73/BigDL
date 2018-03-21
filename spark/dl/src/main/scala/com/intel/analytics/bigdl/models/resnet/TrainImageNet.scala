@@ -56,7 +56,7 @@ object TrainImageNet {
 
       val batchSize = param.batchSize
       val (imageSize, dataSetType, maxEpoch, dataSet) =
-        (224, DatasetType.ImageNet, 90, ImageNetDataSet)
+        (224, DatasetType.ImageNet, param.nepochs, ImageNetDataSet)
 
       val trainDataSet = dataSet.trainDataSet(param.folder + "/train", sc, imageSize, batchSize)
 
@@ -90,7 +90,7 @@ object TrainImageNet {
       println(model)
 
       val optimMethod = if (param.stateSnapshot.isDefined) {
-        val optim = OptimMethod.load[Float](param.stateSnapshot.get).asInstanceOf[LarsSGD[Float]]
+        val optim = OptimMethod.load[Float](param.stateSnapshot.get).asInstanceOf[SGD[Float]]
         val baseLr = param.learningRate
         val iterationsPerEpoch = math.ceil(1281167 / param.batchSize).toInt
         val warmUpIteration = iterationsPerEpoch * param.warmupEpoch
@@ -108,18 +108,10 @@ object TrainImageNet {
         logger.info(s"warmUpIteraion: $warmUpIteration, startLr: ${param.learningRate}, " +
           s"maxLr: $maxLr, " +
           s"delta: $delta, nesterov: ${param.nesterov}")
-//        new LarsSGD[Float](learningRate = param.learningRate, learningRateDecay = 0.0,
-//          momentum = param.momentum,
-////          larsLearningRateSchedule = SGD.EpochDecayWithWarmUp(warmUpIteration, delta, imageNetDecay),
-//          larsLearningRateSchedule =
-//            SGD.PolyWithWarmUp(warmUpIteration, delta, 2, iterationsPerEpoch * 90),
-//          gwRation = 0.001
-//        )
         new SGD[Float](learningRate = param.learningRate, learningRateDecay = 0.0,
-        momentum = param.momentum, dampening = param.dampening,
-        nesterov = param.nesterov,
-        learningRateSchedule = SGD.EpochDecayWithWarmUp(warmUpIteration, delta, imageNetDecay))
-//        learningRateSchedule = SGD.PolyWithWarmUp(warmUpIteration, delta, 2, iterationsPerEpoch * 90))
+          momentum = param.momentum, dampening = param.dampening,
+          nesterov = param.nesterov, weightDecay = 0.0001,
+          learningRateSchedule = SGD.EpochDecayWithWarmUp(warmUpIteration, delta, imageNetDecay))
       }
 
       val optimizer = Optimizer(
