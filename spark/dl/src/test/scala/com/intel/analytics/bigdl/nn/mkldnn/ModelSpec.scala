@@ -69,7 +69,7 @@ class ModelSpec extends FlatSpec with Matchers {
         (Vgg_19_dnn(1000, false), MiniBatch(Tensor[Float](batchSize, 3, 224, 224)
           .apply1(e => RNG.uniform(0, 1).toFloat), Tensor[Float](batchSize, 1000).randn()))
       case "resnet_50" =>
-        val model = ResNet(classNum = 1000, T("depth" -> 50, "optnet" -> true,
+        val model = ResNet(classNum = 1000, T("depth" -> 50, "optnet" -> false,
           "dataSet" -> DatasetType.ImageNet))
 //        ResNet.shareGradInput(model)
 //        ResNet.modelInit(model)
@@ -77,7 +77,7 @@ class ModelSpec extends FlatSpec with Matchers {
           .apply1(e => RNG.uniform(0, 1).toFloat), Tensor[Float](batchSize, 1000).randn()))
 
       case "resnet_50_dnn" =>
-        val model = ResNet_dnn(classNum = 1000, T("depth" -> 50, "optnet" -> true,
+        val model = ResNet_dnn(classNum = 1000, T("depth" -> 50, "optnet" -> false,
           "dataSet" -> ResNet_dnn.DatasetType.ImageNet))
         //        ResNet_dnn.shareGradInput(model)
 //        ResNet_dnn.modelInit(model)

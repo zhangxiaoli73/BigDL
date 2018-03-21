@@ -640,82 +640,38 @@ object SbnDnn {
   def apply[@specialized(Float, Double) T: ClassTag](
     nOutput: Int,
     eps: Double = 1e-3,
-    momentum: Double = 0.1,
-    //    momentum: Double = 0.9,
+    momentum: Double = 0.9,
     affine: Boolean = true)
   (implicit ev: TensorNumeric[T]): SpatialBatchNormalization[T] = {
     mkldnn.SpatialBatchNormalization[T](nOutput, eps, momentum, affine).setInitMethod(Ones, Zeros)
-    //    SpatialBatchNormalization[T](nOutput, eps, momentum, affine).setInitMethod(Ones)
   }
 }
 
 object Convolution {
   def apply[@specialized(Float, Double) T: ClassTag](
-      nInputPlane: Int,
-      nOutputPlane: Int,
-      kernelW: Int,
-      kernelH: Int,
-      strideW: Int = 1,
-      strideH: Int = 1,
-      padW: Int = 0,
-      padH: Int = 0,
-      nGroup: Int = 1,
-      propagateBack: Boolean = true,
-      optnet: Boolean = true,
-      weightDecay: Double = 1e-4)
-    (implicit ev: TensorNumeric[Float]): ConvolutionDnn[Float] = {
-    val wReg = L2Regularizer[Float](weightDecay)
-    val bReg = L2Regularizer[Float](weightDecay)
+    nInputPlane: Int,
+    nOutputPlane: Int,
+    kernelW: Int,
+    kernelH: Int,
+    strideW: Int = 1,
+    strideH: Int = 1,
+    padW: Int = 0,
+    padH: Int = 0,
+    nGroup: Int = 1,
+    propagateBack: Boolean = true,
+    optnet: Boolean = true,
+    withBias2: Boolean = false)
+  (implicit ev: TensorNumeric[T]): ConvolutionDnn[Float] = {
+    require(optnet == false, "dnn only support false optnet")
     val conv = mkldnn.ConvolutionDnn(nInputPlane, nOutputPlane, kernelW, kernelH,
-        strideW, strideH, padW, padH, nGroup, propagateBack, wReg, bReg)
+        strideW, strideH, padW, padH, nGroup, propagateBack, withBias = withBias2)
     conv.setInitMethod(MsraFiller(false), Zeros)
-    //    conv.setInitMethod(MsraFiller(false))
     conv
   }
 }
 
 object ResNet_dnn {
   val logger = Logger.getLogger(getClass)
-
-  def shareGradInput(model: Module[Float]): Unit = {
-    logger.info("Share gradients in ResNet")
-    def sharingKey(m: Module[Float]) = m.getClass.getName
-    val cache = mutable.Map[Any, Storage[Float]]()
-    val packageName: String = model.getName().stripSuffix("Sequential")
-    cache.put("fInput", Storage(Array(1.0f)))
-    cache.put("fGradInput", Storage(Array(1.0f)))
-
-    var index = 0
-    def matchModels(model: Module[Float]): Unit = {
-      model match {
-        case container: Container[Activity, Activity, Float] =>
-          container.modules.foreach( m => {
-            if (m.gradInput.isInstanceOf[Tensor[_]] &&
-              !m.getClass.getName.equals(packageName + "ConcatTable")) {
-              val key = sharingKey(m)
-              if (!cache.contains(key)) {
-                cache.put(key, Storage(Array(1.0f)))
-              }
-              m.gradInput = Tensor(cache.get(key).get, 1, Array(0))
-            }
-            matchModels(m)
-          })
-        case concatTable if (concatTable.isInstanceOf[ConcatTable[Float]]) =>
-          if (!cache.contains(index % 2)) {
-            cache.put(index % 2, Storage(Array(1.0f)))
-          }
-          concatTable.gradInput = Tensor[Float](cache.get(index % 2).get, 1, Array(0))
-          index = index + 1
-        case spatialShareConvolution
-          if (spatialShareConvolution.isInstanceOf[SpatialShareConvolution[Float]]) =>
-          val curModel = spatialShareConvolution.asInstanceOf[SpatialShareConvolution[Float]]
-          curModel.fInput = Tensor[Float](cache.get("fInput").get)
-          curModel.fGradInput = Tensor[Float](cache.get("fGradInput").get)
-        case _ => Unit
-      }
-    }
-    matchModels(model)
-  }
 
   def modelInit(model: Module[Float]): Unit = {
     logger.info("Initialize ResNet")
@@ -785,7 +741,8 @@ object ResNet_dnn {
         .add(ReLUDnn(true).setName(s"res${name}_branch2b_relu"))
         .add(mkldnn.Convolution(n, n*4, 1, 1, 1, 1, 0, 0,
           optnet = optnet).setName(s"res${name}_branch2c"))
-        .add(mkldnn.SbnDnn(n * 4).setInitMethod(Zeros, Zeros).setName(s"bn${name}_branch2c"))
+        // .add(mkldnn.SbnDnn(n * 4).setInitMethod(Zeros, Zeros).setName(s"bn${name}_branch2c"))
+        .add(mkldnn.SbnDnn(n * 4).setName(s"bn${name}_branch2c"))
 
       val model = Sequential()
         .add(ConcatTableDnn().
@@ -829,18 +786,20 @@ object ResNet_dnn {
       iChannels = 64
       logger.info(" | ResNet-" + depth + " ImageNet")
 
-      model.add(mkldnn.Convolution(3, 64, 7, 7, 2, 2, 3, 3, propagateBack = false,
-        optnet = optnet).setName("conv1"))
+      model.add(mkldnn.Convolution(3, 64, 7, 7, 2, 2, 3, 3,
+        optnet = optnet, withBias2 = true).setName("conv1"))
         .add(mkldnn.SbnDnn(64).setName("bn_conv1"))
         .add(ReLUDnn(true).setName("conv1_relu"))
-        .add(PoolingDnn(3, 3, 2, 2, 1, 1).setName("pool1"))
+        .add(PoolingDnn(3, 3, 2, 2, 0, 0).setName("pool1"))
         .add(layer(block, 64, loopConfig._1, name = "2"))
         .add(layer(block, 128, loopConfig._2, 2, name = "3"))
         .add(layer(block, 256, loopConfig._3, 2, name = "4"))
         .add(layer(block, 512, loopConfig._4, 2, name = "5"))
         .add(PoolingDnnAverage(7, 7, 1, 1).setName("pool5"))
-        .add(mkldnn.Linear(nFeatures, classNum, true, L2Regularizer(1e-4), L2Regularizer(1e-4))
+        .add(mkldnn.Linear(nFeatures, classNum, true)
           .setInitMethod(RandomNormal(0.0, 0.01), Zeros).setName("fc1000"))
+//        .add(mkldnn.Linear(nFeatures, classNum, true, L2Regularizer(1e-4), L2Regularizer(1e-4))
+//          .setInitMethod(RandomNormal(0.0, 0.01), Zeros).setName("fc1000"))
     } else {
       throw new IllegalArgumentException(s"Invalid dataset ${dataSet}")
     }

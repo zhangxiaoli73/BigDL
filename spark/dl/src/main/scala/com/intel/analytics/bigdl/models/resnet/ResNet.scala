@@ -203,7 +203,8 @@ object ResNet {
         .add(Sbn(n))
         .add(ReLU(true))
         .add(Convolution(n, n*4, 1, 1, 1, 1, 0, 0, optnet = optnet))
-        .add(Sbn(n * 4).setInitMethod(Zeros, Zeros))
+        .add(Sbn(n * 4))
+ //       .add(Sbn(n * 4).setInitMethod(Zeros, Zeros))
 //        .add(Sbn(n * 4).setInitMethod(Zeros))
 
       Sequential()

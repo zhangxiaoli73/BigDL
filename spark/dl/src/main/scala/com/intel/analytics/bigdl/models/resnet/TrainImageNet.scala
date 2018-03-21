@@ -72,9 +72,7 @@ object TrainImageNet {
         val curModel = ResNet_dnn(classNum = param.classes,
           T("shortcutType" -> ResNet_dnn.ShortcutType.B, "depth" -> param.depth,
             "optnet" -> param.optnet, "dataSet" -> ResNet_dnn.DatasetType.ImageNet))
-//        val model = ResNet_dnn(classNum = 1000, T("depth" -> 50, "optnet" -> true,
-//          "dataset" -> ResNet_dnn.DatasetType.ImageNet))
-        ResNet_dnn.modelInit(curModel)
+//         ResNet_dnn.modelInit(curModel)
         curModel
       } else {
         val curModel =
@@ -83,7 +81,7 @@ object TrainImageNet {
         if (param.optnet) {
           ResNet.shareGradInput(curModel)
         }
-        ResNet.modelInit(curModel)
+        // ResNet.modelInit(curModel)
         curModel
       }
 
