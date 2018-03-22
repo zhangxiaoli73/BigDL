@@ -161,7 +161,7 @@ class ConvolutionDnn[T: ClassTag](
 
   private val weightSize = weight.size()
   private val dimWeight = weight.dim()
-  private val biasSize = bias.size()
+  private val biasSize = Array(nOutputPlane) // bias.size()
   private val strides = Array(strideW, strideH)
   private val padding = Array(padH, padW)
   private val dataType = MklDnn.DataType.f32
@@ -211,6 +211,8 @@ class ConvolutionDnn[T: ClassTag](
   private var bias_md : Long = 0L
   @transient
   private var gradOutput_md: Long = 0L
+  @transient
+  private var gradBias_md: Long = 0L
 
   // for reorder memory primitive
   @transient
@@ -355,15 +357,18 @@ class ConvolutionDnn[T: ClassTag](
 
       src_md = MklDnnOps.memoryDescInit(input.dim(), input_size, dataType, this.internal_format)
       weights_md = MklDnnOps.memoryDescInit(dimWeight, weightSize, dataType, this.internal_format)
-      bias_md = MklDnnOps.memoryDescInit(1, biasSize, dataType, MklDnn.MemoryFormat.x)
+      if (withBias) {
+        bias_md = MklDnnOps.memoryDescInit(1, biasSize, dataType, MklDnn.MemoryFormat.x)
+      }
       // for output
       val dst_md = MklDnnOps.memoryDescInit(output.dim(), dst_sizes, dataType, this.internal_format)
 
       /* create a convolution */
       val conv_desc = MklDnnOps.convForwardDescInit(
-                                MklDnn.PropKind.forwardTraining, MklDnn.AlgKind.convolutionDirect,
-                                src_md, weights_md, bias_md, dst_md,
-                                strides, padding, padding, MklDnn.PaddingKind.mkldnnPaddingZero)
+        MklDnn.PropKind.forwardTraining, MklDnn.AlgKind.convolutionDirect,
+        src_md, weights_md, bias_md, dst_md,
+        strides, padding, padding, MklDnn.PaddingKind.mkldnnPaddingZero)
+
       fwd_pd = MklDnnOps.primitiveDescCreate(conv_desc, engine, 0L)
 
       // create memory desc, for input
@@ -376,7 +381,9 @@ class ConvolutionDnn[T: ClassTag](
       }
       weights_memory = MklDnnOps.initDataMemory(
                       dimWeight, weightSize, weightDnnFormat, dataType, engine)
-      bias_memory = MklDnnOps.createMemoryPrimitive(bias_md, engine)
+      if (withBias) {
+        bias_memory = MklDnnOps.createMemoryPrimitive(bias_md, engine)
+      }
 
       /* create reorder primitives between user data and convolution srcs */
       var reorder_src: Long = 0L
@@ -649,8 +656,12 @@ class ConvolutionDnn[T: ClassTag](
         dataType, engine)
 
      // for gradBias
-     val gradBias_md = MklDnnOps.memoryDescInit(1, biasSize, dataType, MklDnn.MemoryFormat.x)
-     gradBias_memory = MklDnnOps.createMemoryPrimitive(gradBias_md, engine)
+     if (withBias) {
+       gradBias_md = MklDnnOps.memoryDescInit(1, biasSize, dataType, MklDnn.MemoryFormat.x)
+     }
+     if (withBias) {
+       gradBias_memory = MklDnnOps.createMemoryPrimitive(gradBias_md, engine)
+     }
 
      val weights_desc = MklDnnOps.convBackwardWeightsDescInit(
                                    MklDnn.AlgKind.convolutionDirect, src_md, gradWeights_md,
@@ -752,7 +763,9 @@ class ConvolutionDnn[T: ClassTag](
     /* build a simple net */
     // keep original data
     original_gradWeights.resizeAs(gradWeight).copy(gradWeight)
-    original_gradBias.resizeAs(gradBias).copy(gradBias)
+    if (withBias) {
+      original_gradBias.resizeAs(gradBias).copy(gradBias)
+    }
 
     val n_bwd = stream_acc.length
     memoryPrimitives.clear()
@@ -820,7 +833,9 @@ class ConvolutionDnn[T: ClassTag](
     }
 
     gradWeight.add(original_gradWeights)
-    gradBias.add(original_gradBias)
+    if (withBias) {
+      gradBias.add(original_gradBias)
+    }
 
     if (null != wRegularizer) {
       wRegularizer.accRegularization(weight, gradWeight, scaleW)

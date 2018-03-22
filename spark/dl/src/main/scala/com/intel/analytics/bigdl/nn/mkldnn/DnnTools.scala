@@ -726,7 +726,8 @@ object ResNet_dnn {
       }
     }
 
-    def bottleneck(n: Int, stride: Int, name: String = ""): Module[Float] = {
+    def bottleneck(n: Int, stride: Int, isZero : Boolean = false,
+                   name: String = ""): Module[Float] = {
       val nInputPlane = iChannels
       iChannels = n * 4
 
@@ -741,8 +742,13 @@ object ResNet_dnn {
         .add(ReLUDnn(true).setName(s"res${name}_branch2b_relu"))
         .add(mkldnn.Convolution(n, n*4, 1, 1, 1, 1, 0, 0,
           optnet = optnet).setName(s"res${name}_branch2c"))
-        // .add(mkldnn.SbnDnn(n * 4).setInitMethod(Zeros, Zeros).setName(s"bn${name}_branch2c"))
-        .add(mkldnn.SbnDnn(n * 4).setName(s"bn${name}_branch2c"))
+        if (isZero) {
+          println("zero name " + s"bn${name}_branch2c")
+          s.add(mkldnn.SbnDnn(n * 4).setInitMethod(Zeros, Zeros).setName(s"bn${name}_branch2c"))
+        } else {
+          println("not_zero name " + s"bn${name}_branch2c")
+          s.add(mkldnn.SbnDnn(n * 4).setName(s"bn${name}_branch2c"))
+        }
 
       val model = Sequential()
         .add(ConcatTableDnn().
@@ -765,19 +771,20 @@ object ResNet_dnn {
       return name1
     }
 
-    def layer(block: (Int, Int, String) => Module[Float], features: Int,
+    def layer(block: (Int, Int, Boolean, String) => Module[Float], features: Int,
               count: Int, stride: Int = 1, name : String): Module[Float] = {
       val s = Sequential()
-      for (i <- 1 to count) {
-        s.add(block(features, if (i == 1) stride else 1, getName(i, name)))
+      for (i <- 1 to count-1) {
+        s.add(block(features, if (i == 1) stride else 1, false, getName(i, name)))
       }
+      s.add(block(features, if (count == 1) stride else 1, true, getName(count, name)))
       s
     }
 
     val model = Sequential()
     if (dataSet == DatasetType.ImageNet) {
       val cfg = Map(
-        50 -> ((3, 4, 6, 3), 2048, bottleneck: (Int, Int, String) => Module[Float])
+        50 -> ((3, 4, 6, 3), 2048, bottleneck: (Int, Int, Boolean, String) => Module[Float])
       )
 
       require(cfg.keySet.contains(depth), s"Invalid depth ${depth}")
