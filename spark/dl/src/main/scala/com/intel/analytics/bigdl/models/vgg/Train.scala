@@ -50,7 +50,9 @@ object Train {
       val model = if (param.modelSnapshot.isDefined) {
         Module.load[Float](param.modelSnapshot.get)
       } else {
-        if (param.graphModel) VggForCifar10.graph(classNum = 10) else VggForCifar10(classNum = 10)
+        if (param.graphModel) VggForCifar10.graph(classNum = 10) else {
+          VggForCifar10.dnn(classNum = 10)
+        }
       }
 
       val optimMethod = if (param.stateSnapshot.isDefined) {
@@ -72,7 +74,7 @@ object Train {
         BGRImgToBatch(param.batchSize)
 
       if (param.checkpoint.isDefined) {
-        optimizer.setCheckpoint(param.checkpoint.get, Trigger.everyEpoch)
+        optimizer.setCheckpoint(param.checkpoint.get, Trigger.maxEpoch(param.maxEpoch))
       }
 
       if (param.overWriteCheckpoint) {
@@ -91,7 +93,7 @@ object Train {
       }
 
       optimizer
-        .setValidation(Trigger.everyEpoch, validateSet, Array(new Top1Accuracy[Float]))
+        .setValidation(Trigger.maxIteration(1), validateSet, Array(new Top1Accuracy[Float]))
         .setOptimMethod(optimMethod)
         .setEndWhen(Trigger.maxEpoch(param.maxEpoch))
         .optimize()
