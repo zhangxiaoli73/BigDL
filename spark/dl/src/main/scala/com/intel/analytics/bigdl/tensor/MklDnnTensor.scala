@@ -193,7 +193,7 @@ class MklDnnTensor[T: ClassTag](
   @throws(classOf[IOException])
   private def readObject(in: ObjectInputStream): Unit = {
     MklDnn.isLoaded
-    println("load mkldnn")
+    // println("load mkldnn")
     in.defaultReadObject()
     this._pointer = allocate(_size.product)
   }

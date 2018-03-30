@@ -22,7 +22,7 @@ import com.intel.analytics.bigdl.models.inception
 import com.intel.analytics.bigdl.models.inception.{Inception_v1, Inception_v1_NoAuxClassifier, Inception_v2}
 import com.intel.analytics.bigdl.models.resnet.ResNet
 import com.intel.analytics.bigdl.models.resnet.ResNet.DatasetType
-import com.intel.analytics.bigdl.models.vgg.{Vgg_16, Vgg_19}
+import com.intel.analytics.bigdl.models.vgg.{VggForCifar10, Vgg_16, Vgg_19}
 import com.intel.analytics.bigdl.nn.{Module => _, _}
 import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.utils.RandomGenerator._
@@ -307,20 +307,26 @@ class ModelSpec extends FlatSpec with Matchers {
   "VGG on Cifar10" should "work correctly" in {
     RNG.setSeed(1)
     val dnn = VggForCifar10.dnn(10, hasDropout = false)
+    RNG.setSeed(1)
     val blas = VggForCifar10(10, hasDropout = false)
 
     dnn.getParameters()._1.copy(blas.getParameters()._1)
     dnn.getParameters()._1 should be (blas.getParameters()._1)
 
     val input = Tensor[Float](4, 3, 32, 32).rand(-1, 1)
-    val gradOutput = Tensor[Float](4, 256, 4, 4).rand(-1, 1)
+    val gradOutput = Tensor[Float]()
 
-    for (i <- 0 until 1) {
-      blas.forward(input)
-      dnn.forward(input)
-      blas.backward(input, gradOutput)
-      dnn.backward(input, gradOutput)
-      dnn.gradInput.toTensor[Float].storage()
+    for (i <- 0  to 1) {
+      println("round " + i)
+      val out1 = blas.forward(input).toTensor[Float]
+      val out2 = dnn.forward(input).toTensor[Float]
+      DnnUtils.nearequals(out1, out2, 1e-4) should be (true)
+
+      gradOutput.resizeAs(blas.output.toTensor[Float]).copy(blas.output.toTensor[Float])
+      val grad1 = blas.backward(input, gradOutput).toTensor[Float]
+      val grad2 = dnn.backward(input, gradOutput).toTensor[Float]
+
+      DnnUtils.nearequals(grad1, grad2, 1e-4) should be (true)
     }
 
     DnnUtils.getunequals(blas.getParameters()._2, dnn.getParameters()._2, 1e-3) should be (true)
