@@ -38,7 +38,7 @@ object Test {
     val imageSize = 224
 
     testParser.parse(args, TestParams()).foreach { param =>
-      val conf = Engine.createSparkConf().setAppName("Test ResNet on Cifar10")
+      val conf = Engine.createSparkConf().setAppName("Test ResNet on ImageNet")
         .set("spark.akka.frameSize", 64.toString)
         .set("spark.task.maxFailures", "1")
       val sc = new SparkContext(conf)

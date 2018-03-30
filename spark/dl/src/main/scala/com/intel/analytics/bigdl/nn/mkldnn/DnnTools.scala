@@ -36,6 +36,7 @@ import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
 import com.intel.analytics.bigdl.tensor.{DenseTensorMath, Storage, Tensor}
 import com.intel.analytics.bigdl.utils.RandomGenerator._
 import org.apache.log4j.Logger
+import org.dmg.pmml.False
 
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
@@ -639,7 +640,7 @@ object Vgg_19_dnn {
 object SbnDnn {
   def apply[@specialized(Float, Double) T: ClassTag](
     nOutput: Int,
-    eps: Double = 1e-3,
+    eps: Double = 1e-5,
     momentum: Double = 0.9,
     affine: Boolean = true)
   (implicit ev: TensorNumeric[T]): SpatialBatchNormalization[T] = {
@@ -732,16 +733,29 @@ object ResNet_dnn {
       iChannels = n * 4
 
       val s = Sequential()
-      s.add(mkldnn.Convolution(nInputPlane, n, 1, 1, 1, 1, 0, 0,
+//      s.add(mkldnn.Convolution(nInputPlane, n, 1, 1, 1, 1, 0, 0,
+//        optnet = optnet).setName(s"res${name}_branch2a"))
+//        .add(mkldnn.SbnDnn(n).setName(s"bn${name}_branch2a"))
+//        .add(ReLUDnn(true).setName(s"res${name}_branch2a_relu"))
+//        .add(mkldnn.Convolution(n, n, 3, 3, stride, stride, 1, 1,
+//          optnet = optnet).setName(s"res${name}_branch2b"))
+//        .add(mkldnn.SbnDnn(n).setName(s"bn${name}_branch2b"))
+//        .add(ReLUDnn(true).setName(s"res${name}_branch2b_relu"))
+//        .add(mkldnn.Convolution(n, n*4, 1, 1, 1, 1, 0, 0,
+//          optnet = optnet).setName(s"res${name}_branch2c"))
+
+      s.add(mkldnn.Convolution(nInputPlane, n, 1, 1, stride, stride, 0, 0,
         optnet = optnet).setName(s"res${name}_branch2a"))
         .add(mkldnn.SbnDnn(n).setName(s"bn${name}_branch2a"))
         .add(ReLUDnn(true).setName(s"res${name}_branch2a_relu"))
-        .add(mkldnn.Convolution(n, n, 3, 3, stride, stride, 1, 1,
+        .add(mkldnn.Convolution(n, n, 3, 3, 1, 1, 1, 1,
           optnet = optnet).setName(s"res${name}_branch2b"))
         .add(mkldnn.SbnDnn(n).setName(s"bn${name}_branch2b"))
         .add(ReLUDnn(true).setName(s"res${name}_branch2b_relu"))
         .add(mkldnn.Convolution(n, n*4, 1, 1, 1, 1, 0, 0,
           optnet = optnet).setName(s"res${name}_branch2c"))
+
+
         if (isZero) {
           println("zero name " + s"bn${name}_branch2c")
           s.add(mkldnn.SbnDnn(n * 4).setInitMethod(Zeros, Zeros).setName(s"bn${name}_branch2c"))
