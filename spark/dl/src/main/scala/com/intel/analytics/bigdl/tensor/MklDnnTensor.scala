@@ -92,8 +92,8 @@ class MklDnnTensor[T: ClassTag](
   override def storage(): Storage[T] = {
     if (_storage == null || _storage.length() != nElement()) {
       this._storage = Storage[T](nElement())
-      println("****allocate****************")
-      MklDnnTensor.backtrace()
+      // println("****allocate****************")
+      // MklDnnTensor.backtrace()
     }
     if (updateStorage) {
       MklDnnTensor.syncToHeap(this, this._storage.array(), storageOffset() - 1)
