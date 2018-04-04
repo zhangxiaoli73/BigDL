@@ -504,7 +504,30 @@ class SpatialBatchNormalization[T: ClassTag](
       diffAll.zero()
       gradWeight.zero()
       gradBias.zero()
+
+      Memory.Zero(diffAll.ptr, diffAll.nElement(), 4)
     }
+  }
+
+  override def clearState() : this.type = {
+    super.clearState()
+    gradAll.set()
+    gradWeight.set()
+    gradBias.set()
+
+    if (diffAll != null) {
+      diffAll.release()
+      diffAll.set()
+    }
+    if (mean != null) {
+      mean.release()
+      mean.set()
+    }
+    if (variance != null) {
+      variance.release()
+      variance.set()
+    }
+    this
   }
 
 //  override def parameters(): (Array[Tensor[T]], Array[Tensor[T]]) = {

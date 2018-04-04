@@ -21,6 +21,7 @@ import com.intel.analytics.bigdl.nn.abstractnn.TensorModule
 import com.intel.analytics.bigdl.tensor.{MklDnnTensor, MklDnnType, Tensor}
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
 
+import scala.collection.mutable.ArrayBuffer
 import scala.reflect.ClassTag
 
 class ReLUDnn[T: ClassTag](ip: Boolean = false, value: Float = 0.0f)(
@@ -151,6 +152,40 @@ class ReLUDnn[T: ClassTag](ip: Boolean = false, value: Float = 0.0f)(
       output
     }
 
+  var gradInputDebug = Tensor[Float]()
+
+  private val dataType = MklDnn.DataType.f32
+  val stream_reOrder = new ArrayBuffer[Long]
+  @transient
+  private var reorder_input_memory : Long = 0L // src
+  @transient
+  private var reorder_output_memory : Long = 0L // dst
+
+  def reorderTwoTensor(input: Tensor[Float], inputFormat: Int,
+                       output: Tensor[Float], outputFormat: Int): Unit = {
+    if (update_primitive) {
+      val sizes = input.size()
+      val dim = input.dim()
+      output.resizeAs(input)
+
+      val src_md = MklDnnOps.memoryDescInit(dim, sizes, dataType, inputFormat)
+      val src_pd = MklDnnOps.memoryPrimitiveDescCreate(src_md, engine)
+
+      reorder_output_memory = MklDnnOps.initDataMemory(dim, sizes, outputFormat, dataType, engine)
+      val res = MklDnnOps.prepareReorder(reorder_output_memory, src_pd, false)
+      reorder_input_memory = res._2
+
+      stream_reOrder.clear()
+      stream_reOrder.append(res._1)
+    }
+
+    /* build a simple net */
+    val memoryPrimitives = Array(reorder_input_memory, reorder_output_memory)
+    val buffer = Array(input, output)
+    MklDnnOps.streamSubmit(stream, 1, stream_reOrder.toArray, 1, memoryPrimitives, buffer)
+  }
+
+
     override def updateGradInput(input: Tensor[Float], gradOutput: Tensor[Float]): Tensor[Float] = {
       val s1 = System.nanoTime()
       if (this.getName() == "res2b_relu") {
@@ -268,6 +303,13 @@ class ReLUDnn[T: ClassTag](ip: Boolean = false, value: Float = 0.0f)(
         DnnTools.debugBwInfo(this.getName(), end1, gradOutput.getFormat(), gradInput.getFormat())
       }
       gradInput.layer_name = this.getName()
+
+      // debug
+//      if (gradInput.getFormat() != -1 && gradInput.getFormat() != 5 && gradInput.dim() == 4) {
+//        gradInputDebug.resizeAs(gradInput)
+//        reorderTwoTensor(gradInput, gradInput.getFormat(), gradInputDebug, 5)
+//        gradInput = gradInputDebug
+//      }
       gradInput
     }
 

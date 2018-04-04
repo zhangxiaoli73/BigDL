@@ -212,11 +212,17 @@ class ConvolutionDnn(
 
   // for reorder memory primitive
   @transient
-  private var reorder_gradOutput_memory: Long = 0L
+  private var reorder_gradOutput_memory_bwd: Long = 0L
   @transient
-  private var reorder_src_memory: Long = 0L
+  private var reorder_gradOutput_memory_acc: Long = 0L
   @transient
-  private var reorder_weights_memory: Long = 0L
+  private var reorder_src_memory_fwd: Long = 0L
+  @transient
+  private var reorder_src_memory_acc: Long = 0L
+  @transient
+  private var reorder_weights_memory_fwd: Long = 0L
+  @transient
+  private var reorder_weights_memory_bwd: Long = 0L
   @transient
   private var reorder_gradWeights_memory: Long = 0L
 
@@ -245,6 +251,12 @@ class ConvolutionDnn(
   private var reorder_input_memory : Long = 0L // src
   @transient
   private var reorder_output_memory : Long = 0L // dst
+
+  val stream_reOrder_2 = new ArrayBuffer[Long]
+  @transient
+  private var reorder_input_memory_2 : Long = 0L // src
+  @transient
+  private var reorder_output_memory_2 : Long = 0L // dst
 
   var dataTime: Long = 0L
 
@@ -298,6 +310,32 @@ class ConvolutionDnn(
     val buffer = Array(input, output)
     MklDnnOps.streamSubmit(stream, 1, stream_reOrder.toArray, 1, memoryPrimitives, buffer)
   }
+
+  def reorderTwoTensorAgain(input: Tensor[Float], inputFormat: Int,
+                       output: Tensor[Float], outputFormat: Int): Unit = {
+    if (update_primitive) {
+      val sizes = input.size()
+      val dim = input.dim()
+      output.resizeAs(input)
+
+      val src_md = MklDnnOps.memoryDescInit(dim, sizes, dataType, inputFormat)
+      val src_pd = MklDnnOps.memoryPrimitiveDescCreate(src_md, engine)
+
+      reorder_output_memory_2 = MklDnnOps.initDataMemory(dim, sizes, outputFormat, dataType, engine)
+      val res = MklDnnOps.prepareReorder(reorder_output_memory_2, src_pd, false)
+      reorder_input_memory_2 = res._2
+
+      stream_reOrder_2.clear()
+      stream_reOrder_2.append(res._1)
+    }
+
+    /* build a simple net */
+    val memoryPrimitives = Array(reorder_input_memory_2, reorder_output_memory_2)
+    val buffer = Array(input, output)
+    MklDnnOps.streamSubmit(stream, 1, stream_reOrder_2.toArray, 1, memoryPrimitives, buffer)
+  }
+
+  var outputDebug = Tensor[Float]()
 
   override def updateOutput(input: Tensor[Float]): Tensor[Float] = {
     val s1 = System.nanoTime()
@@ -379,12 +417,12 @@ class ConvolutionDnn(
         val res = MklDnnOps.reorderToInternal(
                   src_memory, fwd_pd, MklDnn.Query.src_pd, inputBuffer, input.size())
         reorder_src = res._1
-        reorder_src_memory = res._2
+        reorder_src_memory_fwd = res._2
       }
-      internal_src_memory = if (reorder_src_memory == 0L) {
+      internal_src_memory = if (reorder_src_memory_fwd == 0L) {
         src_memory
       } else {
-        reorder_src_memory
+        reorder_src_memory_fwd
       }
 
       internal_weightFormat = MklDnnOps.queryFormat(fwd_pd, MklDnn.Query.weights_pd, 0)
@@ -392,12 +430,12 @@ class ConvolutionDnn(
         val res = MklDnnOps.reorderToInternal(
                   weights_memory, fwd_pd, MklDnn.Query.weights_pd, weightsBuffer, weight.size())
         reorder_weights = res._1
-        reorder_weights_memory = res._2
+        reorder_weights_memory_fwd = res._2
       }
-      internal_weights_memory = if (reorder_weights_memory == 0L) {
+      internal_weights_memory = if (reorder_weights_memory_fwd == 0L) {
         weights_memory
       } else {
-        reorder_weights_memory
+        reorder_weights_memory_fwd
       }
 
       /* create memory for dst data, we don't need to reorder it to user data */
@@ -424,7 +462,7 @@ class ConvolutionDnn(
 
       // for input
       if ((inputBuffer == null && input.getTensorType != MklDnnType)
-        || (reorder_src_memory != 0L && inputBuffer == null)) {
+        || (reorder_src_memory_fwd != 0L && inputBuffer == null)) {
         inputBuffer = MklDnnTensor[Float](input.size())
       } else if (inputBuffer != null && inputBuffer.nElement() != input.nElement()) {
         inputBuffer.release()
@@ -433,20 +471,25 @@ class ConvolutionDnn(
 
       // for weight
       if ((weightsBuffer == null && weight.getTensorType != MklDnnType)
-        || (reorder_weights_memory != 0L && weightsBuffer == null)) {
+        || (reorder_weights_memory_fwd != 0L && weightsBuffer == null)) {
           weightsBuffer = MklDnnTensor[Float](weight.size())
       } else if (weightsBuffer != null && weightsBuffer.nElement() != weight.nElement()) {
         weightsBuffer.release()
         weightsBuffer = MklDnnTensor[Float](weight.size())
       }
     }
+
+    if (nInputPlane == 64) {
+      val tmp = 0
+    }
     val n_fwd = stream_fwd.length
+    println("stream_fwd " + stream_fwd(0) + "_" + stream_fwd(1))
     memoryPrimitives.clear()
     buffer.clear()
     memoryPrimitives.append(bias_memory, dst_memory)
     buffer.append(bias, output)
 
-    if (reorder_src_memory == 0L) {
+    if (reorder_src_memory_fwd == 0L) {
       // sync here
       if (input.getTensorType != MklDnnType) {
         MklDnnTensor.syncFromHeap(inputBuffer, input.storage().array(), input.storageOffset() - 1)
@@ -461,11 +504,11 @@ class ConvolutionDnn(
       memoryPrimitives.append(src_memory)
       buffer.append(inputBuffer)
     } else {
-      memoryPrimitives.append(src_memory, reorder_src_memory)
+      memoryPrimitives.append(src_memory, reorder_src_memory_fwd)
       buffer.append(input, inputBuffer)
     }
 
-    if (reorder_weights_memory == 0L) {
+    if (reorder_weights_memory_fwd == 0L) {
       // sync here
       if (weight.getTensorType != MklDnnType) {
         MklDnnTensor.syncFromHeap(weightsBuffer, weight.storage().array(), weight.storageOffset() - 1)
@@ -476,10 +519,14 @@ class ConvolutionDnn(
       memoryPrimitives.append(weights_memory)
       buffer.append(weightsBuffer)
     } else {
-      memoryPrimitives.append(weights_memory, reorder_weights_memory)
+      memoryPrimitives.append(weights_memory, reorder_weights_memory_fwd)
       buffer.append(weight, weightsBuffer)
     }
 
+    println("reorder_weights_memory " + reorder_weights_memory_fwd)
+    for (i <-0 to memoryPrimitives.length -1) {
+      println(s"i ${i} " + memoryPrimitives(i) + "_" + buffer(i).storage().array() + "_" + buffer(i).getFormat())
+    }
     MklDnnOps.streamSubmit(stream, n_fwd, stream_fwd.toArray, n_fwd,
       memoryPrimitives.toArray, buffer.toArray)
 
@@ -487,6 +534,15 @@ class ConvolutionDnn(
     if (System.getProperty("debug") == "2") {
       DnnTools.debugFwInfo(this.getName(), end1, input.getFormat(), output.getFormat())
     }
+
+//    val tmp = if (output.getFormat() != -1 && output.getFormat() != 5) {
+//      outputDebug.resizeAs(output)
+//      reorderTwoTensorAgain(output, output.getFormat(), outputDebug, 5)
+//      outputDebug
+//    } else {
+//      output
+//    }
+
     output
   }
 
@@ -528,29 +584,29 @@ class ConvolutionDnn(
         val res = MklDnnOps.reorderToInternal(gradOutput_memory,
                       bwd_data_pd, MklDnn.Query.diff_dst_pd, gradOutputBuffer, gradOutput.size())
         reorder_gradOutput = res._1
-        reorder_gradOutput_memory = res._2
+        reorder_gradOutput_memory_bwd = res._2
       }
-      internal_gradOutput_memory = if (reorder_gradOutput_memory == 0L) {
+      internal_gradOutput_memory = if (reorder_gradOutput_memory_bwd == 0L) {
         gradOutput_memory
       } else {
-        reorder_gradOutput_memory
+        reorder_gradOutput_memory_bwd
       }
 
       var reorder_weights: Long = 0L
       val f1 = MklDnnOps.queryFormat(bwd_data_pd, MklDnn.Query.weights_pd, 0)
       if (f1 == weightDnnFormat) {
-        reorder_weights_memory = 0L
+        reorder_weights_memory_bwd = 0L
       } else if (f1 != internal_weightFormat) {
         internal_weightFormat = f1
         val res = MklDnnOps.reorderToInternal(weights_memory, bwd_data_pd, MklDnn.Query.weights_pd,
           weightsBuffer, weight.size())
         reorder_weights = res._1
-        reorder_weights_memory = res._2
+        reorder_weights_memory_bwd = res._2
       }
-      internal_weights_memory = if (reorder_weights_memory == 0L) {
+      internal_weights_memory = if (reorder_weights_memory_bwd == 0L) {
         weights_memory
       } else {
-        reorder_weights_memory
+        reorder_weights_memory_bwd
       }
 
       val conv_inputs = Array(internal_gradOutput_memory, internal_weights_memory,
@@ -574,7 +630,7 @@ class ConvolutionDnn(
 
       // for gradOutput
       if ((gradOutputBuffer == null && gradOutput.getTensorType != MklDnnType)
-        || (reorder_gradOutput_memory != 0L)) {
+        || (reorder_gradOutput_memory_bwd != 0L)) {
         if (gradOutputBuffer != null) {
           gradOutputBuffer.release()
         }
@@ -589,7 +645,7 @@ class ConvolutionDnn(
     memoryPrimitives.clear()
     buffer.clear()
 
-    if (reorder_gradOutput_memory == 0L) {
+    if (reorder_gradOutput_memory_bwd == 0L) {
       // sync here
       if (gradOutput.getTensorType != MklDnnType) {
         MklDnnTensor.syncFromHeap(
@@ -601,14 +657,14 @@ class ConvolutionDnn(
       memoryPrimitives.append(gradOutput_memory, gradInput_memory)
       buffer.append(gradOutputBuffer, gradInput)
     } else {
-      memoryPrimitives.append(reorder_gradOutput_memory, gradInput_memory, gradOutput_memory)
+      memoryPrimitives.append(reorder_gradOutput_memory_bwd, gradInput_memory, gradOutput_memory)
       buffer.append(gradOutputBuffer, gradInput, gradOutput)
     }
     if (gradOutputBuffer.ptr == 0) {
-      println(s"${reorder_gradOutput_memory}, ${update_primitive}")
+      println(s"${reorder_gradOutput_memory_bwd}, ${update_primitive}")
       println(s"gradOutput.ptr ${gradOutput.asInstanceOf[MklDnnTensor[Float]].ptr} ${gradOutput.size().mkString("\t")}")
     }
-    if (reorder_weights_memory == 0L) {
+    if (reorder_weights_memory_bwd == 0L) {
       // sync here
       if (!weightsBuffer_sync) {
         if (weight.getTensorType != MklDnnType) {
@@ -620,7 +676,7 @@ class ConvolutionDnn(
       memoryPrimitives.append(weights_memory)
       buffer.append(weightsBuffer)
     } else {
-      memoryPrimitives.append(weights_memory, reorder_weights_memory)
+      memoryPrimitives.append(weights_memory, reorder_weights_memory_bwd)
       buffer.append(weight, weightsBuffer)
     }
 
@@ -682,35 +738,35 @@ class ConvolutionDnn(
       var reorder_gradOutput: Long = 0L
       val f1 = MklDnnOps.queryFormat(weights_pd, MklDnn.Query.diff_dst_pd, 0)
       if (f1 == gradOutput.getFormat()) {
-        reorder_gradOutput_memory = 0L
+        reorder_gradOutput_memory_acc = 0L
       } else if ( f1 != internal_gradOutputFormat) {
         internal_gradOutputFormat = f1
         val res = MklDnnOps.reorderToInternal(gradOutput_memory, weights_pd,
           MklDnn.Query.diff_dst_pd, gradOutputBuffer, gradOutput.size())
         reorder_gradOutput = res._1
-        reorder_gradOutput_memory = res._2
+        reorder_gradOutput_memory_acc = res._2
       }
-      internal_gradOutput_memory = if (reorder_gradOutput_memory == 0L) {
+      internal_gradOutput_memory = if (reorder_gradOutput_memory_acc == 0L) {
         gradOutput_memory
       } else {
-        reorder_gradOutput_memory
+        reorder_gradOutput_memory_acc
       }
 
       var reorder_src: Long = 0L
       val f2 = MklDnnOps.queryFormat(weights_pd, MklDnn.Query.src_pd, 0)
       if (f2 == input.getFormat()) {
-        reorder_src_memory = 0L
+        reorder_src_memory_acc = 0L
       } else if ( f2 != internal_inputFormat) {
         internal_inputFormat = f2
         val res = MklDnnOps.reorderToInternal(src_memory, weights_pd, MklDnn.Query.src_pd,
           inputBuffer, input.size())
         reorder_src = res._1
-        reorder_src_memory = res._2
+        reorder_src_memory_acc = res._2
       }
-      internal_src_memory = if (reorder_src_memory == 0L) {
+      internal_src_memory = if (reorder_src_memory_acc == 0L) {
         src_memory
       } else {
-        reorder_src_memory
+        reorder_src_memory_acc
       }
 
       val conv_inputs = Array(internal_src_memory, internal_gradOutput_memory)
@@ -746,7 +802,7 @@ class ConvolutionDnn(
 
       // for gradOutput
       if ((gradOutputBuffer == null && gradOutput.getTensorType != MklDnnType)
-        || (reorder_gradOutput_memory != 0L && gradOutputBuffer == null)) {
+        || (reorder_gradOutput_memory_acc != 0L && gradOutputBuffer == null)) {
         gradOutputBuffer = MklDnnTensor[Float](gradOutput.size())
       } else if (gradOutputBuffer != null && gradOutputBuffer.nElement() != gradOutput.nElement()) {
         gradOutputBuffer.release()
@@ -782,7 +838,7 @@ class ConvolutionDnn(
       buffer.append(gradWeight, gradBias, gradWeightBuffer)
     }
 
-    if (reorder_src_memory == 0L) {
+    if (reorder_src_memory_acc == 0L) {
       // sync here
       if (!inputBuffer_sync) {
         if (input.getTensorType != MklDnnType) {
@@ -794,11 +850,11 @@ class ConvolutionDnn(
       memoryPrimitives.append(src_memory)
       buffer.append(inputBuffer)
     } else {
-      memoryPrimitives.append(src_memory, reorder_src_memory)
+      memoryPrimitives.append(src_memory, reorder_src_memory_acc)
       buffer.append(input, inputBuffer)
     }
 
-    if (reorder_gradOutput_memory == 0L) {
+    if (reorder_gradOutput_memory_acc == 0L) {
       // sync here
       if (!gradOutputBuffer_sync) {
         if (gradOutput.getTensorType != MklDnnType) {
@@ -810,7 +866,7 @@ class ConvolutionDnn(
       memoryPrimitives.append(gradOutput_memory)
       buffer.append(gradOutputBuffer)
     } else {
-      memoryPrimitives.append(gradOutput_memory, reorder_gradOutput_memory)
+      memoryPrimitives.append(gradOutput_memory, reorder_gradOutput_memory_acc)
       buffer.append(gradOutput, gradOutputBuffer)
     }
 
