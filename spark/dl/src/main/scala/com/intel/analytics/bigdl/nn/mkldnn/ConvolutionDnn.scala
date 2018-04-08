@@ -482,7 +482,7 @@ class ConvolutionDnn(
       val tmp = 0
     }
     val n_fwd = stream_fwd.length
-    println("stream_fwd " + stream_fwd(0) + "_" + stream_fwd(1))
+    // println("stream_fwd " + stream_fwd(0) + "_" + stream_fwd(1))
     memoryPrimitives.clear()
     buffer.clear()
     memoryPrimitives.append(bias_memory, dst_memory)
@@ -516,10 +516,10 @@ class ConvolutionDnn(
       buffer.append(weight, weightsBuffer)
     }
 
-    println("reorder_weights_memory " + reorder_weights_memory_fwd)
-    for (i <-0 to memoryPrimitives.length -1) {
-      println(s"i ${i} " + memoryPrimitives(i) + "_" + buffer(i).storage().array() + "_" + buffer(i).getFormat())
-    }
+//    println("reorder_weights_memory " + reorder_weights_memory_fwd)
+//    for (i <-0 to memoryPrimitives.length -1) {
+//      println(s"i ${i} " + memoryPrimitives(i) + "_" + buffer(i).storage().array() + "_" + buffer(i).getFormat())
+//    }
     MklDnnOps.streamSubmit(stream, n_fwd, stream_fwd.toArray, n_fwd,
       memoryPrimitives.toArray, buffer.toArray)
 
