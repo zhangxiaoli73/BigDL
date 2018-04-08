@@ -344,8 +344,8 @@ class ModelSpec extends FlatSpec with Matchers {
       DnnUtils.nearequals(grad1, userGrad2, 1e-3) should be (true)
     }
 
-//    DnnUtils.getunequals(blas.getParameters()._1, dnn.getParameters()._1, 1e-10) should be (true)
- //   DnnUtils.getunequals(blas.getParameters()._2, dnn.getParameters()._2, 1e-3) should be (true)
+    DnnUtils.getunequals(blas.getParameters()._1, dnn.getParameters()._1, 1e-10) should be (true)
+    DnnUtils.getunequals(blas.getParameters()._2, dnn.getParameters()._2, 1e-3) should be (true)
 
     println("done")
   }
