@@ -342,6 +342,23 @@ class ConvolutionDnn(
     if (engine == 0L) engine = this.getDnnEngine(0)
     if (stream == 0L) stream = this.getStream()
 
+
+    // for input
+    if (inputBuffer == null) {
+      inputBuffer = MklDnnTensor[Float](input.size())
+    } else if (inputBuffer != null && inputBuffer.nElement() != input.nElement()) {
+      inputBuffer.release()
+      inputBuffer = MklDnnTensor[Float](input.size())
+    }
+
+    // for weight
+    if (weightsBuffer == null) {
+      weightsBuffer = MklDnnTensor[Float](weight.size())
+    } else if (weightsBuffer != null && weightsBuffer.nElement() != weight.nElement()) {
+      weightsBuffer.release()
+      weightsBuffer = MklDnnTensor[Float](weight.size())
+    }
+
     if (inputElement != input.nElement()) {
       update_primitive = true
       inputElement = input.nElement()
@@ -459,24 +476,6 @@ class ConvolutionDnn(
         stream_fwd.append(reorder_weights)
       }
       stream_fwd.append(conv_fwd)
-
-      // for input
-      if ((inputBuffer == null && input.getTensorType != MklDnnType)
-        || (reorder_src_memory_fwd != 0L && inputBuffer == null)) {
-        inputBuffer = MklDnnTensor[Float](input.size())
-      } else if (inputBuffer != null && inputBuffer.nElement() != input.nElement()) {
-        inputBuffer.release()
-        inputBuffer = MklDnnTensor[Float](input.size())
-      }
-
-      // for weight
-      if ((weightsBuffer == null && weight.getTensorType != MklDnnType)
-        || (reorder_weights_memory_fwd != 0L && weightsBuffer == null)) {
-          weightsBuffer = MklDnnTensor[Float](weight.size())
-      } else if (weightsBuffer != null && weightsBuffer.nElement() != weight.nElement()) {
-        weightsBuffer.release()
-        weightsBuffer = MklDnnTensor[Float](weight.size())
-      }
     }
 
     if (nInputPlane == 64) {
@@ -494,13 +493,8 @@ class ConvolutionDnn(
       if (input.getTensorType != MklDnnType) {
         MklDnnTensor.syncFromHeap(inputBuffer, input.storage().array(), input.storageOffset() - 1)
       } else {
-        if (inputBuffer != null && inputBuffer.ptr != 0 &&
-          inputBuffer.ptr != input.asInstanceOf[MklDnnTensor[Float]].ptr) {
-          inputBuffer.release()
-        }
-        inputBuffer = input.asInstanceOf[MklDnnTensor[Float]]
+        inputBuffer.copy(input)
       }
-      inputBuffer_sync = true
       memoryPrimitives.append(src_memory)
       buffer.append(inputBuffer)
     } else {
@@ -513,9 +507,8 @@ class ConvolutionDnn(
       if (weight.getTensorType != MklDnnType) {
         MklDnnTensor.syncFromHeap(weightsBuffer, weight.storage().array(), weight.storageOffset() - 1)
       } else {
-        weightsBuffer = weight.asInstanceOf[MklDnnTensor[Float]]
+        weightsBuffer.copy(weight)
       }
-      weightsBuffer_sync = true
       memoryPrimitives.append(weights_memory)
       buffer.append(weightsBuffer)
     } else {
@@ -535,19 +528,18 @@ class ConvolutionDnn(
       DnnTools.debugFwInfo(this.getName(), end1, input.getFormat(), output.getFormat())
     }
 
-//    val tmp = if (output.getFormat() != -1 && output.getFormat() != 5) {
-//      outputDebug.resizeAs(output)
-//      reorderTwoTensorAgain(output, output.getFormat(), outputDebug, 5)
-//      outputDebug
-//    } else {
-//      output
-//    }
-
     output
   }
 
   override def updateGradInput(input: Tensor[Float], gradOutput: Tensor[Float]): Tensor[Float] = {
     val s1 = System.nanoTime()
+    // for gradOutput
+    if (gradOutputBuffer == null) {
+      gradOutputBuffer = MklDnnTensor[Float](gradOutput.size())
+    } else if (gradOutputBuffer != null && gradOutputBuffer.nElement() != gradOutput.nElement()) {
+      gradOutputBuffer.release()
+      gradOutputBuffer = MklDnnTensor[Float](gradOutput.size())
+    }
     if (!propagateBack) {
       return gradInput
     }
@@ -627,18 +619,6 @@ class ConvolutionDnn(
         stream_bwd.append(reorder_weights)
       }
       stream_bwd.append(conv_bwd)
-
-      // for gradOutput
-      if ((gradOutputBuffer == null && gradOutput.getTensorType != MklDnnType)
-        || (reorder_gradOutput_memory_bwd != 0L)) {
-        if (gradOutputBuffer != null) {
-          gradOutputBuffer.release()
-        }
-        gradOutputBuffer = MklDnnTensor[Float](gradOutput.size())
-      } else if (gradOutputBuffer != null && gradOutputBuffer.nElement() != gradOutput.nElement()) {
-        gradOutputBuffer.release()
-        gradOutputBuffer = MklDnnTensor[Float](gradOutput.size())
-      }
     }
 
     val n_bwd = stream_bwd.length
@@ -651,9 +631,8 @@ class ConvolutionDnn(
         MklDnnTensor.syncFromHeap(
           gradOutputBuffer, gradOutput.storage().array(), gradOutput.storageOffset() - 1)
       } else {
-        gradOutputBuffer = gradOutput.asInstanceOf[MklDnnTensor[Float]]
+        gradOutputBuffer.copy(gradOutput)
       }
-      gradOutputBuffer_sync = true
       memoryPrimitives.append(gradOutput_memory, gradInput_memory)
       buffer.append(gradOutputBuffer, gradInput)
     } else {
@@ -670,7 +649,7 @@ class ConvolutionDnn(
         if (weight.getTensorType != MklDnnType) {
           MklDnnTensor.syncFromHeap(weightsBuffer, weight.storage().array(), weight.storageOffset() - 1)
         } else {
-          weightsBuffer = weight.asInstanceOf[MklDnnTensor[Float]]
+          weightsBuffer.copy(weight)
         }
       }
       memoryPrimitives.append(weights_memory)
@@ -691,6 +670,13 @@ class ConvolutionDnn(
 
   override def accGradParameters(input: Tensor[Float], gradOutput: Tensor[Float]): Unit = {
     val s1 = System.nanoTime()
+    // for gradWeight
+    if (gradWeightBuffer == null) {
+      gradWeightBuffer = MklDnnTensor[Float](gradWeight.size())
+    } else if (gradWeightBuffer != null && gradWeightBuffer.nElement() != gradWeight.nElement()) {
+      gradWeightBuffer.release()
+      gradWeightBuffer = MklDnnTensor[Float](gradWeight.size())
+    }
     if (update_primitive) {
       if (!propagateBack) {
         gradOutput_md = MklDnnOps.memoryDescInit(gradOutput.dim(), gradOutput.size(), dataType,
@@ -790,29 +776,6 @@ class ConvolutionDnn(
         stream_acc.append(reorder_src)
       }
       stream_acc.append(conv_acc)
-
-      // for gradWeight
-      if ((gradWeightBuffer == null && gradWeight.getTensorType != MklDnnType)
-        || (reorder_gradWeights_memory != 0L && gradWeightBuffer == null)) {
-        gradWeightBuffer = MklDnnTensor[Float](gradWeight.size())
-      } else if (gradWeightBuffer != null && gradWeightBuffer.nElement() != gradWeight.nElement()) {
-        gradWeightBuffer.release()
-        gradWeightBuffer = MklDnnTensor[Float](gradWeight.size())
-      }
-
-      // for gradOutput
-      if ((gradOutputBuffer == null && gradOutput.getTensorType != MklDnnType)
-        || (reorder_gradOutput_memory_acc != 0L && gradOutputBuffer == null)) {
-        gradOutputBuffer = MklDnnTensor[Float](gradOutput.size())
-      } else if (gradOutputBuffer != null && gradOutputBuffer.nElement() != gradOutput.nElement()) {
-        gradOutputBuffer.release()
-        gradOutputBuffer = MklDnnTensor[Float](gradOutput.size())
-      }
-
-      if (inputBuffer != null && reorder_src != 0 && input.isInstanceOf[MklDnnTensor[Float]] &&
-        input.asInstanceOf[MklDnnTensor[Float]].ptr == inputBuffer.asInstanceOf[MklDnnTensor[Float]].ptr) {
-        inputBuffer = MklDnnTensor[Float](input.size())
-      }
     }
     /* build a simple net */
     // keep original data
@@ -829,7 +792,7 @@ class ConvolutionDnn(
         MklDnnTensor.syncFromHeap(
           gradWeightBuffer, gradWeight.storage().array(), gradWeight.storageOffset() - 1)
       } else {
-        gradWeightBuffer = gradWeight.asInstanceOf[MklDnnTensor[Float]]
+        gradWeightBuffer.copy(gradWeight)
       }
       memoryPrimitives.append(gradBias_memory, gradWeights_memory)
       buffer.append(gradBias, gradWeightBuffer)
@@ -839,13 +802,10 @@ class ConvolutionDnn(
     }
 
     if (reorder_src_memory_acc == 0L) {
-      // sync here
-      if (!inputBuffer_sync) {
-        if (input.getTensorType != MklDnnType) {
-          MklDnnTensor.syncFromHeap(inputBuffer, input.storage().array(), input.storageOffset() - 1)
-        } else {
-          inputBuffer = input.asInstanceOf[MklDnnTensor[Float]]
-        }
+      if (input.getTensorType != MklDnnType) {
+        MklDnnTensor.syncFromHeap(inputBuffer, input.storage().array(), input.storageOffset() - 1)
+      } else {
+        inputBuffer.copy(input)
       }
       memoryPrimitives.append(src_memory)
       buffer.append(inputBuffer)
@@ -855,13 +815,10 @@ class ConvolutionDnn(
     }
 
     if (reorder_gradOutput_memory_acc == 0L) {
-      // sync here
-      if (!gradOutputBuffer_sync) {
-        if (gradOutput.getTensorType != MklDnnType) {
-          MklDnnTensor.syncFromHeap(gradOutputBuffer, gradOutput.storage().array(), gradOutput.storageOffset() - 1)
-        } else {
-          gradOutputBuffer = gradOutput.asInstanceOf[MklDnnTensor[Float]]
-        }
+      if (gradOutput.getTensorType != MklDnnType) {
+        MklDnnTensor.syncFromHeap(gradOutputBuffer, gradOutput.storage().array(), gradOutput.storageOffset() - 1)
+      } else {
+        gradOutputBuffer.copy(gradOutput)
       }
       memoryPrimitives.append(gradOutput_memory)
       buffer.append(gradOutputBuffer)
