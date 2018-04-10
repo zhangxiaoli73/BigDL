@@ -317,7 +317,7 @@ class ModelSpec extends FlatSpec with Matchers {
     val input = Tensor[Float](4, 3, 32, 32).apply1(e => RNG.uniform(-1, 1).toFloat)
     val gradOutput = Tensor[Float]()
 
-    for (i <- 0  to 1) {
+    for (i <- 0  to 2) {
       println("round " + i)
       DnnUtils.getunequals(blas.getParameters()._1, dnn.getParameters()._1, 1e-10) should be (true)
       val out1 = blas.forward(input).toTensor[Float]
@@ -342,10 +342,12 @@ class ModelSpec extends FlatSpec with Matchers {
         userGrad2 = grad2
       }
       DnnUtils.nearequals(grad1, userGrad2, 1e-3) should be (true)
+
+      DnnUtils.getunequals(blas.getParameters()._2, dnn.getParameters()._2, 2e-2) should be (true)
     }
 
-//    DnnUtils.getunequals(blas.getParameters()._1, dnn.getParameters()._1, 1e-10) should be (true)
- //   DnnUtils.getunequals(blas.getParameters()._2, dnn.getParameters()._2, 1e-3) should be (true)
+    DnnUtils.getunequals(blas.getParameters()._1, dnn.getParameters()._1, 1e-10) should be (true)
+    DnnUtils.getunequals(blas.getParameters()._2, dnn.getParameters()._2, 2e-2) should be (true)
 
     println("done")
   }
