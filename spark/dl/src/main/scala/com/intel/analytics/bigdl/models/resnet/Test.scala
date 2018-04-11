@@ -21,8 +21,8 @@ import com.intel.analytics.bigdl.dataset.{ByteRecord, DataSet}
 import com.intel.analytics.bigdl.nn.Module
 import com.intel.analytics.bigdl.utils.Engine
 import com.intel.analytics.bigdl.models.resnet.Utils._
-import com.intel.analytics.bigdl.optim.{Top1Accuracy, ValidationMethod, ValidationResult}
-import com.intel.analytics.bigdl.dataset.image.{HFlip, _}
+import com.intel.analytics.bigdl.optim.{Top1Accuracy, Top5Accuracy, ValidationMethod, ValidationResult}
+import com.intel.analytics.bigdl.dataset.image.{BGRImgCropper, BGRImgNormalizer, HFlip, _}
 import com.intel.analytics.bigdl.models.resnet.ResNet.DatasetType
 import org.apache.hadoop.io.Text
 import org.apache.log4j.{Level, Logger}
@@ -56,9 +56,9 @@ object Test {
         }).coalesce(partitionNum, true)
 
       val rddData = DataSet.SeqFileFolder.filesToRdd(param.folder, sc, 1000)
-      val transformer = (BytesToBGRImg() -> BGRImgCropper(imageSize, imageSize)
-        -> ColorJitter() -> Lighting() -> BGRImgNormalizer(0.485, 0.456, 0.406, 0.229, 0.224, 0.225)
-        ) -> HFlip(0.5) -> BGRImgToSample()
+      val transformer = (BytesToBGRImg()
+        -> BGRImgNormalizer(0.485, 0.456, 0.406, 0.229, 0.224, 0.225)
+        ) -> BGRImgCropper(imageSize, imageSize, CropCenter) -> BGRImgToSample()
 
       val evaluationSet = transformer(rddData)
 
@@ -69,7 +69,8 @@ object Test {
 
       val model = Module.load[Float](param.model)
       println(model)
-      val result = model.evaluate(evaluationSet, Array(new Top1Accuracy[Float]),
+      val result = model.evaluate(evaluationSet,
+        Array(new Top1Accuracy[Float], new Top5Accuracy[Float]),
         Some(param.batchSize))
       result.foreach(r => println(s"${r._2} is ${r._1}"))
 

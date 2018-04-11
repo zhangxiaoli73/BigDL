@@ -31,7 +31,7 @@ object Utils {
     modelSnapshot: Option[String] = None,
     stateSnapshot: Option[String] = None,
     optnet: Boolean = false,
-    depth: Int = 20,
+    depth: Int = 50,
     classes: Int = 10,
     shortcutType: String = "A",
     batchSize: Int = 128,

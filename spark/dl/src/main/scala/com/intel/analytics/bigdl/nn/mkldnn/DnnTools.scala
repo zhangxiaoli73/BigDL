@@ -743,7 +743,6 @@ object ResNet_dnn {
 //        .add(ReLUDnn(true).setName(s"res${name}_branch2b_relu"))
 //        .add(mkldnn.Convolution(n, n*4, 1, 1, 1, 1, 0, 0,
 //          optnet = optnet).setName(s"res${name}_branch2c"))
-
       s.add(mkldnn.Convolution(nInputPlane, n, 1, 1, stride, stride, 0, 0,
         optnet = optnet).setName(s"res${name}_branch2a"))
         .add(mkldnn.SbnDnn(n).setName(s"bn${name}_branch2a"))
@@ -754,7 +753,6 @@ object ResNet_dnn {
         .add(ReLUDnn(true).setName(s"res${name}_branch2b_relu"))
         .add(mkldnn.Convolution(n, n*4, 1, 1, 1, 1, 0, 0,
           optnet = optnet).setName(s"res${name}_branch2c"))
-
 
         if (isZero) {
           println("zero name " + s"bn${name}_branch2c")
