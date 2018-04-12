@@ -15,6 +15,8 @@
  */
 package com.intel.analytics.bigdl.nn.mkldnn
 
+import breeze.linalg
+import breeze.linalg.dim
 import com.intel.analytics.bigdl.mkl.MklDnn
 import com.intel.analytics.bigdl.nn.Dropout
 import com.intel.analytics.bigdl.nn.abstractnn.TensorModule

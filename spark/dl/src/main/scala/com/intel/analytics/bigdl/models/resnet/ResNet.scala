@@ -45,19 +45,16 @@ object Convolution {
      nGroup: Int = 1,
      propagateBack: Boolean = true,
      optnet: Boolean = true,
-     weightDecay: Double = 1e-4)
+     withBias2: Boolean = false)
      (implicit ev: TensorNumeric[T]): SpatialConvolution[T] = {
-    val wReg = L2Regularizer[T](weightDecay)
-    val bReg = L2Regularizer[T](weightDecay)
     val conv = if (optnet) {
       SpatialShareConvolution[T](nInputPlane, nOutputPlane, kernelW, kernelH,
-        strideW, strideH, padW, padH, nGroup, propagateBack, wReg, bReg)
+        strideW, strideH, padW, padH, nGroup, propagateBack)
     } else {
       SpatialConvolution[T](nInputPlane, nOutputPlane, kernelW, kernelH,
-        strideW, strideH, padW, padH, nGroup, propagateBack, wReg, bReg)
+        strideW, strideH, padW, padH, nGroup, propagateBack, withBias = withBias2)
     }
     conv.setInitMethod(MsraFiller(false), Zeros)
-//    conv.setInitMethod(MsraFiller(false))
     conv
   }
 }
@@ -66,12 +63,10 @@ object Sbn {
   def apply[@specialized(Float, Double) T: ClassTag](
     nOutput: Int,
     eps: Double = 1e-3,
-    momentum: Double = 0.1,
-//    momentum: Double = 0.9,
+    momentum: Double = 0.9,
     affine: Boolean = true)
   (implicit ev: TensorNumeric[T]): SpatialBatchNormalization[T] = {
     SpatialBatchNormalization[T](nOutput, eps, momentum, affine).setInitMethod(Ones, Zeros)
-//    SpatialBatchNormalization[T](nOutput, eps, momentum, affine).setInitMethod(Ones)
   }
 }
 
@@ -208,7 +203,8 @@ object ResNet {
         .add(Sbn(n))
         .add(ReLU(true))
         .add(Convolution(n, n*4, 1, 1, 1, 1, 0, 0, optnet = optnet))
-        .add(Sbn(n * 4).setInitMethod(Zeros, Zeros))
+        .add(Sbn(n * 4))
+ //       .add(Sbn(n * 4).setInitMethod(Zeros, Zeros))
 //        .add(Sbn(n * 4).setInitMethod(Zeros))
 
       Sequential()
@@ -251,19 +247,18 @@ object ResNet {
       iChannels = 64
       logger.info(" | ResNet-" + depth + " ImageNet")
 
-      model.add(Convolution(3, 64, 7, 7, 2, 2, 3, 3, optnet = optnet, propagateBack = false))
+      model.add(Convolution(3, 64, 7, 7, 2, 2, 3, 3, optnet = optnet, withBias2 = true))
         .add(Sbn(64))
         .add(ReLU(true))
-        .add(SpatialMaxPooling(3, 3, 2, 2, 1, 1))
+        .add(SpatialMaxPooling(3, 3, 2, 2, 0, 0))
         .add(layer(block, 64, loopConfig._1))
         .add(layer(block, 128, loopConfig._2, 2))
         .add(layer(block, 256, loopConfig._3, 2))
         .add(layer(block, 512, loopConfig._4, 2))
         .add(SpatialAveragePooling(7, 7, 1, 1))
         .add(View(nFeatures).setNumInputDims(3))
-        .add(Linear(nFeatures, classNum, true, L2Regularizer(1e-4), L2Regularizer(1e-4))
+        .add(Linear(nFeatures, classNum, true)
           .setInitMethod(RandomNormal(0.0, 0.01), Zeros))
-//          .setInitMethod(RandomNormal(0.0, 0.01)))
     } else if (dataSet == DatasetType.CIFAR10) {
       require((depth - 2)%6 == 0,
         "depth should be one of 20, 32, 44, 56, 110, 1202")

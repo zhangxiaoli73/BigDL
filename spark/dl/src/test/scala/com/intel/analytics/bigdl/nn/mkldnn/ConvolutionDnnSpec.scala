@@ -89,6 +89,54 @@ class ConvolutionDnnSpec extends FlatSpec with Matchers {
     println("fwd weight format %d ", internal_weightFormat)
   }
 
+
+  "ConvolutionDnn with nobias and ngroup=1" should "work correctly" in {
+    val nInputPlane = 2
+    val nOutputPlane = 4
+    val kW = 3
+    val kH = 3
+    val dW = 4
+    val dH = 4
+    val padW = 0
+    val padH = 0
+    val withBias = false
+
+    val input = Tensor[Float](2, 2, 23, 23).apply1(e => Random.nextFloat())
+    val gradOutput = Tensor[Float](2, 4, 6, 6).apply1(e => Random.nextFloat())
+    RNG.setSeed(100)
+    val conv = ConvolutionDnn(nInputPlane, nOutputPlane, kW, kH, dW, dH, padW, padH,
+      withBias = withBias)
+    RNG.setSeed(100)
+    val layer = SpatialConvolution[Float](nInputPlane, nOutputPlane, kW, kH, dW, dH, padW, padH,
+      withBias = withBias)
+
+    val output = conv.forward(input)
+    val grad1 = conv.updateGradInput(input, gradOutput)
+    conv.accGradParameters(input, gradOutput)
+    conv.accGradParameters(input, gradOutput)
+    val weight1 = conv.weight
+    val gradweight1 = conv.gradWeight
+    val bias1 = conv.bias
+    val gradbias1 = conv.gradBias
+    val output2 = layer.forward(input)
+    val grad2 = layer.updateGradInput(input, gradOutput)
+    layer.accGradParameters(input, gradOutput)
+    layer.accGradParameters(input, gradOutput)
+    val weight2 = layer.weight
+    val gradweight2 = layer.gradWeight
+    val bias2 = conv.bias
+    val gradbias2 = conv.gradBias
+
+    DnnUtils.nearequals(weight1, weight2) should be(true)
+    DnnUtils.nearequals(gradweight1, gradweight2) should be(true)
+    if (withBias) {
+      DnnUtils.nearequals(bias1, bias2) should be(true)
+      DnnUtils.nearequals(gradbias1, gradbias2) should be(true)
+    }
+    DnnUtils.nearequals(output, output2) should be(true)
+    DnnUtils.nearequals(grad1, grad2) should be(true)
+  }
+
   "ConvolutionDnn with format=nchw and ngroup=1" should "work correctly" in {
       val nInputPlane = 2
       val nOutputPlane = 4

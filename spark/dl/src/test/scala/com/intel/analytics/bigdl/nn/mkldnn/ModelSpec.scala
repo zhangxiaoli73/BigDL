@@ -22,7 +22,7 @@ import com.intel.analytics.bigdl.models.inception
 import com.intel.analytics.bigdl.models.inception.{Inception_v1, Inception_v1_NoAuxClassifier, Inception_v2}
 import com.intel.analytics.bigdl.models.resnet.ResNet
 import com.intel.analytics.bigdl.models.resnet.ResNet.DatasetType
-import com.intel.analytics.bigdl.models.vgg.{VggForCifar10, Vgg_16, Vgg_19}
+import com.intel.analytics.bigdl.models.vgg.{Vgg_16, Vgg_19}
 import com.intel.analytics.bigdl.nn.{Module => _, _}
 import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.utils.RandomGenerator._
@@ -69,7 +69,7 @@ class ModelSpec extends FlatSpec with Matchers {
         (Vgg_19_dnn(1000, false), MiniBatch(Tensor[Float](batchSize, 3, 224, 224)
           .apply1(e => RNG.uniform(0, 1).toFloat), Tensor[Float](batchSize, 1000).randn()))
       case "resnet_50" =>
-        val model = ResNet(classNum = 1000, T("depth" -> 50, "optnet" -> true,
+        val model = ResNet(classNum = 1000, T("depth" -> 50, "optnet" -> false,
           "dataSet" -> DatasetType.ImageNet))
 //        ResNet.shareGradInput(model)
 //        ResNet.modelInit(model)
@@ -77,7 +77,7 @@ class ModelSpec extends FlatSpec with Matchers {
           .apply1(e => RNG.uniform(0, 1).toFloat), Tensor[Float](batchSize, 1000).randn()))
 
       case "resnet_50_dnn" =>
-        val model = ResNet_dnn(classNum = 1000, T("depth" -> 50, "optnet" -> true,
+        val model = ResNet_dnn(classNum = 1000, T("depth" -> 50, "optnet" -> false,
           "dataSet" -> ResNet_dnn.DatasetType.ImageNet))
         //        ResNet_dnn.shareGradInput(model)
 //        ResNet_dnn.modelInit(model)
@@ -222,17 +222,7 @@ class ModelSpec extends FlatSpec with Matchers {
     println("compare params")
     DnnUtils.nearequals(weightAll1, weightAll2, 1e-4) should be(true)
     DnnUtils.nearequals(biasAll1, biasAll2, 1e-3) should be(true)
-//
-//    val params1 = model1.parameters()._2
-//    val params2 = model2.parameters()._2
-//
-//    params1.length should be (params2.length)
-//
-//    for (i <- params1.indices.reverse) {
-//      DnnUtils.nearequals(params1(i), params2(i)) should be (true)
-//      println(s"module $i done")
-//    }
-//    DnnUtils.nearequals(model1.getParameters()._2, model2.getParameters()._2) should be (true)
+
     println("done")
   }
 
@@ -300,54 +290,6 @@ class ModelSpec extends FlatSpec with Matchers {
     DnnUtils.nearequals(weight1, weight2, 1e-4) should be(true)
     DnnUtils.getunequals(bias1, bias2, 1e-2) should be(true)
 
-
-    println("done")
-  }
-
-  "VGG on Cifar10" should "work correctly" in {
-    RNG.setSeed(1)
-    val dnn = VggForCifar10.dnn(10, hasDropout = false)
-    RNG.setSeed(1)
-    val blas = VggForCifar10(10, hasDropout = false)
-
-    dnn.getParameters()._1.copy(blas.getParameters()._1)
-    dnn.getParameters()._1 should be (blas.getParameters()._1)
-
-    RNG.setSeed(10)
-    val input = Tensor[Float](4, 3, 32, 32).apply1(e => RNG.uniform(-1, 1).toFloat)
-    val gradOutput = Tensor[Float]()
-
-    for (i <- 0  to 2) {
-      println("round " + i)
-      DnnUtils.getunequals(blas.getParameters()._1, dnn.getParameters()._1, 1e-10) should be (true)
-      val out1 = blas.forward(input).toTensor[Float]
-      val out2 = dnn.forward(input).toTensor[Float]
-
-      var userOut2 = Tensor[Float]()
-      if (out1.getFormat() != out2.getFormat() && out2.getFormat() != 5 && out2.getFormat() != 4) {
-        DnnUtils.reorderToUser(out2, userOut2, 5)
-      } else {
-        userOut2 = out2
-      }
-      DnnUtils.nearequals(out1, userOut2, 1e-3) should be (true)
-
-      gradOutput.resizeAs(blas.output.toTensor[Float]).copy(blas.output.toTensor[Float])
-      val grad1 = blas.backward(input, gradOutput).toTensor[Float]
-      val grad2 = dnn.backward(input, gradOutput).toTensor[Float]
-
-      var userGrad2 = Tensor[Float]()
-      if (grad1.getFormat() != grad2.getFormat() && grad2.getFormat() != 5 && grad2.getFormat() != 4) {
-        DnnUtils.reorderToUser(grad2, userGrad2, 5)
-      } else {
-        userGrad2 = grad2
-      }
-      DnnUtils.nearequals(grad1, userGrad2, 1e-3) should be (true)
-
-      DnnUtils.getunequals(blas.getParameters()._2, dnn.getParameters()._2, 2e-2) should be (true)
-    }
-
-    DnnUtils.getunequals(blas.getParameters()._1, dnn.getParameters()._1, 1e-10) should be (true)
-    DnnUtils.getunequals(blas.getParameters()._2, dnn.getParameters()._2, 2e-2) should be (true)
 
     println("done")
   }

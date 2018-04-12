@@ -81,6 +81,9 @@ class ConcatDnn(val dimension: Int) extends Container[Tensor[Float], Tensor[Floa
 
   def reorderToUser(input: Tensor[Float], output: Tensor[Float],
                     outputFormat: Int, num: Int): Unit = {
+    if (stream_reOrder == null) {
+      stream_reOrder = new Array[Array[Long]](this.modules.length)
+    }
     if (update_primitive) {
       val sizes = input.size()
       val dim = input.dim()
@@ -89,9 +92,10 @@ class ConcatDnn(val dimension: Int) extends Container[Tensor[Float], Tensor[Floa
       val src_pd = input.getPrimitiveDesc()
       reorder_dst_memory(num) = MklDnnOps.initDataMemory(dim, sizes, outputFormat, dataType, engine)
       val res = MklDnnOps.prepareReorder(reorder_dst_memory(num), src_pd, false)
+      // val reorder_primitive = res._1
+      reorder_src_memory(num) = res._2
 
       stream_reOrder(num)(0) = res._1
-      reorder_src_memory(num) = res._2
     }
     /* build a simple net */
     val memoryPrimitives = Array(reorder_src_memory(num), reorder_dst_memory(num))
@@ -105,8 +109,6 @@ class ConcatDnn(val dimension: Int) extends Container[Tensor[Float], Tensor[Floa
     if (outBuffers == null) outBuffers = new Array[MklDnnTensor[Float]](modules.length)
     if (resultsMPD == null) resultsMPD = new Array[Long](this.modules.length)
     if (resultsPrimitive == null) resultsPrimitive = new Array[Long](this.modules.length)
-    if (stream_reOrder == null) stream_reOrder = new Array[Array[Long]](this.modules.length)
-
 
     if (engine == 0L) engine = this.getDnnEngine(0)
     if (stream == 0L) stream = this.getStream()
@@ -141,6 +143,14 @@ class ConcatDnn(val dimension: Int) extends Container[Tensor[Float], Tensor[Floa
         case -1 => default_format
         case _ => currentOut.getFormat()
       }
+      // reorder all output to user format
+      if (outBuffers(i) == null) {
+        outBuffers(i) = MklDnnTensor[Float](currentOut.size())
+      } else if (outBuffers(i) != null && outBuffers(i).nElement() != currentOut.nElement()) {
+        println("ConcatDnn: release and re allocate")
+        outBuffers(i).release()
+        outBuffers(i) = MklDnnTensor[Float](currentOut.size())
+      }
 
       if (update_primitive) {
         val md = MklDnnOps.memoryDescInit(currentOut.dim(), currentOut.size(), dataType, user_format)
@@ -148,13 +158,6 @@ class ConcatDnn(val dimension: Int) extends Container[Tensor[Float], Tensor[Floa
         resultsPrimitive(i) = MklDnn.PrimitiveCreate0(resultsMPD(i))
       }
 
-      // reorder all output to user format
-      if (outBuffers(i) == null) {
-        outBuffers(i) = MklDnnTensor[Float](currentOut.size())
-      } else if (outBuffers(i) != null && outBuffers(i).nElement() != currentOut.nElement()) {
-        outBuffers(i).release()
-        outBuffers(i) = MklDnnTensor[Float](currentOut.size())
-      }
       if (format != user_format) {
         // if (outBuffers(i) == null) outBuffers(i) = MklDnnTensor[Float](currentOut.size())
         reorderToUser(currentOut, outBuffers(i), user_format, i)
@@ -195,6 +198,8 @@ class ConcatDnn(val dimension: Int) extends Container[Tensor[Float], Tensor[Floa
       output.asInstanceOf[MklDnnTensor[Float]].release()
       output = MklDnnTensor[Float](this.size)
     }
+
+    // println("output size " + output.size().foreach(println(_)))
 
     if (update_primitive) {
       val dst_md = MklDnnOps.memoryDescInit(output.dim(), output.size(), dataType, user_format)
@@ -255,12 +260,9 @@ class ConcatDnn(val dimension: Int) extends Container[Tensor[Float], Tensor[Floa
       results(i) = Engine.model.invoke( () => {
         val narrowedTensor = gradOutput.narrow(dimension, _offset, currentOutput.size(dimension))
         if (gradOutput.getPrimitiveDesc() != 0L) {
-          var pd: Long = 0L
-          if (update_primitive) {
-            val md = MklDnnOps.memoryDescInit(
-              narrowedTensor.dim(), narrowedTensor.size(), dataType, gradOutput.getFormat())
-            pd = MklDnnOps.memoryPrimitiveDescCreate(md, engine)
-          }
+          val md = MklDnnOps.memoryDescInit(
+            narrowedTensor.dim(), narrowedTensor.size(), dataType, gradOutput.getFormat())
+          val pd = MklDnnOps.memoryPrimitiveDescCreate(md, engine)
           narrowedTensor.setPrimitiveDesc(pd)
         }
         if(dimension == 2) {
