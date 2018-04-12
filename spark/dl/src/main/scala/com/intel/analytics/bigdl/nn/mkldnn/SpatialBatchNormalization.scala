@@ -41,14 +41,18 @@ class SpatialBatchNormalization[T: ClassTag](
   val mean: MklDnnTensor[T] = MklDnnTensor[T](Array(nOutput))
   val variance: MklDnnTensor[T] = MklDnnTensor[T](Array(nOutput))
 
-  val all = createParams(initWeight, initBias)
-  val gradAll = createParams(initGradWeight, initGradBias)
+  var all = createParams(initWeight, initBias)
+  var gradAll = createParams(initGradWeight, initGradBias)
   val diffAll = MklDnnTensor[T](all.size())
   val prvAll = MklDnnTensor[T](all.size())
 
   val allWeight = all.view(Array(2, nOutput))
   val weight = allWeight.select(1, 1)
   val bias = allWeight.select(1, 2)
+
+  val allGradWeight = gradAll.view(Array(2, nOutput))
+  val gradWeight = allGradWeight.select(1, 1)
+  val gradBias = allGradWeight.select(1, 2)
 
   @transient var engine = 0L
   @transient var stream = 0L
@@ -173,6 +177,10 @@ class SpatialBatchNormalization[T: ClassTag](
   @transient var varianceUserPrim = 0L
   @transient var previousSize: Array[Int] = _
   override def updateOutput(input: Tensor[T]): Tensor[T] = {
+    val allWeight = all.view(Array(2, nOutput))
+    allWeight.select(1, 1).copy(weight)
+    allWeight.select(1, 2).copy(bias)
+
     val s1 = System.nanoTime()
     if (previousSize == null) {
       previousSize = input.size()
@@ -316,6 +324,10 @@ class SpatialBatchNormalization[T: ClassTag](
   @transient var gradWeightAndBiasUserPrim = 0L
   @transient var internalGradInput, internalGradOutput: MklDnnTensor[T] = _
   def backward1(input: Tensor[T], gradOutput: Tensor[T]): Tensor[T] = {
+    val allGradWeight1 = gradAll.view(Array(2, nOutput))
+    allGradWeight1.select(1, 1).copy(gradWeight)
+    allGradWeight1.select(1, 2).copy(gradBias)
+
     val s1 = System.nanoTime()
     if (backwardPrims.isEmpty) {
       if (gradInput.getTensorType == MklDnnType) {
@@ -430,6 +442,11 @@ class SpatialBatchNormalization[T: ClassTag](
     diffAll.syncToHeap()
     gradAll.add(diffAll)
 
+
+    val allGradWeight = gradAll.view(Array(2, nOutput))
+    gradWeight.copy(allGradWeight.select(1, 1))
+    gradBias.copy(allGradWeight.select(1, 2))
+
     if (shouldConvert) {
       gradInput.asInstanceOf[MklDnnTensor[T]].syncToHeap()
     }
@@ -485,16 +502,49 @@ class SpatialBatchNormalization[T: ClassTag](
     if (affine) {
       gradAll.zero()
       diffAll.zero()
+      gradWeight.zero()
+      gradBias.zero()
+
+      Memory.Zero(diffAll.ptr, diffAll.nElement(), 4)
     }
   }
 
-  override def parameters(): (Array[Tensor[T]], Array[Tensor[T]]) = {
-    if (affine) {
-      (Array(all), Array(gradAll))
-    } else {
-      null
+  override def clearState() : this.type = {
+    super.clearState()
+    gradAll.set()
+    gradWeight.set()
+    gradBias.set()
+
+    if (diffAll != null) {
+      diffAll.release()
+      diffAll.set()
     }
+    if (mean != null) {
+      mean.release()
+      mean.set()
+    }
+    if (variance != null) {
+      variance.release()
+      variance.set()
+    }
+    this
   }
+
+//  override def parameters(): (Array[Tensor[T]], Array[Tensor[T]]) = {
+//    if (affine) {
+//      (Array(all), Array(gradAll))
+//    } else {
+//      null
+//    }
+//  }
+
+    override def parameters(): (Array[Tensor[T]], Array[Tensor[T]]) = {
+      if (affine) {
+        (Array(weight, bias), Array(gradWeight, gradBias))
+      } else {
+        null
+      }
+    }
 
   override def getParametersTable(): Table = {
     if (affine) {
