@@ -112,7 +112,7 @@ object ImageNetDataSet extends ResNetDataSet {
   override def valDataSet(path: String, sc: SparkContext, imageSize: Int, batchSize: Int)
   : DataSet[MiniBatch[Float]] = {
     DataSet.SeqFileFolder.files(path, sc, 1000).transform(
-      MTLabeledBGRImgToBatch[ByteRecord](
+      MTLabeledCaffeImgToBatch[ByteRecord](
         width = imageSize,
         height = imageSize,
         batchSize = batchSize,
@@ -125,14 +125,13 @@ object ImageNetDataSet extends ResNetDataSet {
   override def trainDataSet(path: String, sc: SparkContext, imageSize: Int, batchSize: Int)
   : DataSet[MiniBatch[Float]] = {
     DataSet.SeqFileFolder.files(path, sc, 1000).transform(
-      MTLabeledBGRImgToBatch[ByteRecord](
+      MTLabeledCaffeImgToBatch[ByteRecord](
         width = imageSize,
         height = imageSize,
         batchSize = batchSize,
-        transformer = (BytesToBGRImg() -> BGRImgCropper(imageSize, imageSize)
-          -> ColorJitter() -> Lighting()
-          -> BGRImgNormalizer(0.485, 0.456, 0.406, 0.229, 0.224, 0.225))
-          -> HFlip(0.5)
+        transformer = BytesToMat() -> CaffeImgRandomAspect() ->
+            CaffeImgCropper(imageSize, imageSize, true, cropperMethod = CropRandom) ->
+            CaffeImgNormalizer(104, 117, 123, 0.0078125)
       ))
   }
 }

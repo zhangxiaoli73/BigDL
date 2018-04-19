@@ -17,11 +17,16 @@
 package com.intel.analytics.bigdl.models.resnet
 
 import com.intel.analytics.bigdl._
+import com.intel.analytics.bigdl.dataset.DataSet
+import com.intel.analytics.bigdl.dataset.image._
 import com.intel.analytics.bigdl.models.resnet.ResNet.{DatasetType, ShortcutType}
 import com.intel.analytics.bigdl.nn.mkldnn.ResNet_dnn
 import com.intel.analytics.bigdl.nn.{CrossEntropyCriterion, Module}
 import com.intel.analytics.bigdl.optim._
+import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric._
+import com.intel.analytics.bigdl.transform.vision.image.MatToTensor
+import com.intel.analytics.bigdl.transform.vision.image.augmentation.Resize
 import com.intel.analytics.bigdl.utils.{Engine, LoggerFilter, T}
 import com.intel.analytics.bigdl.visualization.{TrainSummary, ValidationSummary}
 import org.apache.log4j.{Level, Logger}
@@ -54,11 +59,51 @@ object TrainImageNet {
       val sc = new SparkContext(conf)
       Engine.init
 
-      val batchSize = param.batchSize
+      val batchSize = 1 // param.batchSize
       val (imageSize, dataSetType, maxEpoch, dataSet) =
         (224, DatasetType.ImageNet, param.nepochs, ImageNetDataSet)
 
+      val srcData = DataSet.SeqFileFolder.files(param.folder + "/train", sc, 1000)
+
+      val srcDataset = srcData.transform(BytesToMat() -> CaffeImgRandomAspect() ->
+        CaffeImgCropper(imageSize, imageSize, true, cropperMethod = CropRandom)
+        -> CaffeImgNormalizer(104, 117, 123, 0.0078125))
+
+      val dataTemp = srcDataset.toDistributed().data(train = false).collect()
+
+      val yy = Tensor[Float](100, 200)
+      yy.resize(20, 30)
+
+      val dataArr = dataTemp(0).content
+      for (i <- 0  to 10) {
+        println(i + " " + dataArr(i))
+      }
+
+      for (i <- 50176  to 50186) {
+        println(i + " " + dataArr(i))
+      }
+
+      for (i <- 100352  to 100362) {
+        println(i + " " + dataArr(i))
+      }
+
       val trainDataSet = dataSet.trainDataSet(param.folder + "/train", sc, imageSize, batchSize)
+
+      val dataTemp1 = trainDataSet.toDistributed().data(train = false).collect()
+
+      val dataArr1 = dataTemp1(0).getInput().toTensor[Float].storage().array()
+      for (i <- 0  to 10) {
+        println(i + " " + dataArr1(i))
+      }
+
+      for (i <- 50176  to 50186) {
+        println(i + " " + dataArr1(i))
+      }
+
+      for (i <- 100352  to 100362) {
+        println(i + " " + dataArr1(i))
+      }
+
 
       val validateSet = dataSet.valDataSet(param.folder + "/val", sc, imageSize, batchSize)
 
@@ -72,12 +117,12 @@ object TrainImageNet {
         val curModel = ResNet_dnn(classNum = param.classes,
           T("shortcutType" -> ResNet_dnn.ShortcutType.B, "depth" -> param.depth,
             "optnet" -> param.optnet, "dataSet" -> ResNet_dnn.DatasetType.ImageNet))
-//         ResNet_dnn.modelInit(curModel)
+        //         ResNet_dnn.modelInit(curModel)
         curModel
       } else {
         val curModel =
           ResNet(classNum = param.classes, T("shortcutType" -> shortcut, "depth" -> param.depth,
-          "optnet" -> param.optnet, "dataSet" -> dataSetType))
+            "optnet" -> param.optnet, "dataSet" -> dataSetType))
         if (param.optnet) {
           ResNet.shareGradInput(curModel)
         }
@@ -120,7 +165,7 @@ object TrainImageNet {
       if (param.checkpoint.isDefined) {
         optimizer.setCheckpoint(param.checkpoint.get, Trigger.everyEpoch)
       }
-      
+
       val logdir = "resnet-imagenet"
       val appName = s"${sc.applicationId}"
       val trainSummary = TrainSummary(logdir, appName)
@@ -132,8 +177,8 @@ object TrainImageNet {
         .setOptimMethod(optimMethod)
 //        .setTrainSummary(trainSummary)
 //        .setValidationSummary(validationSummary)
-        .setValidation(Trigger.everyEpoch,
-          validateSet, Array(new Top1Accuracy[Float], new Top5Accuracy[Float]))
+//        .setValidation(Trigger.everyEpoch,
+//          validateSet, Array(new Top1Accuracy[Float], new Top5Accuracy[Float]))
         .setEndWhen(Trigger.maxEpoch(maxEpoch))
         .optimize()
       sc.stop()
