@@ -24,9 +24,11 @@ import com.intel.analytics.bigdl.opencv.OpenCV
 import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.transform.vision.image.ImageFeature
 import com.intel.analytics.bigdl.transform.vision.image.opencv.OpenCVMat
+import com.intel.analytics.bigdl.utils.RandomGenerator
 import spire.math.Interval.Open
 
 import scala.collection.Iterator
+import scala.util.Random
 
 object CaffeImgCropper {
   def apply(cropWidth: Int, cropHeight: Int,
@@ -49,18 +51,17 @@ class CaffeImgCropper(cropWidth: Int, cropHeight: Int,
 
     val (startH, startW) = cropperMethod match {
       case CropRandom =>
-        val indexH =
-          if (height == cropHeight) 0 else math.ceil(RNG.uniform(1e-2, height - cropHeight)).toInt
-        val indexW =
-          if (width == cropWidth) 0 else math.ceil(RNG.uniform(1e-2, width - cropWidth + 1)).toInt
+        val indexH = math.ceil(RNG.uniform(0, height - cropHeight)).toInt
+        val indexW = math.ceil(RNG.uniform(0, width - cropWidth)).toInt
         (indexH, indexW)
       case CropCenter =>
         ((height - cropHeight) / 2, (width - cropWidth) / 2)
     }
 
+    val do_mirror = mirror && (RandomGenerator.RNG.uniform(0, 2).toInt != 0)
     val input = img.toTensor(ImageFeature.imageTensor)
     cropper(input.storage().array(), buffer.content,
-      Array(height, width), Array(buffer.height(), buffer.width()), startH, startW, mirror)
+      Array(height, width), Array(buffer.height(), buffer.width()), startH, startW, do_mirror)
 
     buffer.setLabel(img.getLabel)
   })

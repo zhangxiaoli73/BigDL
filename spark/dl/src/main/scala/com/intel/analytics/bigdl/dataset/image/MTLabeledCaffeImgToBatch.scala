@@ -56,7 +56,7 @@ class MTLabeledCaffeImgToBatch[A: ClassTag] private[bigdl](width: Int, height: I
   }
 
   private lazy val transformers = (1 to parallelism).map(
-    _ => new PreFetch[A] -> transformer.cloneTransformer()
+    _ => new PreFetchCaffe[A] -> transformer.cloneTransformer()
   ).toArray
 
   private val frameLength = height * width
@@ -103,7 +103,7 @@ class MTLabeledCaffeImgToBatch[A: ClassTag] private[bigdl](width: Int, height: I
   }
 }
 
-private class PreFetch[T] extends Transformer[T, T] {
+private class PreFetchCaffe[T] extends Transformer[T, T] {
   override def apply(prev: Iterator[T]): Iterator[T] = {
     new Iterator[T] {
       private var buffer: T = null.asInstanceOf[T]

@@ -59,52 +59,11 @@ object TrainImageNet {
       val sc = new SparkContext(conf)
       Engine.init
 
-      val batchSize = 1 // param.batchSize
+      val batchSize = param.batchSize
       val (imageSize, dataSetType, maxEpoch, dataSet) =
         (224, DatasetType.ImageNet, param.nepochs, ImageNetDataSet)
 
-      val srcData = DataSet.SeqFileFolder.files(param.folder + "/train", sc, 1000)
-
-      val srcDataset = srcData.transform(BytesToMat() -> CaffeImgRandomAspect() ->
-        CaffeImgCropper(imageSize, imageSize, true, cropperMethod = CropRandom)
-        -> CaffeImgNormalizer(104, 117, 123, 0.0078125))
-
-      val dataTemp = srcDataset.toDistributed().data(train = false).collect()
-
-      val yy = Tensor[Float](100, 200)
-      yy.resize(20, 30)
-
-      val dataArr = dataTemp(0).content
-      for (i <- 0  to 10) {
-        println(i + " " + dataArr(i))
-      }
-
-      for (i <- 50176  to 50186) {
-        println(i + " " + dataArr(i))
-      }
-
-      for (i <- 100352  to 100362) {
-        println(i + " " + dataArr(i))
-      }
-
       val trainDataSet = dataSet.trainDataSet(param.folder + "/train", sc, imageSize, batchSize)
-
-      val dataTemp1 = trainDataSet.toDistributed().data(train = false).collect()
-
-      val dataArr1 = dataTemp1(0).getInput().toTensor[Float].storage().array()
-      for (i <- 0  to 10) {
-        println(i + " " + dataArr1(i))
-      }
-
-      for (i <- 50176  to 50186) {
-        println(i + " " + dataArr1(i))
-      }
-
-      for (i <- 100352  to 100362) {
-        println(i + " " + dataArr1(i))
-      }
-
-
       val validateSet = dataSet.valDataSet(param.folder + "/val", sc, imageSize, batchSize)
 
       val shortcut: ShortcutType = ShortcutType.B
@@ -166,12 +125,12 @@ object TrainImageNet {
         optimizer.setCheckpoint(param.checkpoint.get, Trigger.everyEpoch)
       }
 
-      val logdir = "resnet-imagenet"
-      val appName = s"${sc.applicationId}"
-      val trainSummary = TrainSummary(logdir, appName)
-      trainSummary.setSummaryTrigger("LearningRate", Trigger.severalIteration(1))
-      trainSummary.setSummaryTrigger("Parameters", Trigger.severalIteration(10))
-      val validationSummary = ValidationSummary(logdir, appName)
+//      val logdir = "resnet-imagenet"
+//      val appName = s"${sc.applicationId}"
+//      val trainSummary = TrainSummary(logdir, appName)
+//      trainSummary.setSummaryTrigger("LearningRate", Trigger.severalIteration(1))
+//      trainSummary.setSummaryTrigger("Parameters", Trigger.severalIteration(10))
+//      val validationSummary = ValidationSummary(logdir, appName)
 
       optimizer
         .setOptimMethod(optimMethod)

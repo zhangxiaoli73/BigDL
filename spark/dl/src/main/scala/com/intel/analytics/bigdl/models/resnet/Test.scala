@@ -17,13 +17,15 @@
 package com.intel.analytics.bigdl.models.resnet
 
 import com.intel.analytics.bigdl.Module
-import com.intel.analytics.bigdl.dataset.{ByteRecord, DataSet}
+import com.intel.analytics.bigdl.dataset.{ByteRecord, DataSet, image}
 import com.intel.analytics.bigdl.nn.Module
-import com.intel.analytics.bigdl.utils.Engine
+import com.intel.analytics.bigdl.utils.{Engine, T}
 import com.intel.analytics.bigdl.models.resnet.Utils._
 import com.intel.analytics.bigdl.optim.{Top1Accuracy, Top5Accuracy, ValidationMethod, ValidationResult}
-import com.intel.analytics.bigdl.dataset.image.{BGRImgCropper, BGRImgNormalizer, HFlip, _}
+import com.intel.analytics.bigdl.dataset.image.{BGRImgCropper, BGRImgNormalizer, CaffeImgNormalizer, HFlip, _}
 import com.intel.analytics.bigdl.models.resnet.ResNet.DatasetType
+import com.intel.analytics.bigdl.nn.mkldnn.ResNet_dnn
+import com.intel.analytics.bigdl.transform.vision.image.augmentation.Resize
 import org.apache.hadoop.io.Text
 import org.apache.log4j.{Level, Logger}
 import org.apache.spark.SparkContext
@@ -56,10 +58,13 @@ object Test {
         }).coalesce(partitionNum, true)
 
       val rddData = DataSet.SeqFileFolder.filesToRdd(param.folder, sc, 1000)
-      val transformer = (BytesToBGRImg()
-        -> BGRImgNormalizer(0.485, 0.456, 0.406, 0.229, 0.224, 0.225)
-        ) -> BGRImgCropper(imageSize, imageSize, CropCenter) -> BGRImgToSample()
+//      val transformer = (BytesToBGRImg()
+//        -> BGRImgNormalizer(0.485, 0.456, 0.406, 0.229, 0.224, 0.225)
+//        ) -> BGRImgCropper(imageSize, imageSize, CropCenter) -> BGRImgToSample()
 
+      val transformer = BytesToMat() -> Resize(256, 256) ->
+        CaffeImgCropper(imageSize, imageSize, false, cropperMethod = CropCenter) ->
+        CaffeImgNormalizer(104, 117, 123, 0.0078125) -> CaffeImgToSample()
       val evaluationSet = transformer(rddData)
 
 //      val rddData = sc.parallelize(loadTest(param.folder), partitionNum)
@@ -68,6 +73,7 @@ object Test {
 //      val evaluationSet = transformer(rddData)
 
       val model = Module.load[Float](param.model)
+
       println(model)
       val result = model.evaluate(evaluationSet,
         Array(new Top1Accuracy[Float], new Top5Accuracy[Float]),
