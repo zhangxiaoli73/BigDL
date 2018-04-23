@@ -18,7 +18,6 @@ package com.intel.analytics.bigdl.models.resnet
 import com.intel.analytics.bigdl.DataSet
 import com.intel.analytics.bigdl.dataset._
 import com.intel.analytics.bigdl.dataset.image._
-import com.intel.analytics.bigdl.transform.vision.image.augmentation.Resize
 import org.apache.spark.SparkContext
 
 /**
@@ -113,29 +112,27 @@ object ImageNetDataSet extends ResNetDataSet {
   override def valDataSet(path: String, sc: SparkContext, imageSize: Int, batchSize: Int)
   : DataSet[MiniBatch[Float]] = {
     DataSet.SeqFileFolder.files(path, sc, 1000).transform(
-      MTLabeledCaffeImgToBatch[ByteRecord](
+      MTLabeledBGRImgToBatch[ByteRecord](
         width = imageSize,
         height = imageSize,
         batchSize = batchSize,
-//        transformer = (BytesToBGRImg()
-//          -> BGRImgNormalizer(0.485, 0.456, 0.406, 0.229, 0.224, 0.225))
-//          -> BGRImgCropper(imageSize, imageSize, CropCenter)
-        transformer = BytesToMat() -> Resize(256, 256) ->
-          CaffeImgCropper(imageSize, imageSize, false, cropperMethod = CropCenter)
-          -> CaffeImgNormalizer(104, 117, 123, 0.0078125)
+        transformer = (BytesToBGRImg()
+          -> BGRImgNormalizer(0.485, 0.456, 0.406, 0.229, 0.224, 0.225))
+          -> BGRImgCropper(imageSize, imageSize, CropCenter)
       ))
   }
 
   override def trainDataSet(path: String, sc: SparkContext, imageSize: Int, batchSize: Int)
   : DataSet[MiniBatch[Float]] = {
     DataSet.SeqFileFolder.files(path, sc, 1000).transform(
-      MTLabeledCaffeImgToBatch[ByteRecord](
+      MTLabeledBGRImgToBatch[ByteRecord](
         width = imageSize,
         height = imageSize,
         batchSize = batchSize,
-        transformer = BytesToMat() -> CaffeImgRandomAspect() ->
-            CaffeImgCropper(imageSize, imageSize, true, cropperMethod = CropRandom) ->
-            CaffeImgNormalizer(104, 117, 123, 0.0078125)
+        transformer = (BytesToBGRImg() -> BGRImgCropper(imageSize, imageSize)
+          -> ColorJitter() -> Lighting()
+          -> BGRImgNormalizer(0.485, 0.456, 0.406, 0.229, 0.224, 0.225))
+          -> HFlip(0.5)
       ))
   }
 }
