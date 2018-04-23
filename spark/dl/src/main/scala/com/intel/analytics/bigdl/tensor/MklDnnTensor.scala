@@ -53,8 +53,8 @@ class MklDnnTensor[T: ClassTag](
   }
 
   private def allocate(capacity: Int): Long = {
-    println("****allocate native****************")
-    MklDnnTensor.backtrace()
+    // println("****allocate native****************")
+    // MklDnnTensor.backtrace()
     require(capacity != 0, s"capacity should not be 0")
     val ptr = Memory.AlignedMalloc(capacity * ELEMENT_SIZE, CACHE_LINE_SIZE)
     require(ptr != 0L, s"allocate native aligned memory failed")
@@ -74,8 +74,8 @@ class MklDnnTensor[T: ClassTag](
   def syncFromHeap(): this.type = {
     if (this._storage == null) {
       this._storage = Storage[T](size().product)
-      println("****allocate 111****************")
-      MklDnnTensor.backtrace()
+      // println("****allocate 111****************")
+      // MklDnnTensor.backtrace()
     }
     MklDnnTensor.syncFromHeap(this, this._storage.array(), storageOffset() - 1)
     this
@@ -84,8 +84,8 @@ class MklDnnTensor[T: ClassTag](
   def syncToHeap(): Storage[T] = {
     if (_storage == null || _storage.length() != nElement()) {
       this._storage = Storage[T](nElement())
-      println("****allocate 111****************")
-      MklDnnTensor.backtrace()
+      // println("****allocate 111****************")
+      // MklDnnTensor.backtrace()
     }
     MklDnnTensor.syncToHeap(this, this._storage.array(), storageOffset() - 1)
     this._storage
@@ -98,8 +98,8 @@ class MklDnnTensor[T: ClassTag](
   override def storage(): Storage[T] = {
     if (_storage == null || _storage.length() != nElement()) {
       this._storage = Storage[T](nElement())
-      println("****allocate****************")
-      MklDnnTensor.backtrace()
+      // println("****allocate****************")
+      // MklDnnTensor.backtrace()
     }
     if (updateStorage) {
       MklDnnTensor.syncToHeap(this, this._storage.array(), storageOffset() - 1)

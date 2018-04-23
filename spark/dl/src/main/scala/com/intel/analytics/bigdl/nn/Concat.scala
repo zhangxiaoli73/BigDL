@@ -117,11 +117,8 @@ class Concat[T: ClassTag](val dimension: Int)(
     }
 
     Engine.model.sync(results)
-    forwardTimeOverhead = System.nanoTime() - before
+    forwardTimeOverhead += System.nanoTime() - before
 
-    if (System.getProperty("debug") == "2") {
-      println(s"concat dnn ${this.getName()} forward ${forwardTimeOverhead/1e6}")
-    }
     this.output
   }
 
@@ -232,7 +229,7 @@ class Concat[T: ClassTag](val dimension: Int)(
       offset += currentOutput.size(dimension)
     }
     Engine.model.sync(results)
-    backwardTime = System.nanoTime() - before
+    backwardTime += System.nanoTime() - before
 
     i = 0
     offset = 1
@@ -257,9 +254,6 @@ class Concat[T: ClassTag](val dimension: Int)(
       backwardTime += System.nanoTime() - before
     }
 
-    if (System.getProperty("debug") == "2") {
-      println(s"concat dnn ${this.getName()} backward ${backwardTime/1e6}")
-    }
     this.gradInput
   }
 
