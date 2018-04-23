@@ -17,11 +17,16 @@
 package com.intel.analytics.bigdl.models.resnet
 
 import com.intel.analytics.bigdl.Module
+import com.intel.analytics.bigdl.dataset.{ByteRecord, DataSet, image}
 import com.intel.analytics.bigdl.nn.Module
-import com.intel.analytics.bigdl.utils.Engine
+import com.intel.analytics.bigdl.utils.{Engine, T}
 import com.intel.analytics.bigdl.models.resnet.Utils._
-import com.intel.analytics.bigdl.optim.{Top1Accuracy, ValidationMethod, ValidationResult}
-import com.intel.analytics.bigdl.dataset.image.{BGRImgNormalizer, BGRImgToSample, BytesToBGRImg}
+import com.intel.analytics.bigdl.optim.{Top1Accuracy, Top5Accuracy, ValidationMethod, ValidationResult}
+import com.intel.analytics.bigdl.dataset.image.{BGRImgCropper, BGRImgNormalizer, CaffeImgNormalizer, HFlip, _}
+import com.intel.analytics.bigdl.models.resnet.ResNet.DatasetType
+import com.intel.analytics.bigdl.nn.mkldnn.ResNet_dnn
+import com.intel.analytics.bigdl.transform.vision.image.augmentation.Resize
+import org.apache.hadoop.io.Text
 import org.apache.log4j.{Level, Logger}
 import org.apache.spark.SparkContext
 
@@ -31,8 +36,11 @@ object Test {
   Logger.getLogger("breeze").setLevel(Level.ERROR)
 
   def main(args: Array[String]): Unit = {
+
+    val imageSize = 224
+
     testParser.parse(args, TestParams()).foreach { param =>
-      val conf = Engine.createSparkConf().setAppName("Test ResNet on Cifar10")
+      val conf = Engine.createSparkConf().setAppName("Test ResNet on ImageNet")
         .set("spark.akka.frameSize", 64.toString)
         .set("spark.task.maxFailures", "1")
       val sc = new SparkContext(conf)
@@ -40,14 +48,35 @@ object Test {
       Engine.init
       val partitionNum = Engine.nodeNumber() * Engine.coreNumber()
 
-      val rddData = sc.parallelize(loadTest(param.folder), partitionNum)
-      val transformer = BytesToBGRImg() -> BGRImgNormalizer(Cifar10DataSet.trainMean,
-          Cifar10DataSet.trainStd) -> BGRImgToSample()
+      val batchSize = param.batchSize
+      val (imageSize, dataSetType, maxEpoch, dataSet) =
+        (224, DatasetType.ImageNet, 90, ImageNetDataSet)
+
+      val rawData = sc.sequenceFile(param.folder, classOf[Text], classOf[Text], partitionNum)
+        .map(image => {
+          ByteRecord(image._2.copyBytes(), DataSet.SeqFileFolder.readLabel(image._1).toFloat)
+        }).coalesce(partitionNum, true)
+
+      val rddData = DataSet.SeqFileFolder.filesToRdd(param.folder, sc, 1000)
+//      val transformer = (BytesToBGRImg()
+//        -> BGRImgNormalizer(0.485, 0.456, 0.406, 0.229, 0.224, 0.225)
+//        ) -> BGRImgCropper(imageSize, imageSize, CropCenter) -> BGRImgToSample()
+
+      val transformer = BytesToMat() -> Resize(256, 256) ->
+        CaffeImgCropper(imageSize, imageSize, false, cropperMethod = CropCenter) ->
+        CaffeImgNormalizer(104, 117, 123, 0.0078125) -> CaffeImgToSample()
       val evaluationSet = transformer(rddData)
 
+//      val rddData = sc.parallelize(loadTest(param.folder), partitionNum)
+//      val transformer = BytesToBGRImg() -> BGRImgNormalizer(Cifar10DataSet.trainMean,
+//          Cifar10DataSet.trainStd) -> BGRImgToSample()
+//      val evaluationSet = transformer(rddData)
+
       val model = Module.load[Float](param.model)
+
       println(model)
-      val result = model.evaluate(evaluationSet, Array(new Top1Accuracy[Float]),
+      val result = model.evaluate(evaluationSet,
+        Array(new Top1Accuracy[Float], new Top5Accuracy[Float]),
         Some(param.batchSize))
       result.foreach(r => println(s"${r._2} is ${r._1}"))
 

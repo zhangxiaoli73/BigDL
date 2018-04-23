@@ -150,6 +150,41 @@ class BGRImage(
     this
   }
 
+  def copySrc(rawData: Array[Byte], normalize: Float = 255.0f): this.type = {
+    val buffer = ByteBuffer.wrap(rawData)
+    _width = buffer.getInt
+    _height = buffer.getInt
+    require(rawData.length == 8 + _width * _height * 3)
+    if (data.length < _height * _width * 3) {
+      data = new Array[Float](_width * _height * 3)
+    }
+    var i = 0
+    while (i < _width * _height * 3) {
+      data(i) = (rawData(i + 8) & 0xff) / normalize
+      i += 1
+    }
+
+    val frameLength = _width * _height
+    var j = 0
+    while (j < frameLength) {
+      data(j) = (rawData(j*3 + 8) & 0xff)
+      data(j + frameLength) = (rawData(j*3 + 8 + 1) & 0xff)
+      data(j + frameLength * 2) = (rawData(j*3 + 8 + 2) & 0xff)
+      j += 1
+    }
+    this
+  }
+
+  def copyCaffeImg(storage: Array[Float], offset: Int): Unit = {
+    val frameLength = width() * height()
+    require(frameLength * 3 + offset <= storage.length)
+    var j = 0
+    while (j < frameLength * 3) {
+      storage(offset + j) = content(j)
+      j += 1
+    }
+  }
+
   def copyTo(storage: Array[Float], offset: Int, toRGB: Boolean = true): Unit = {
     val frameLength = width() * height()
     require(frameLength * 3 + offset <= storage.length)
