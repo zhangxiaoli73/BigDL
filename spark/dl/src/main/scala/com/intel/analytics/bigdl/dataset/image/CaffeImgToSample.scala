@@ -16,8 +16,6 @@
 
 package com.intel.analytics.bigdl.dataset.image
 
-import breeze.linalg.*
-import com.intel.analytics.bigdl.dataset.image.LabeledBGRImage
 import com.intel.analytics.bigdl.dataset.{Sample, Transformer}
 import com.intel.analytics.bigdl.tensor.Tensor
 

@@ -498,16 +498,16 @@ class SpatialBatchNormalization[T: ClassTag](
     weightAndBias
   }
 
-  override def zeroGradParameters(): Unit = {
-    if (affine) {
-      gradAll.zero()
-      diffAll.zero()
-      gradWeight.zero()
-      gradBias.zero()
-
-      Memory.Zero(diffAll.ptr, diffAll.nElement(), 4)
-    }
-  }
+//  override def zeroGradParameters(): Unit = {
+//    if (affine) {
+//      gradAll.zero()
+//      diffAll.zero()
+//      gradWeight.zero()
+//      gradBias.zero()
+//
+//      Memory.Zero(diffAll.ptr, diffAll.nElement(), 4)
+//    }
+//  }
 
   override def clearState() : this.type = {
     super.clearState()

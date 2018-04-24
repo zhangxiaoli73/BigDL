@@ -1102,8 +1102,9 @@ abstract class AbstractModule[A <: Activity: ClassTag, B <: Activity: ClassTag, 
 
   def setDnnEngine(loc : Long): this.type = {
     this.engineLocation = loc
-    if (this.isInstanceOf[Container[Activity, Activity, T]]) {
-      this.asInstanceOf[Container[Activity, Activity, T]].
+    val t = this.asInstanceOf[AbstractModule[Activity, Activity, T]]
+    if (t.isInstanceOf[Container[Activity, Activity, T]]) {
+      t.asInstanceOf[Container[Activity, Activity, T]].
         modules.map(_.setDnnEngine(loc))
     }
     this
@@ -1112,8 +1113,9 @@ abstract class AbstractModule[A <: Activity: ClassTag, B <: Activity: ClassTag, 
   def createDnnEngine(index : Int): Unit = {
     require(MklDnn.isLoaded, "mkldnn isn't loaded")
     engineLocation = MklDnn.EngineCreate(mkldnn_engine_type, index)
-    if (this.isInstanceOf[Container[Activity, Activity, T]]) {
-      this.asInstanceOf[Container[Activity, Activity, T]].
+    val t = this.asInstanceOf[AbstractModule[Activity, Activity, T]]
+    if (t.isInstanceOf[Container[Activity, Activity, T]]) {
+      t.asInstanceOf[Container[Activity, Activity, T]].
         modules.map(_.setDnnEngine(engineLocation))
     }
   }
@@ -1130,8 +1132,9 @@ abstract class AbstractModule[A <: Activity: ClassTag, B <: Activity: ClassTag, 
 
   def setStream(loc: Long): this.type = {
     this.streamLocation = loc
-    if (this.isInstanceOf[Container[Activity, Activity, T]]) {
-      this.asInstanceOf[Container[Activity, Activity, T]].
+    val t = this.asInstanceOf[AbstractModule[Activity, Activity, T]]
+    if (t.isInstanceOf[Container[Activity, Activity, T]]) {
+      t.asInstanceOf[Container[Activity, Activity, T]].
         modules.map(_.setStream(loc))
     }
     this
@@ -1140,8 +1143,9 @@ abstract class AbstractModule[A <: Activity: ClassTag, B <: Activity: ClassTag, 
   def createStream(): Unit = {
     require(MklDnn.isLoaded, "mkldnn isn't loaded")
     streamLocation = MklDnn.StreamCreate(MklDnn.StreamType.eager)
-    if (this.isInstanceOf[Container[Activity, Activity, T]]) {
-      this.asInstanceOf[Container[Activity, Activity, T]].
+    val t = this.asInstanceOf[AbstractModule[Activity, Activity, T]]
+    if (t.isInstanceOf[Container[Activity, Activity, T]]) {
+      t.asInstanceOf[Container[Activity, Activity, T]].
         modules.map(_.setStream(streamLocation))
     }
   }

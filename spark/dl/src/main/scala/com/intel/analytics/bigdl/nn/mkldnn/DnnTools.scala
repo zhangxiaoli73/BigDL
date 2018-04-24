@@ -19,7 +19,7 @@ package com.intel.analytics.bigdl.nn.mkldnn
 import breeze.numerics._
 import com.intel.analytics.bigdl._
 import com.intel.analytics.bigdl.nn.Graph._
-import com.intel.analytics.bigdl.nn.{Graph, Linear, SpatialBatchNormalization, Module => _, _}
+import com.intel.analytics.bigdl.nn.{Graph, Module => _, _}
 import com.intel.analytics.bigdl.utils.{T, Table}
 import com.intel.analytics.bigdl._
 import com.intel.analytics.bigdl.numeric.NumericFloat
@@ -27,8 +27,6 @@ import com.intel.analytics.bigdl.utils.{T, Table}
 import com.intel.analytics.bigdl.nn.Graph.ModuleNode
 import com.intel.analytics.bigdl.Module
 import com.intel.analytics.bigdl.mkl.MklDnn
-import com.intel.analytics.bigdl.models.inception.Inception_Layer_v2
-import com.intel.analytics.bigdl.models.resnet.Convolution
 import com.intel.analytics.bigdl.models.resnet.ResNet.{apply => _, _}
 import com.intel.analytics.bigdl.nn.abstractnn.{AbstractModule, Activity}
 import com.intel.analytics.bigdl.optim.L2Regularizer
@@ -662,7 +660,7 @@ object Convolution {
     propagateBack: Boolean = true,
     optnet: Boolean = true,
     withBias2: Boolean = false)
-  (implicit ev: TensorNumeric[T]): ConvolutionDnn[Float] = {
+  (implicit ev: TensorNumeric[T]): ConvolutionDnn = {
     require(optnet == false, "dnn only support false optnet")
     val conv = mkldnn.ConvolutionDnn(nInputPlane, nOutputPlane, kernelW, kernelH,
         strideW, strideH, padW, padH, nGroup, propagateBack, withBias = withBias2)
@@ -673,34 +671,6 @@ object Convolution {
 
 object ResNet_dnn {
   val logger = Logger.getLogger(getClass)
-
-  def modelInit(model: Module[Float]): Unit = {
-    logger.info("Initialize ResNet")
-    def initModules(model: Module[Float]): Unit = {
-      model match {
-        case container: Container[Activity, Activity, Float]
-        => container.modules.foreach(m => initModules(m))
-        case convolutionDnn
-          if (convolutionDnn.isInstanceOf[mkldnn.ConvolutionDnn[Float]]) =>
-          val curModel = convolutionDnn.asInstanceOf[mkldnn.ConvolutionDnn[Float]]
-          val n: Float = curModel.kernelW * curModel.kernelW * curModel.nOutputPlane
-          curModel.weight.apply1(_ => RNG.normal(0, Math.sqrt(2.0f / n)).toFloat)
-          curModel.bias.apply1(_ => 0.0f)
-          curModel
-        case spatialBatchNormalization
-          if (spatialBatchNormalization.isInstanceOf[mkldnn.SpatialBatchNormalization[Float]]) =>
-          val curModel =
-            spatialBatchNormalization.asInstanceOf[mkldnn.SpatialBatchNormalization[Float]]
-          curModel.weight.apply1(_ => 1.0f)
-          curModel.bias.apply1(_ => 0.0f)
-        case linear
-          if (linear.isInstanceOf[mkldnn.Linear[Float]]) =>
-          linear.asInstanceOf[Linear[Float]].bias.apply1(_ => 0.0f)
-        case _ => Unit
-      }
-    }
-    initModules(model)
-  }
 
   var iChannels = 0
   def apply(classNum: Int, opt: Table): Module[Float] = {

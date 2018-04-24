@@ -29,7 +29,7 @@ import org.dmg.pmml.False
 import scala.collection.mutable.ArrayBuffer
 import scala.reflect.ClassTag
 
-class ConvolutionDnn[T: ClassTag](
+class ConvolutionDnn(
      val nInputPlane: Int, // The number of expected input planes in the image given into forward()
      val nOutputPlane: Int, // The number of output planes the convolution layer will produce.
      val kernelW: Int, // The kernel width of the convolution
@@ -48,8 +48,7 @@ class ConvolutionDnn[T: ClassTag](
      val initGradBias: Tensor[Float] = null,
      val withBias: Boolean = true,
      val format: DataFormat = DataFormat.NCHW
-   )(implicit ev: TensorNumeric[T])
-  extends TensorModule[Float] with Initializable {
+   ) extends TensorModule[Float] with Initializable {
 
   @transient
   private var engine: Long = 0L
@@ -846,19 +845,19 @@ class ConvolutionDnn[T: ClassTag](
     }
   }
 
-  override def updateParameters(learningRate: Float): Unit = {
-    weight.map(gradWeight, (a, b) => a - learningRate * b)
-    if (withBias) {
-      bias.map(gradBias, (a, b) => a - learningRate * b)
-    }
-  }
-
-  override def zeroGradParameters(): Unit = {
-    gradWeight.zero()
-    if (withBias) {
-      gradBias.zero()
-    }
-  }
+//  override def updateParameters(learningRate: Float): Unit = {
+//    weight.map(gradWeight, (a, b) => a - learningRate * b)
+//    if (withBias) {
+//      bias.map(gradBias, (a, b) => a - learningRate * b)
+//    }
+//  }
+//
+//  override def zeroGradParameters(): Unit = {
+//    gradWeight.zero()
+//    if (withBias) {
+//      gradBias.zero()
+//    }
+//  }
 
   override def parameters(): (Array[Tensor[Float]], Array[Tensor[Float]]) = {
     if (withBias) {
@@ -921,8 +920,8 @@ object ConvolutionDnn {
    initGradWeight: Tensor[Float] = null,
    initGradBias: Tensor[Float] = null,
    withBias: Boolean = true,
-   format: DataFormat = DataFormat.NCHW): ConvolutionDnn[Float] = {
-    new ConvolutionDnn[Float](nInputPlane, nOutputPlane, kW, kH, dW,
+   format: DataFormat = DataFormat.NCHW): ConvolutionDnn = {
+    new ConvolutionDnn(nInputPlane, nOutputPlane, kW, kH, dW,
     dH, padW, padH, nGroup, propagateBack, wRegularizer, bRegularizer,
       initWeight, initBias, initGradWeight, initGradBias, withBias, format)
   }

@@ -702,20 +702,17 @@ class Linear[T: ClassTag](
       biasPtr)
   }
 
-  override def updateParameters(learningRate: T): Unit = {
-    weight.add(ev.negative(learningRate), gradWeight)
-    if (withBias) bias.add(ev.negative(learningRate), gradBias)
-  }
-
-  override def zeroGradParameters(): Unit = {
-    gradWeight.zero()
-    if (withBias) {
-      gradBias.zero()
-    }
-
-    Memory.Zero(diffWeight.ptr, gradWeight.nElement(), 4)
-    Memory.Zero(diffBias.ptr, gradBias.nElement(), 4)
-  }
+//  override def updateParameters(learningRate: T): Unit = {
+//    weight.add(ev.negative(learningRate), gradWeight)
+//    if (withBias) bias.add(ev.negative(learningRate), gradBias)
+//  }
+//
+//  override def zeroGradParameters(): Unit = {
+//    gradWeight.zero()
+//    if (withBias) {
+//      gradBias.zero()
+//    }
+//  }
 
   override def clearState() : this.type = {
     super.clearState()
