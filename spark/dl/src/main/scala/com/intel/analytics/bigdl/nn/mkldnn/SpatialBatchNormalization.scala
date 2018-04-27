@@ -433,6 +433,17 @@ class SpatialBatchNormalization[T: ClassTag](
   @transient var gradWeightAndBiasUserPrim = 0L
   @transient var internalGradInput, internalGradOutput: MklDnnTensor[T] = _
   def backward1(input: Tensor[T], gradOutput: Tensor[T]): Tensor[T] = {
+    if (gradAll.nElement() == 0) {
+      gradAll.resize(Array(2 * nOutput))
+    }
+
+    if (gradWeight.nElement() != nOutput) {
+      gradWeight.resize(Array(nOutput))
+    }
+
+    if (gradBias.nElement() != nOutput) {
+      gradBias.resize(Array(nOutput))
+    }
     val allGradWeight1 = gradAll.view(Array(2, nOutput))
     allGradWeight1.select(1, 1).copy(gradWeight)
     allGradWeight1.select(1, 2).copy(gradBias)
@@ -621,7 +632,11 @@ class SpatialBatchNormalization[T: ClassTag](
   override def clearState() : this.type = {
     super.clearState()
 
-    for (t <- List(gradAll, gradWeight, gradBias, diffAll, mean, variance)) {
+    gradAll.set()
+    gradWeight.set()
+    gradBias.set()
+
+    for (t <- List(diffAll, mean, variance)) {
       t.resize(t.size)
     }
 
