@@ -326,10 +326,12 @@ class PoolingDnnAverage[T: ClassTag](
     if (gradOutputBuffer != null) {
       gradOutputBuffer.release()
       gradOutputBuffer.set()
+      gradOutputBuffer = null
     }
     if (inputBuffer != null) {
       inputBuffer.release()
       inputBuffer.set()
+      inputBuffer = null
     }
     this
   }

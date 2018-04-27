@@ -15,6 +15,9 @@
  */
 package com.intel.analytics.bigdl.nn.mkldnn
 
+import java.nio.file.Files
+import java.nio.file.Paths
+
 import com.intel.analytics.bigdl._
 import com.intel.analytics.bigdl.dataset.MiniBatch
 import com.intel.analytics.bigdl.example.loadmodel.AlexNet
@@ -28,6 +31,8 @@ import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.utils.RandomGenerator._
 import com.intel.analytics.bigdl.utils.T
 import org.scalatest.{FlatSpec, Matchers}
+import com.intel.analytics.bigdl.optim.Optimizer
+import com.intel.analytics.bigdl.utils.File
 
 import scala.util.Random
 
@@ -292,5 +297,29 @@ class ModelSpec extends FlatSpec with Matchers {
 
 
     println("done")
+  }
+
+  "Dnn model load and save" should "be correct" in {
+    val (model, batch) = getModel("resnet_50_dnn", batchSize = 1)
+
+    val filePath = java.io.File.createTempFile("ModelSpec", "model").getAbsolutePath
+    Files.delete(Paths.get(filePath))
+    Files.createDirectory(Paths.get(filePath))
+
+    val input = Tensor[Float](1, 3, 224, 224).rand()
+
+    val out1 = model.forward(input)
+    val grad1 = model.backward(input, out1)
+
+    val model2 = model.cloneModule()
+    Optimizer.saveModel(model2, Some(filePath), true)
+    val modelLoad = File.load[Module[Float]](filePath + "/model")
+    modelLoad should be (model2)
+
+    val out2 = modelLoad.forward(input)
+    val grad2 = modelLoad.backward(input, out2)
+
+    out1 should be (out1)
+    grad1 should be (grad2)
   }
 }

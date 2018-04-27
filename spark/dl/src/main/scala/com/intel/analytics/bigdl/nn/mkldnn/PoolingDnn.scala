@@ -226,13 +226,12 @@ class PoolingDnn[T: ClassTag](
       println("pooling updateoutput start " + this.getName())
     }
     val n_fwd = stream_fwd.length
-    if (input.getTensorType != MklDnnType) {
+   val (memoryPrimitives, buffer) = if (input.getTensorType != MklDnnType) {
       MklDnnTensor.syncFromHeap(inputBuffer, input.storage().array(), input.storageOffset() - 1)
+     (Array(src_memory, dst_memory, work_memory), Array(inputBuffer, output, workSpace))
     } else {
-      inputBuffer = input.asInstanceOf[MklDnnTensor[Float]]
+     (Array(src_memory, dst_memory, work_memory), Array(input, output, workSpace))
     }
-    val memoryPrimitives = Array(src_memory, dst_memory, work_memory)
-    val buffer = Array(inputBuffer, output, workSpace)
     MklDnnOps.streamSubmit(stream, n_fwd, stream_fwd.toArray, n_fwd, memoryPrimitives, buffer)
 
     val end1 = (System.nanoTime() - s1)/1e6
@@ -332,15 +331,19 @@ class PoolingDnn[T: ClassTag](
     if (gradOutputBuffer != null) {
       gradOutputBuffer.release()
       gradOutputBuffer.set()
+      gradOutputBuffer = null
     }
     if (workSpace != null) {
       workSpace.release()
       workSpace.set()
+      workSpace = null
     }
     if (inputBuffer != null) {
       inputBuffer.release()
       inputBuffer.set()
+      inputBuffer = null
     }
+    inputElement = 0
     this
   }
 }

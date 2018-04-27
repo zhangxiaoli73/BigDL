@@ -28,7 +28,7 @@ import com.intel.analytics.bigdl.nn.quantized.Quantization
 import com.intel.analytics.bigdl.nn.{Module, _}
 import com.intel.analytics.bigdl.optim._
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
-import com.intel.analytics.bigdl.tensor.{QuantizedTensor, Tensor, TensorDataType}
+import com.intel.analytics.bigdl.tensor.{MklDnnTensor, QuantizedTensor, Tensor, TensorDataType}
 import com.intel.analytics.bigdl.transform.vision.image.{DistributedImageFrame, ImageFeature, ImageFrame, LocalImageFrame}
 import com.intel.analytics.bigdl.utils.TorchObject.TYPE_MODULE
 import com.intel.analytics.bigdl.utils._
@@ -128,6 +128,15 @@ abstract class AbstractModule[A <: Activity: ClassTag, B <: Activity: ClassTag, 
       gradInput.asInstanceOf[Tensor[_]].set()
     }
 
+    if (output.isInstanceOf[MklDnnTensor[_]]) {
+      output.asInstanceOf[MklDnnTensor[_]].release()
+      output.asInstanceOf[MklDnnTensor[_]].set()
+    }
+
+    if (gradInput.isInstanceOf[MklDnnTensor[_]]) {
+      gradInput.asInstanceOf[MklDnnTensor[_]].release()
+      gradInput.asInstanceOf[MklDnnTensor[_]].set()
+    }
     this
   }
 

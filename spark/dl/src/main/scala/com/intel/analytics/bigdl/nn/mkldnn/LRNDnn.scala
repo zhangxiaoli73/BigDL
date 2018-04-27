@@ -265,14 +265,17 @@ class LRNDnn[T: ClassTag](
     if (gradOutputBuffer != null) {
       gradOutputBuffer.release()
       gradOutputBuffer.set()
+      gradOutputBuffer = null
     }
     if (workSpace != null) {
       workSpace.release()
       workSpace.set()
+      workSpace = null
     }
     if (inputBuffer != null) {
       inputBuffer.release()
       inputBuffer.set()
+      inputBuffer = null
     }
     this
   }

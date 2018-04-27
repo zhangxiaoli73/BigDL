@@ -131,13 +131,13 @@ class ReLUDnn[T: ClassTag](ip: Boolean = false, value: Float = 0.0f)(
         println("relu updateoutput start " + this.getName())
       }
 
-      if (input.getTensorType != MklDnnType) {
+      val (memoryPrimitives, buffer) = if (input.getTensorType != MklDnnType) {
         MklDnnTensor.syncFromHeap(inputBuffer, input.storage().array(), input.storageOffset() - 1)
+        (Array(src_memory, dst_memory), Array(inputBuffer, output))
       } else {
         inputBuffer = input.asInstanceOf[MklDnnTensor[Float]]
+        (Array(src_memory, dst_memory), Array(input, output))
       }
-      val memoryPrimitives = Array(src_memory, dst_memory)
-      val buffer = Array(inputBuffer, output)
       val stream_fwd = Array(relu_fwd)
       val n_fwd = stream_fwd.length
       MklDnnOps.streamSubmit(stream, n_fwd, stream_fwd, n_fwd, memoryPrimitives, buffer)
@@ -153,9 +153,6 @@ class ReLUDnn[T: ClassTag](ip: Boolean = false, value: Float = 0.0f)(
 
     override def updateGradInput(input: Tensor[Float], gradOutput: Tensor[Float]): Tensor[Float] = {
       val s1 = System.nanoTime()
-      if (this.getName() == "res2b_relu") {
-        val tmp = 0
-      }
       if (update_primitive) {
         var gradOutput_md : Long = 0L
         if (gradOutput.getPrimitiveDesc() != 0L) {
@@ -276,10 +273,12 @@ class ReLUDnn[T: ClassTag](ip: Boolean = false, value: Float = 0.0f)(
     if (gradOutputBuffer != null) {
       gradOutputBuffer.release()
       gradOutputBuffer.set()
+      gradOutputBuffer = null
     }
     if (inputBuffer != null) {
       inputBuffer.release()
       inputBuffer.set()
+      inputBuffer = null
     }
     this
   }

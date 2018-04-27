@@ -422,7 +422,7 @@ class ConvolutionDnn(
         stream_fwd.append(reorder_src)
       }
       if (reorder_weights != 0L) {
-        println("conv updateOutput weight reorder " + internal_weightFormat)
+        println("conv updateOutput weight reorder " + internal_weightFormat + " " + this.getName())
         stream_fwd.append(reorder_weights)
       }
       stream_fwd.append(conv_fwd)
@@ -489,6 +489,7 @@ class ConvolutionDnn(
     if (System.getProperty("debug") == "2") {
       DnnTools.debugFwInfo(this.getName(), end1, input.getFormat(), output.getFormat())
     }
+    output.storage()
     output
   }
 
@@ -501,7 +502,13 @@ class ConvolutionDnn(
       gradOutput_md = MklDnnOps.memoryDescInit(gradOutput.dim(), gradOutput.size(), dataType,
         this.internal_format)
       // for gradInput
-      gradInput = MklDnnTensor[Float](input.size())
+      if (gradInput.getTensorType != MklDnnType) {
+        gradInput.asInstanceOf[Tensor[Float]].set()
+        gradInput = MklDnnTensor[Float](input.size())
+      } else if (gradInput.nElement() != input.nElement()) {
+        gradInput.asInstanceOf[MklDnnTensor[Float]].release()
+        gradInput = MklDnnTensor[Float](input.size())
+      }
       val gradInput_md = MklDnnOps.memoryDescInit(gradInput.dim(), gradInput.size(), dataType,
         this.internal_format)
 
@@ -812,7 +819,6 @@ class ConvolutionDnn(
         memoryPrimitives.append(gradOutput_memory)
         buffer.append(gradOutput)
       }
-
     } else {
       memoryPrimitives.append(gradOutput_memory, reorder_gradOutput_memory_acc)
       buffer.append(gradOutput, gradOutputBuffer)
@@ -882,18 +888,22 @@ class ConvolutionDnn(
     if (gradOutputBuffer != null) {
       gradOutputBuffer.release()
       gradOutputBuffer.set()
+      gradOutputBuffer = null
     }
     if (inputBuffer != null) {
       inputBuffer.release()
       inputBuffer.set()
+      inputBuffer = null
     }
     if (weightsBuffer != null) {
       weightsBuffer.release()
       weightsBuffer.set()
+      weightsBuffer = null
     }
     if (gradWeightBuffer != null) {
       gradWeightBuffer.release()
       gradWeightBuffer.set()
+      gradWeightBuffer = null
     }
     if (original_gradWeights != null) original_gradWeights.set()
     if (original_gradBias != null) original_gradBias.set()

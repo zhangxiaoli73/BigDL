@@ -91,6 +91,7 @@ class MklDnnTensor[T: ClassTag](
 
   override def isEmpty: Boolean = this.ptr == NullPtr
 
+  // todo: will not be 0 as default _size is not null
   override def nElement(): Int = if (_size == null) { 0 } else { _size.product }
 
   override def storage(): Storage[T] = {
@@ -116,6 +117,7 @@ class MklDnnTensor[T: ClassTag](
     this._size = s
     this._storage = null
     this._stride = DenseTensor.size2Stride(s)
+    this.nDimension = s.length
 
     this
   }
@@ -199,7 +201,12 @@ class MklDnnTensor[T: ClassTag](
     MklDnn.isLoaded
 //    println("load mkldnn")
     in.defaultReadObject()
-    this._pointer = allocate(_size.product)
+    // todo: whether is reasonable
+    if (_size.isEmpty) {
+      this._pointer = NullPtr
+    } else {
+      this._pointer = allocate(_size.product)
+    }
   }
 
 }
