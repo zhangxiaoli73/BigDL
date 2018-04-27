@@ -620,22 +620,11 @@ class SpatialBatchNormalization[T: ClassTag](
 
   override def clearState() : this.type = {
     super.clearState()
-    gradAll.set()
-    gradWeight.set()
-    gradBias.set()
 
-    if (diffAll != null) {
-      diffAll.release()
-      diffAll.set()
+    for (t <- List(gradAll, gradWeight, gradBias, diffAll, mean, variance)) {
+      t.resize(t.size)
     }
-    if (mean != null) {
-      mean.release()
-      mean.set()
-    }
-    if (variance != null) {
-      variance.release()
-      variance.set()
-    }
+
     this
   }
 
