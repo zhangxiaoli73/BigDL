@@ -199,8 +199,12 @@ class ReLUDnn[T: ClassTag](ip: Boolean = false, value: Float = 0.0f)(
         val bwd_pd = MklDnnOps.primitiveDescCreate(bwd_desc, engine, relu_fwd_pd)
 
         /* create memory primities for relu diff src */
-        // todo: output with Dense Tensor
-        gradInput = MklDnnTensor[Float](input.size())
+        if (gradInput.getTensorType != MklDnnType) {
+          gradInput = MklDnnTensor[Float](input.size())
+        } else if (gradInput.nElement() != input.nElement()) {
+          gradInput.asInstanceOf[MklDnnTensor[Float]].release()
+          gradInput = MklDnnTensor[Float](input.size())
+        }
         val gradInput_pd = MklDnnOps.primitiveDescQueryPd(bwd_pd, MklDnn.Query.diff_src_pd, 0)
         gradInput_memory = MklDnn.PrimitiveCreate0(gradInput_pd)
         gradInput.setPrimitiveDesc(gradInput_pd)

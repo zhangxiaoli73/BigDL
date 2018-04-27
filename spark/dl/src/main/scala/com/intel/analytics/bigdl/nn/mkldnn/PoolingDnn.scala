@@ -256,8 +256,12 @@ class PoolingDnn[T: ClassTag](
       }
 
       // for gradInput
-      // todo: output with Dense Tensor
-      gradInput = MklDnnTensor[Float](input.size())
+      if (gradInput.getTensorType != MklDnnType) {
+        gradInput = MklDnnTensor[Float](input.size())
+      } else {
+        gradInput.asInstanceOf[MklDnnTensor[Float]].release()
+        gradInput = MklDnnTensor[Float](input.size())
+      }
       val gradInput_md = MklDnnOps.memoryDescInit(gradInput.dim(), gradInput.size(),
         dataType, this.internal_format)
 

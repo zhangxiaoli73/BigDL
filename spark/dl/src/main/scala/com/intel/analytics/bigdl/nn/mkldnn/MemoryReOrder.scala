@@ -20,7 +20,7 @@ import breeze.linalg
 import breeze.linalg.dim
 import com.intel.analytics.bigdl.mkl.MklDnn
 import com.intel.analytics.bigdl.nn.abstractnn.{DataFormat, TensorModule}
-import com.intel.analytics.bigdl.tensor.{MklDnnTensor, Tensor}
+import com.intel.analytics.bigdl.tensor.{MklDnnTensor, MklDnnType, Tensor}
 
 import scala.collection.mutable.ArrayBuffer
 import scala.reflect.ClassTag
@@ -105,8 +105,12 @@ class MemoryReOrder(inputFormat: Int = MklDnn.MemoryFormat.any,
       // val reorder_primitive = res._1
       src_memory = res._2
       if (src_memory != 0L) {
-        // todo: output with Dense Tensor
-        output = MklDnnTensor[Float](input.size())
+        if (output.getTensorType != MklDnnType) {
+          output = MklDnnTensor[Float](input.size())
+        } else if (output.nElement() != input.nElement()) {
+          output.asInstanceOf[MklDnnTensor[Float]].release()
+          output = MklDnnTensor[Float](input.size())
+        }
         output.setPrimitiveDesc(user_pd)
       }
 
@@ -156,8 +160,12 @@ class MemoryReOrder(inputFormat: Int = MklDnn.MemoryFormat.any,
       // val reorder_primitive = res._1
       src_memory2 = res._2
       if (src_memory2 != 0L) {
-        // todo: output with Dense Tensor
-        gradInput = MklDnnTensor[Float](gradOutput.size())
+        if (gradInput.getTensorType != MklDnnType) {
+          gradInput = MklDnnTensor[Float](gradOutput.size())
+        } else if (gradInput.nElement() != gradOutput.nElement()) {
+          gradInput.asInstanceOf[MklDnnTensor[Float]].release()
+          gradInput = MklDnnTensor[Float](gradOutput.size())
+        }
         gradInput.setPrimitiveDesc(user_pd)
       }
 

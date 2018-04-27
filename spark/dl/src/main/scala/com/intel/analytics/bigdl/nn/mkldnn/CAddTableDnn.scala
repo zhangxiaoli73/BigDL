@@ -42,6 +42,9 @@ class CAddTableDnn[T: ClassTag](val inplace: Boolean = false)(
       output = input[Tensor[T]](1)
     } else if (output.getTensorType != MklDnnType) {
       output = MklDnnTensor[T](input[Tensor[T]](1).size())
+    } else if (output.nElement() != input[Tensor[T]](1).nElement()) {
+      output.asInstanceOf[MklDnnTensor[Float]].release()
+      output = MklDnnTensor[T](input[Tensor[T]](1).size())
     }
 
     // default: all tensor in inputTable should have same format

@@ -195,10 +195,8 @@ class ConcatDnn(val dimension: Int) extends DynamicContainer[Tensor[Float], Tens
       i += 1
     }
     if (output.getTensorType != MklDnnType) {
-      // todo: output with Dense Tensor
       output = MklDnnTensor[Float](this.size)
     } else if (output.nElement() != this.size.product) {
-      println("ConcatDnn: resize output")
       output.asInstanceOf[MklDnnTensor[Float]].release()
       output = MklDnnTensor[Float](this.size)
     }
