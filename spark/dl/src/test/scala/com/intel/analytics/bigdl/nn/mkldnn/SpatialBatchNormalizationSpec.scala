@@ -723,4 +723,34 @@ class SpatialBatchNormalizationSpec extends FlatSpec with Matchers {
 
     DnnUtils.nearequals(dnn.output.toTensor, blas.output.toTensor, 1e-4) should be (true)
   }
+
+  "bn clear state" should "work correctly" in {
+    val (batchSize, channel, height, width) = (4, 64, 112, 112)
+    val epsilon = 1e-5
+
+    val initWeight = Tensor(channel).rand(-1, 1)
+    val initBias = Tensor(channel).fill(0)
+
+    val bn = SpatialBatchNormalization(channel, epsilon, initWeight = initWeight,
+      initBias = initBias).setShouldConvert(true)
+    val input = Tensor(batchSize, channel, height, width).rand(-1, 1)
+
+    val output = bn.forward(input)
+
+    val nnBn = nn.SpatialBatchNormalization(channel, epsilon,
+      initWeight = initWeight, initBias = initBias)
+    val nnOutput = nnBn.forward(input)
+
+    DnnUtils.nearequals(output, nnOutput) should be (true)
+
+    val gradOutput = Tensor().resizeAs(output)
+    bn.backward(input, gradOutput)
+    nnBn.backward(input, gradOutput)
+
+    bn.clearState()
+    nnBn.clearState()
+
+    bn.forward(input)
+    bn.backward(input, gradOutput)
+  }
 }
