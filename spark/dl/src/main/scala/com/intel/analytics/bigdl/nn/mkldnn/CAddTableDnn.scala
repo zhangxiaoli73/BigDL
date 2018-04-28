@@ -53,7 +53,6 @@ class CAddTableDnn[T: ClassTag](val inplace: Boolean = false)(
     while (i <= input.length()) {
       val curTensor = input[Tensor[T]](i)
       require(curTensor.getFormat() == format, "all tensor in inputTable should have same format")
-       // todo: need mkl dnn tensor add
       output.add(curTensor)
       i += 1
     }

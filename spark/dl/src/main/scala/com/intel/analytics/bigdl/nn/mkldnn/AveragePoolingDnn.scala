@@ -163,7 +163,6 @@ class PoolingDnnAverage[T: ClassTag](
       val nbatch = input.size(1)
       val input_size = input.size()
       val dst_sizes = Array(nbatch, nInputPlane, oHeight, oWidth)
-      // todo: output with Dense Tensor
       if (output.getTensorType != MklDnnType) {
         output = MklDnnTensor[Float](dst_sizes)
       } else if (output.nElement() != dst_sizes.product) {

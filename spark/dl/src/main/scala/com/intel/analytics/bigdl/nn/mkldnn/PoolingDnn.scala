@@ -165,7 +165,6 @@ class PoolingDnn[T: ClassTag](
       val input_size = input.size()
       // todo: dst size not correct some times
       val dst_sizes = Array(nbatch, nInputPlane, oHeight, oWidth)
-      // todo: output with Dense Tensor
       if (output.getTensorType != MklDnnType) {
         output = MklDnnTensor[Float](dst_sizes)
       } else if (output.nElement() != dst_sizes.product) {

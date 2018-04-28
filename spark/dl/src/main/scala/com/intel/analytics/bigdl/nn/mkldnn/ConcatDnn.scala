@@ -303,6 +303,9 @@ class ConcatDnn(val dimension: Int) extends DynamicContainer[Tensor[Float], Tens
           gradInput.copy(currentGradInput)
         } else {
           // todo: before add, need to transfor to same format, here just require
+          require(currentGradInput.getFormat() == format,
+            s"all tensor should have same format ${format}," +
+            s"but ${this.modules(i).getName()} has format ${currentGradInput.getFormat()}")
           gradInput.add(currentGradInput)
         }
       }

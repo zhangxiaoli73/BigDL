@@ -48,31 +48,4 @@ class LRNDnnSpec extends FlatSpec with Matchers {
       DnnUtils.nearequals(output, output2) should be(true)
       DnnUtils.nearequals(grad1, grad2) should be(true)
   }
-
-
-  "LRNDnn time test" should "work correctly" in {
-    val batchSize = 4
-
-    val input = Tensor[Float](batchSize, 96, 55, 55).apply1(e => Random.nextFloat())
-    val gradOutput = Tensor[Float](batchSize, 96, 55, 55).apply1(e => Random.nextFloat())
-
-     // val layer = SpatialMaxPooling[Float](3, 3, 2, 2, 0, 0)
-    val layer = LRNDnn[Float](5, 0.0001, 0.75, 1.0)
-
-    // warm up
-    for (i <- 1 to 30) {
-      val output = layer.forward(input)
-      val grad1 = layer.backward(input, gradOutput)
-      val t = 1
-    }
-
-    val s1 = System.nanoTime()
-    for (i <- 1 to 50) {
-       val output = layer.forward(input)
-      val grad1 = layer.backward(input, gradOutput)
-    }
-    val end1 = System.nanoTime() - s1
-    println(s"lrn dnn time ${end1/1e9} s")
-    println("done")
-  }
 }

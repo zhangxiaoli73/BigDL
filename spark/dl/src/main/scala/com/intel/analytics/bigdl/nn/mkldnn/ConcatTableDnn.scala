@@ -70,10 +70,9 @@ class ConcatTableDnn[T : ClassTag]
         format = currentGradInput.getFormat()
       } else {
         // todo: before add, need to transfor to same format, here just require
-//        require(currentGradInput.getFormat() == format,
-//                                      "all tensor results from modules should have same" +
-//         s"format ${format} ${currentGradInput.getFormat()} ${modules(i).getName()} ${this.getName()}")
-
+        require(currentGradInput.getFormat() == format,
+                                      "all tensor results from modules should have same" +
+         s"format ${format}, but ${modules(i).getName()} has format ${currentGradInput.getFormat()}")
         gradInput.add(currentGradInput)
       }
       i += 1

@@ -179,101 +179,101 @@ class ConvolutionDnnSpec extends FlatSpec with Matchers {
       DnnUtils.nearequals(grad1, grad2) should be(true)
   }
 
-  "ConvolutionDnn with format=nchw and ngroup=2" should "work correctly" in {
-    val nInputPlane = 2
-    val nOutputPlane = 4
-    val kW = 3
-    val kH = 3
-    val dW = 4
-    val dH = 4
-    val padW = 0
-    val padH = 0
-    val ngroup = 2
+//  "ConvolutionDnn with format=nchw and ngroup=2" should "work correctly" in {
+//    val nInputPlane = 2
+//    val nOutputPlane = 4
+//    val kW = 3
+//    val kH = 3
+//    val dW = 4
+//    val dH = 4
+//    val padW = 0
+//    val padH = 0
+//    val ngroup = 2
+//
+//    val input = Tensor[Float](2, 2, 23, 23).apply1(e => Random.nextFloat())
+//    val gradOutput = Tensor[Float](2, 4, 6, 6).apply1(e => Random.nextFloat())
+//    RNG.setSeed(100)
+//    val conv = ConvolutionDnn(nInputPlane, nOutputPlane, kW, kH, dW, dH,
+//      padW, padH, ngroup)
+//    RNG.setSeed(100)
+//    val layer = SpatialConvolution[Float](nInputPlane, nOutputPlane, kW, kH,
+//      dW, dH, padW, padH, ngroup)
+//
+//    val output2 = layer.forward(input)
+//    val grad2 = layer.updateGradInput(input, gradOutput)
+//    layer.accGradParameters(input, gradOutput)
+//    layer.accGradParameters(input, gradOutput)
+//    val weight2 = layer.weight
+//    val gradweight2 = layer.gradWeight
+//    val bias2 = conv.bias
+//    val gradbias2 = conv.gradBias
+//
+//    val output = conv.forward(input)
+//    val grad1 = conv.updateGradInput(input, gradOutput)
+//    conv.accGradParameters(input, gradOutput)
+//    conv.accGradParameters(input, gradOutput)
+//    val weight1 = conv.weight
+//    val gradweight1 = conv.gradWeight
+//    val bias1 = conv.bias
+//    val gradbias1 = conv.gradBias
+//
+//    DnnUtils.nearequals(weight1, weight2) should be(true)
+//    DnnUtils.nearequals(gradweight1, gradweight2) should be(true)
+//    DnnUtils.nearequals(bias1, bias2) should be(true)
+//    DnnUtils.nearequals(gradbias1, gradbias2) should be(true)
+//    DnnUtils.nearequals(output, output2) should be(true)
+//    DnnUtils.nearequals(grad1, grad2) should be(true)
+//  }
 
-    val input = Tensor[Float](2, 2, 23, 23).apply1(e => Random.nextFloat())
-    val gradOutput = Tensor[Float](2, 4, 6, 6).apply1(e => Random.nextFloat())
-    RNG.setSeed(100)
-    val conv = ConvolutionDnn(nInputPlane, nOutputPlane, kW, kH, dW, dH,
-      padW, padH, ngroup)
-    RNG.setSeed(100)
-    val layer = SpatialConvolution[Float](nInputPlane, nOutputPlane, kW, kH,
-      dW, dH, padW, padH, ngroup)
-
-    val output2 = layer.forward(input)
-    val grad2 = layer.updateGradInput(input, gradOutput)
-    layer.accGradParameters(input, gradOutput)
-    layer.accGradParameters(input, gradOutput)
-    val weight2 = layer.weight
-    val gradweight2 = layer.gradWeight
-    val bias2 = conv.bias
-    val gradbias2 = conv.gradBias
-
-    val output = conv.forward(input)
-    val grad1 = conv.updateGradInput(input, gradOutput)
-    conv.accGradParameters(input, gradOutput)
-    conv.accGradParameters(input, gradOutput)
-    val weight1 = conv.weight
-    val gradweight1 = conv.gradWeight
-    val bias1 = conv.bias
-    val gradbias1 = conv.gradBias
-
-    DnnUtils.nearequals(weight1, weight2) should be(true)
-    DnnUtils.nearequals(gradweight1, gradweight2) should be(true)
-    DnnUtils.nearequals(bias1, bias2) should be(true)
-    DnnUtils.nearequals(gradbias1, gradbias2) should be(true)
-    DnnUtils.nearequals(output, output2) should be(true)
-    DnnUtils.nearequals(grad1, grad2) should be(true)
-  }
-
-  "ConvolutionDnn with relu " should "work correctly" in {
-    val nInputPlane = 2
-    val nOutputPlane = 4
-    val kW = 3
-    val kH = 3
-    val dW = 4
-    val dH = 4
-    val padW = 0
-    val padH = 0
-    val ngroup = 2
-
-    val input = Tensor[Float](2, 2, 23, 23).apply1(e => Random.nextFloat())
-    val gradOutput = Tensor[Float](2, 4, 6, 6).apply1(e => Random.nextFloat())
-    RNG.setSeed(100)
-    val conv = ConvolutionDnn(nInputPlane, nOutputPlane, kW, kH, dW, dH,
-      padW, padH, ngroup)
-    RNG.setSeed(100)
-    val layer = SpatialConvolution[Float](nInputPlane, nOutputPlane, kW, kH,
-      dW, dH, padW, padH, ngroup)
-    val relu = ReLUDnn[Float](ip = false)
-    val relu1 = ReLU[Float](ip = false)
-
-    var output = conv.forward(input)
-    relu.forward(output)
-    val grad1 = relu.backward(output, gradOutput)
-    val grad1_conv = conv.backward(input, grad1)
-
-    val weight1 = conv.weight
-    val gradweight1 = conv.gradWeight
-    val bias1 = conv.bias
-    val gradbias1 = conv.gradBias
-
-    val output2 = layer.forward(input)
-    relu.forward(output2)
-    val grad2 = relu.backward(output2, gradOutput)
-    val grad2_conv = layer.backward(input, grad2)
-
-    val weight2 = layer.weight
-    val gradweight2 = layer.gradWeight
-    val bias2 = conv.bias
-    val gradbias2 = conv.gradBias
-
-    DnnUtils.nearequals(weight1, weight2) should be(true)
-    DnnUtils.nearequals(gradweight1, gradweight2) should be(true)
-    DnnUtils.nearequals(bias1, bias2) should be(true)
-    DnnUtils.nearequals(gradbias1, gradbias2) should be(true)
-    DnnUtils.nearequals(output, output2) should be(true)
-    DnnUtils.nearequals(grad1, grad2) should be(true)
-  }
+//  "ConvolutionDnn with relu " should "work correctly" in {
+//    val nInputPlane = 2
+//    val nOutputPlane = 4
+//    val kW = 3
+//    val kH = 3
+//    val dW = 4
+//    val dH = 4
+//    val padW = 0
+//    val padH = 0
+//    val ngroup = 2
+//
+//    val input = Tensor[Float](2, 2, 23, 23).apply1(e => Random.nextFloat())
+//    val gradOutput = Tensor[Float](2, 4, 6, 6).apply1(e => Random.nextFloat())
+//    RNG.setSeed(100)
+//    val conv = ConvolutionDnn(nInputPlane, nOutputPlane, kW, kH, dW, dH,
+//      padW, padH, ngroup)
+//    RNG.setSeed(100)
+//    val layer = SpatialConvolution[Float](nInputPlane, nOutputPlane, kW, kH,
+//      dW, dH, padW, padH, ngroup)
+//    val relu = ReLUDnn[Float](ip = false)
+//    val relu1 = ReLU[Float](ip = false)
+//
+//    var output = conv.forward(input)
+//    relu.forward(output)
+//    val grad1 = relu.backward(output, gradOutput)
+//    val grad1_conv = conv.backward(input, grad1)
+//
+//    val weight1 = conv.weight
+//    val gradweight1 = conv.gradWeight
+//    val bias1 = conv.bias
+//    val gradbias1 = conv.gradBias
+//
+//    val output2 = layer.forward(input)
+//    relu.forward(output2)
+//    val grad2 = relu.backward(output2, gradOutput)
+//    val grad2_conv = layer.backward(input, grad2)
+//
+//    val weight2 = layer.weight
+//    val gradweight2 = layer.gradWeight
+//    val bias2 = conv.bias
+//    val gradbias2 = conv.gradBias
+//
+//    DnnUtils.nearequals(weight1, weight2) should be(true)
+//    DnnUtils.nearequals(gradweight1, gradweight2) should be(true)
+//    DnnUtils.nearequals(bias1, bias2) should be(true)
+//    DnnUtils.nearequals(gradbias1, gradbias2) should be(true)
+//    DnnUtils.nearequals(output, output2) should be(true)
+//    DnnUtils.nearequals(grad1, grad2) should be(true)
+//  }
 
   def getModel(module: String, batchSize: Int): (Module[Float], MiniBatch[Float]) = {
     RNG.setSeed(100)
@@ -591,85 +591,6 @@ class ConvolutionDnnSpec extends FlatSpec with Matchers {
     println("done")
   }
 
-  "Inception_v2_dnn" should "work correctly" in {
-    val batchSize = 2
-    val (model1, batch1) = getModel("inception_v2", batchSize)
-    val (model2, batch2) = getModel("inception_v2_dnn", batchSize)
-
-    RNG.setSeed(1)
-    val input = Tensor[Float](batchSize, 3, 224, 224).fill(1.0f)
-
-    val (weight1, bias1) = model1.getParameters()
-    val (weight2, bias2) = model2.getParameters()
-
-    DnnUtils.nearequals(weight1, weight2, 1e-4) should be(true)
-    DnnUtils.nearequals(bias1, bias2, 1e-4) should be(true)
-
-    val out1 = model1.forward(input).toTensor[Float]
-    val out2 = model2.forward(input).toTensor[Float]
-    DnnUtils.nearequals(out1, out2, 1e-3) should be(true)
-    DnnUtils.nearequals(weight1, weight2, 1e-4) should be(true)
-    DnnUtils.nearequals(bias1, bias2, 1e-4) should be(true)
-
-    val grad1 = model1.backward(input, out1).toTensor[Float]
-    val grad2 = model2.backward(input, out1).toTensor[Float]
-    // DnnUtils.nearequals(grad1, grad2)
-
-    //    val (weight1, bias1) = model1.getParameters()
-    //    val (weight2, bias2) = model2.getParameters()
-    //
-    DnnUtils.nearequals(weight1, weight2, 1e-4) should be(true)
-    DnnUtils.nearequals(bias1, bias2, 1e-3) should be(true)
-
-
-    println("done")
-
-  }
-
-  "bn dnn" should "work correctly" in {
-    val batchSize = 2
-    RNG.setSeed(100)
-    val model = SpatialConvolution[Float](3, 64, 7, 7, 2, 2, 3, 3, 1, false)
-    val in = Tensor[Float](batchSize, 3, 224, 224).fill(1.0f)
-    val input = model.forward(in)
-
-    val (channel, height, width) = (64, 112, 112)
-//    val input = Tensor[Float](batchSize, channel, height, width)
-//                          .apply1(e => RNG.uniform(-1, 1).toFloat)
-
-//    val initWeight = Tensor[Float](channel).rand()
-//    val initBias = Tensor[Float](channel).rand()
-
-    val bn = // SpatialBatchNormalization[Float](channel, epsilon)
-    mkldnn.SpatialBatchNormalization[Float](64, 1e-3)
-    val nnBn = // nn.SpatialBatchNormalization[Float](channel, epsilon)
-    nn.SpatialBatchNormalization[Float](64, 1e-3)
-
-    val out1 = bn.forward(input)
-    val out2 = nnBn.forward(input)
-
-    DnnUtils.nearequals(out1, out2, 1e-4) should be(true)
-
-
-    val (weight1, gradweight1) = bn.getParameters()
-    val (weight2, gradweight2) = nnBn.getParameters()
-
-    val gradOutput = Tensor[Float]().resizeAs(input).rand()
-
-    bn.backward(input, gradOutput)
-    nnBn.backward(input, gradOutput)
-
-
-    DnnUtils.nearequals(weight1, weight2)
-    DnnUtils.nearequals(gradweight1, gradweight2)
-
-    DnnUtils.nearequals(bn.output, nnBn.output)
-    DnnUtils.nearequals(bn.gradInput, nnBn.gradInput)
-
-    println("=" * 120)
-
-  }
-
   "Inception_Layer_v2 dnn" should "work correctly" in {
     import com.intel.analytics.bigdl.models.inception
     val batchSize = 2
@@ -747,53 +668,6 @@ class ConvolutionDnnSpec extends FlatSpec with Matchers {
     DnnUtils.nearequals(weight1, weight2, 1e-4) should be(true)
     DnnUtils.nearequals(bias1, bias2, 1e-4) should be(true)
 
-
-    println("done")
-
-  }
-
-  "resnet_50_dnn" should "work correctly" in {
-    val batchSize = 1
-    // val (model1, batch1) = getModel("resnet_50", batchSize)
-    // val (model2, batch2) = getModel("resnet_50_dnn", batchSize)
-
-    val (model1, batch1) = getModel("vgg19", batchSize)
-    val (model2, batch2) = getModel("vgg19_dnn", batchSize)
-
-
-    RNG.setSeed(1)
-    val input = Tensor[Float](batchSize, 3, 224, 224).fill(1.0f)
-
-    val (weight1, bias1) = model1.getParameters()
-    val (weight2, bias2) = model2.getParameters()
-
-    DnnUtils.nearequals(weight1, weight2, 1e-4) should be(true)
-    DnnUtils.nearequals(bias1, bias2, 1e-4) should be(true)
-
-    val out1 = model1.forward(input).toTensor[Float]
-    val out2 = model2.forward(input).toTensor[Float]
-
-    out2.storage()
-    var userOut2 = Tensor[Float]()
-    if (out1.getFormat() != out2.getFormat() && out2.getFormat() != 5 && out2.getFormat() != 4) {
-      DnnUtils.reorderToUser(out2, userOut2, 5)
-    } else {
-      userOut2 = out2
-    }
-    DnnUtils.getunequals(out1, userOut2, 1e-3) should be(true)
-
-    DnnUtils.nearequals(weight1, weight2, 1e-4) should be(true)
-    DnnUtils.nearequals(bias1, bias2, 1e-4) should be(true)
-
-    val grad1 = model1.backward(input, out1).toTensor[Float]
-    val grad2 = model2.backward(input, out1).toTensor[Float]
-    // DnnUtils.nearequals(grad1, grad2)
-
-    //    val (weight1, bias1) = model1.getParameters()
-    //    val (weight2, bias2) = model2.getParameters()
-    //
-    DnnUtils.nearequals(weight1, weight2, 1e-4) should be(true)
-    DnnUtils.getunequals(bias1, bias2, 1e-3) should be(true)
 
     println("done")
 

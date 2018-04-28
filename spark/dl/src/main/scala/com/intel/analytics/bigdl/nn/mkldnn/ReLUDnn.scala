@@ -76,7 +76,6 @@ class ReLUDnn[T: ClassTag](ip: Boolean = false, value: Float = 0.0f)(
       }
 
       if (update_primitive) {
-        // todo: output with Dense Tensor
         if (output.getTensorType != MklDnnType) {
           output = MklDnnTensor[Float](input.size())
         } else if (output.nElement() != input.nElement()) {
