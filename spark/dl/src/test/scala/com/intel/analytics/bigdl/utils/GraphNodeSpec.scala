@@ -18,10 +18,15 @@ package com.intel.analytics.bigdl.utils
 
 
 import com.intel.analytics.bigdl.example.loadmodel.AlexNet_OWT
+import com.intel.analytics.bigdl.mkl.Memory
 import com.intel.analytics.bigdl.models.Inception
 import com.intel.analytics.bigdl.models.resnet.ResNet
 import com.intel.analytics.bigdl.models.resnet.ResNet.{DatasetType, ShortcutType}
+import com.intel.analytics.bigdl.nn
 import com.intel.analytics.bigdl.nn._
+import com.intel.analytics.bigdl.nn.mkldnn.HeapData
+import com.intel.analytics.bigdl.nn.mkldnn.Phase.{InferencePhase, TrainingPhase}
+import com.intel.analytics.bigdl.nn.mkldnn.models.Vgg_16
 import com.intel.analytics.bigdl.utils.RandomGenerator.RNG
 import org.scalatest.{FlatSpec, Matchers}
 import com.intel.analytics.bigdl.numeric.NumericFloat
@@ -102,6 +107,75 @@ class GraphNodeSpec extends FlatSpec with Matchers {
     val gradInput2 = graphModel.backward(input, gradOutput)
 
     gradInput1 should be (gradInput2)
+  }
+
+  "MklDnn ResNet to Graph" should "generate correct output" in {
+    System.setProperty("bigdl.mkldnn.fusion.convbn", "true")
+    System.setProperty("bigdl.mkldnn.fusion.bnrelu", "true")
+    System.setProperty("bigdl.mkldnn.fusion.convrelu", "true")
+    System.setProperty("bigdl.mkldnn.fusion.convsum", "true")
+
+    System.setProperty("bigdl.localMode", "true")
+    System.setProperty("bigdl.engineType", "mkldnn")
+    Engine.init
+
+    import com.intel.analytics.bigdl.nn.mkldnn.ResNet.DatasetType
+    val inputSeed = 1
+    val batchSize = 4
+    val modelSeed = 101
+
+    System.setProperty("bigdl.engineType", "mkldnn")
+
+    val classNum = 1000
+    val inputFormat = Memory.Format.nchw
+    val inputShape = Array(batchSize, 3, 224, 224)
+    val input = Tensor(inputShape).rand()
+    val label = Tensor(batchSize).apply1(_ => Math.ceil(RNG.uniform(0, 1) * 1000).toFloat)
+
+    val model = nn.mkldnn.ResNet(
+      batchSize, classNum, T("depth" -> 50, "dataSet" -> DatasetType.ImageNet))
+
+    val criterion = CrossEntropyCriterion()
+
+    model.compile(InferencePhase)
+    model.evaluate()
+
+//    val tmp = Engine.getEngineType()
+//    Random.setSeed(inputSeed)
+//    val classNum: Int = 1000
+//    val input = Tensor[Float](batchSize, 3, 224, 224).apply1( e => Random.nextFloat())
+//    val labels = Tensor[Float](batchSize).apply1(e => Random.nextInt(classNum))
+//    val seed = modelSeed
+//    RNG.setSeed(seed)
+//    val model = nn.mkldnn.ResNet(
+//      batchSize, classNum, T("depth" -> 50, "dataSet" -> DatasetType.ImageNet))
+//    RNG.setSeed(seed)
+//    val model2 = nn.mkldnn.ResNet(
+//      batchSize, classNum, T("depth" -> 50, "dataSet" -> DatasetType.ImageNet))
+//
+//
+//    val inputShape = Array(batchSize, 3, 224, 224)
+//    val inputFormat = Memory.Format.nchw
+//    model.compile(InferencePhase, Array(HeapData(inputShape, inputFormat)))
+//    model.evaluate()
+//
+//    val (weights, grad) = model.getParameters()
+//    val (w, g) = model2.getParameters()
+//    w.copy(weights)
+//    val graphModel = model2.toGraph()
+//
+//    val output1 = model.forward(input).toTensor[Float]
+//    val output2 = graphModel.forward(input).toTensor[Float]
+//    output1 should be (output2)
+//
+//    val criterion = new ClassNLLCriterion[Float]()
+//    val loss = criterion.forward(output1, labels)
+//    val gradOutput = criterion.backward(output1, labels)
+//
+//    val gradInput1 = model.backward(input, gradOutput)
+//    val gradInput2 = graphModel.backward(input, gradOutput)
+//
+//    gradInput1 should be (gradInput2)
   }
 
   "AlexNet to Graph" should "generate correct output" in {

@@ -148,6 +148,8 @@ class DnnTensor[T: ClassTag](
 
     hash
   }
+
+  override def set(): Tensor[T] = {this}
 }
 
 object DnnTensor {

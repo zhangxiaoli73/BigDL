@@ -42,24 +42,24 @@ trait MklDnnModule extends MklDnnModuleHelper {
    * Init the MKL-DNN primitives for the layer. Note that these primitives will be erased when
    * sent to a remote worker.
    */
-  private[mkldnn] def initFwdPrimitives(inputs: Array[MemoryData], phase: Phase)
+  private[bigdl] def initFwdPrimitives(inputs: Array[MemoryData], phase: Phase)
   : (Array[MemoryData], Array[MemoryData])
 
-  private[mkldnn] def initBwdPrimitives(grad: Array[MemoryData], phase: Phase)
+  private[bigdl] def initBwdPrimitives(grad: Array[MemoryData], phase: Phase)
   : (Array[MemoryData], Array[MemoryData])
 
-  private[mkldnn] def initGradWPrimitives(grad: Array[MemoryData], phase: Phase): Array[MemoryData]
+  private[bigdl] def initGradWPrimitives(grad: Array[MemoryData], phase: Phase): Array[MemoryData]
   = grad
 
-  private[mkldnn] def inputFormats(): Array[MemoryData]
+  private[bigdl] def inputFormats(): Array[MemoryData]
 
-  private[mkldnn] def gradInputFormats(): Array[MemoryData]
+  private[bigdl] def gradInputFormats(): Array[MemoryData]
 
-  private[mkldnn] def outputFormats(): Array[MemoryData]
+  private[bigdl] def outputFormats(): Array[MemoryData]
 
-  private[mkldnn] def gradOutputFormats(): Array[MemoryData]
+  private[bigdl] def gradOutputFormats(): Array[MemoryData]
 
-  private[mkldnn] def gradOutputWeightFormats(): Array[MemoryData]
+  private[bigdl] def gradOutputWeightFormats(): Array[MemoryData]
 }
 
 trait MklDnnModuleHelper {
@@ -131,7 +131,7 @@ trait MklDnnLayer extends AbstractModule[Activity, Activity, Float] with MklDnnM
   @transient
   private var cachedGradOutput: Activity = _
 
-  override private[mkldnn] def initGradWPrimitives(grad: Array[MemoryData],
+  override private[bigdl] def initGradWPrimitives(grad: Array[MemoryData],
     phase: Phase): Array[MemoryData] = {
     _gradOutputFormatsForWeight = grad
     grad
@@ -176,6 +176,12 @@ trait MklDnnLayer extends AbstractModule[Activity, Activity, Float] with MklDnnM
   }
 
   override def updateGradInput(input: Activity, gradOutput: Activity): Activity = {
+    if (this.getName() == "dnninput") {
+      val t1 = DnnTools.dense(input)
+      val t2 = DnnTools.dense(gradOutput)
+      // println(t2)
+      val m = 0
+    }
     if (updateGradInputMemoryPrimitives == null) {
       updateGradInputMemoryPrimitives =
         gradOutputFormats().map(_.getPrimitive(runtime)) ++
@@ -215,27 +221,27 @@ trait MklDnnLayer extends AbstractModule[Activity, Activity, Float] with MklDnnM
   }
 
 
-  override private[mkldnn] def inputFormats() = {
-    require(_inputFormats != null, "You should call initFwdPrimitives first")
+  override private[bigdl] def inputFormats() = {
+    require(_inputFormats != null, s"You should call initFwdPrimitives first ${this.getName()}")
     _inputFormats
   }
 
-  override private[mkldnn] def gradInputFormats() = {
+  override private[bigdl] def gradInputFormats() = {
     require(_gradInputFormats != null, "You should call initBwdPrimitives first")
     _gradInputFormats
   }
 
-  override private[mkldnn] def outputFormats() = {
+  override private[bigdl] def outputFormats() = {
     require(_outputFormats != null, "You should call initFwdPrimitives first")
     _outputFormats
   }
 
-  override private[mkldnn] def gradOutputFormats() = {
+  override private[bigdl] def gradOutputFormats() = {
     require(_gradOutputFormats != null, "You should call initBwdPrimitives first")
     _gradOutputFormats
   }
 
-  override private[mkldnn] def gradOutputWeightFormats() = {
+  override private[bigdl] def gradOutputWeightFormats() = {
     _gradOutputFormatsForWeight
   }
 
@@ -270,6 +276,8 @@ trait MklDnnLayer extends AbstractModule[Activity, Activity, Float] with MklDnnM
 
     tensors.foreach(_.release())
   }
+
+  override def clearState(): this.type = this
 }
 
 /**
@@ -308,7 +316,7 @@ trait MklDnnContainer extends DynamicContainer[Activity, Activity, Float] with M
    * Create MklDnnRuntime and compile the model
    * @param phase
    */
-  private[mkldnn] final def compile(phase: Phase, formats: Array[MemoryData]): Unit = {
+  private[bigdl] final def compile(phase: Phase, formats: Array[MemoryData]): Unit = {
     compile(phase, new MklDnnRuntime(), formats)
   }
 
@@ -318,14 +326,14 @@ trait MklDnnContainer extends DynamicContainer[Activity, Activity, Float] with M
    * @param phase
    * @param runtime
    */
-  private[mkldnn] final def compile(phase: Phase, runtime: MklDnnRuntime,
+  private[bigdl] final def compile(phase: Phase, runtime: MklDnnRuntime,
     formats: Array[MemoryData]): Unit = {
     freeze()
     fusion(phase)
     initPrimitives(phase, runtime, formats)
   }
 
-  final def initPrimitives(phase: Phase, runtime: MklDnnRuntime, formats: Array[MemoryData])
+  def initPrimitives(phase: Phase, runtime: MklDnnRuntime, formats: Array[MemoryData])
   : Unit = {
     setRuntime(runtime)
     val outputFormats = initFwdPrimitives(formats, phase)._2
@@ -344,7 +352,7 @@ trait MklDnnContainer extends DynamicContainer[Activity, Activity, Float] with M
   /**
    * Modify the computing path by fuse some layers into one to improve the performance
    */
-  private[mkldnn] def fusion(phase: Phase): Unit = {
+  private[bigdl] def fusion(phase: Phase): Unit = {
     modules.filter(_.isInstanceOf[MklDnnContainer])
       .map { case mc: MklDnnContainer => mc.fusion(phase) }
   }

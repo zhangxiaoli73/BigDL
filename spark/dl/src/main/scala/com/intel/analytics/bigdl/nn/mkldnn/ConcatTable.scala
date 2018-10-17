@@ -63,7 +63,7 @@ class ConcatTable extends MklDnnContainer {
     }
   }
 
-  override private[mkldnn] def initFwdPrimitives(inputs: Array[MemoryData], phase: Phase) = {
+  override private[bigdl] def initFwdPrimitives(inputs: Array[MemoryData], phase: Phase) = {
     require(mklDnnModules != null, "You should call compile first")
     require(inputs.length == 1, "Concat only accept one tensor")
     val buffer = new ArrayBuffer[MemoryData]()
@@ -78,7 +78,7 @@ class ConcatTable extends MklDnnContainer {
     (inputs, _outputFormats)
   }
 
-  override private[mkldnn] def initBwdPrimitives(grads: Array[MemoryData], phase: Phase) = {
+  override private[bigdl] def initBwdPrimitives(grads: Array[MemoryData], phase: Phase) = {
     require(grads.length == mklDnnModules.length, "grad tensor number is not correct")
     _gradOutputFormats = new Array[MemoryData](grads.length)
     val subGradInputs = new Array[MemoryData](grads.length)
@@ -116,7 +116,7 @@ class ConcatTable extends MklDnnContainer {
     (_gradOutputFormats, _gradInputFormats)
   }
 
-  override private[mkldnn] def initGradWPrimitives(grads: Array[MemoryData], phase: Phase) = {
+  override private[bigdl] def initGradWPrimitives(grads: Array[MemoryData], phase: Phase) = {
     val realGradsBuffer = new ArrayBuffer[MemoryData]()
     for(i <- 0 until grads.length) {
       val m = mklDnnModules(i)
@@ -129,22 +129,22 @@ class ConcatTable extends MklDnnContainer {
     _gradOutputWeightFormats
   }
 
-  override private[mkldnn] def inputFormats() = {
+  override private[bigdl] def inputFormats() = {
     require(_inputFormats != null, "You should call initFwdPrimitives first")
     _inputFormats
   }
 
-  override private[mkldnn] def gradInputFormats() = {
+  override private[bigdl] def gradInputFormats() = {
     require(_gradInputFormats != null, "You should call initBwdPrimitives first")
     _gradInputFormats
   }
 
-  override private[mkldnn] def outputFormats() = {
+  override private[bigdl] def outputFormats() = {
     require(_outputFormats != null, "You should call initFwdPrimitives first")
     _outputFormats
   }
 
-  override private[mkldnn] def gradOutputFormats() = {
+  override private[bigdl] def gradOutputFormats() = {
     require(_gradOutputFormats != null, "You should call initBwdPrimitives first")
     _gradOutputFormats
   }
@@ -155,7 +155,7 @@ class ConcatTable extends MklDnnContainer {
   private var _gradOutputFormats: Array[MemoryData] = _
   private var _gradOutputWeightFormats: Array[MemoryData] = _
 
-  override private[mkldnn] def gradOutputWeightFormats() = _gradOutputWeightFormats
+  override private[bigdl] def gradOutputWeightFormats() = _gradOutputWeightFormats
 
   override def toString(): String = {
     val tab = "\t"

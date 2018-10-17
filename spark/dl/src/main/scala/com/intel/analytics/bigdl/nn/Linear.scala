@@ -17,7 +17,7 @@
 package com.intel.analytics.bigdl.nn
 
 import com.intel.analytics.bigdl.Module
-import com.intel.analytics.bigdl.nn.abstractnn.{Initializable, TensorModule}
+import com.intel.analytics.bigdl.nn.abstractnn.{AbstractModule, Activity, Initializable, TensorModule}
 import com.intel.analytics.bigdl.optim.Regularizer
 import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
@@ -213,6 +213,20 @@ class Linear[T: ClassTag](
 
   override def toString(): String = {
     s"${getPrintName}($inputSize -> $outputSize)"
+  }
+
+  override def toDnnModule(): AbstractModule[Activity, Activity, T] = {
+    val dnn = mkldnn.Linear(inputSize, outputSize, withBias,
+      initWeight.asInstanceOf[Tensor[Float]], initBias.asInstanceOf[Tensor[Float]],
+      initGradWeight.asInstanceOf[Tensor[Float]], initGradBias.asInstanceOf[Tensor[Float]])
+      .setName(this.getName())
+
+    val params1 = dnn.getParameters()
+    val params2 = this.getParameters()
+    params1._1.asInstanceOf[Tensor[T]].copy(params2._1)
+    params1._2.asInstanceOf[Tensor[T]].copy(params2._2)
+
+    dnn.asInstanceOf[AbstractModule[Activity, Activity, T]]
   }
 }
 

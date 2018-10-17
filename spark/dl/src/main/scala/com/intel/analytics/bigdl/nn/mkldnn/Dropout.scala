@@ -36,14 +36,14 @@ class Dropout(
     }
   }
 
-  override private[mkldnn] def initFwdPrimitives(inputs: Array[MemoryData], phase: Phase) = {
+  override private[bigdl] def initFwdPrimitives(inputs: Array[MemoryData], phase: Phase) = {
     _inputFormats = inputs.map(x => HeapData(x.shape, format(x.shape)))
     _outputFormats = inputs.map(x => HeapData(x.shape, format(x.shape)))
     output = initTensor(_outputFormats.head)
     (_inputFormats, _outputFormats)
   }
 
-  override private[mkldnn] def initBwdPrimitives(grad: Array[MemoryData], phase: Phase) = {
+  override private[bigdl] def initBwdPrimitives(grad: Array[MemoryData], phase: Phase) = {
     _gradOutputFormats = grad.map(x => HeapData(x.shape, format(x.shape)))
     _gradOutputFormatsForWeight = grad.map(x => HeapData(x.shape, format(x.shape)))
     _gradInputFormats = grad.map(x => HeapData(x.shape, format(x.shape)))

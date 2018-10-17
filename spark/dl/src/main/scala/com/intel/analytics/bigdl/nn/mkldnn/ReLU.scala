@@ -22,7 +22,7 @@ class ReLU(value: Float = 0.0f) extends MklDnnLayer {
 
   @transient private var fwdPrimDesc: Long = UNDEFINED
 
-  override private[mkldnn] def initFwdPrimitives(inputs: Array[MemoryData], phase: Phase) = {
+  override private[bigdl] def initFwdPrimitives(inputs: Array[MemoryData], phase: Phase) = {
     _inputFormats = singleNativeData(inputs)
     val description = MklDnn.EltwiseForwardDescInit(
       PropKind.Forward, AlgKind.EltwiseRelu, _inputFormats(0).getMemoryDescription(), value, 0)
@@ -37,7 +37,7 @@ class ReLU(value: Float = 0.0f) extends MklDnnLayer {
     (_inputFormats, _outputFormats)
   }
 
-  override private[mkldnn] def initBwdPrimitives(grad: Array[MemoryData], phase: Phase) = {
+  override private[bigdl] def initBwdPrimitives(grad: Array[MemoryData], phase: Phase) = {
     _gradOutputFormats = singleNativeData(grad)
     _gradOutputFormatsForWeight = _gradOutputFormats
     val description = MklDnn.EltwiseBackwardDescInit(AlgKind.EltwiseRelu,

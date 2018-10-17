@@ -32,7 +32,7 @@ import com.intel.analytics.bigdl.tensor.{DnnTensor, Tensor}
  *
  * @param _size the shape of Tensor, such as Array(4, 3, 224, 224)
  */
-private[mkldnn] class Blob(_size: Array[Int]) extends Serializable {
+private[bigdl] class Blob(_size: Array[Int]) extends Serializable {
   val dense: Tensor[Float] = Tensor[Float](_size)
   val native: DnnTensor[Float] = DnnTensor[Float](_size)
 

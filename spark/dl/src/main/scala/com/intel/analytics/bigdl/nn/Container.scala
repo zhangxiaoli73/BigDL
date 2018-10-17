@@ -41,6 +41,7 @@ abstract class Container[A <: Activity : ClassTag,
     B <: Activity : ClassTag, T: ClassTag](
   implicit ev: TensorNumeric[T]) extends AbstractModule[A, B, T] {
 
+
   // list of sub modules
   val modules: ArrayBuffer[AbstractModule[Activity, Activity, T]]
   = ArrayBuffer[AbstractModule[Activity, Activity, T]]()

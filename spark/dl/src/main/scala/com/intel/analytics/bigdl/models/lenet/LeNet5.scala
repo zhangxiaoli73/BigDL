@@ -16,6 +16,7 @@
 
 package com.intel.analytics.bigdl.models.lenet
 
+import breeze.linalg.reshape
 import com.intel.analytics.bigdl._
 import com.intel.analytics.bigdl.mkl.Memory
 import com.intel.analytics.bigdl.numeric.NumericFloat
@@ -39,8 +40,8 @@ object LeNet5 {
   }
 
   def graph(classNum: Int): Module[Float] = {
-    val input = Reshape(Array(1, 28, 28)).inputs()
-    val conv1 = SpatialConvolution(1, 6, 5, 5).setName("conv1_5x5").inputs(input)
+    // val input = Reshape(Array(1, 28, 28)).inputs()
+    val conv1 = SpatialConvolution(1, 6, 5, 5).setName("conv1_5x5").inputs()
     val tanh1 = Tanh().inputs(conv1)
     val pool1 = SpatialMaxPooling(2, 2, 2, 2).inputs(tanh1)
     val conv2 = SpatialConvolution(6, 12, 5, 5).setName("conv2_5x5").inputs(pool1)
@@ -52,7 +53,7 @@ object LeNet5 {
     val fc2 = Linear(100, classNum).setName("fc2").inputs(tanh3)
     val output = LogSoftMax().inputs(fc2)
 
-    Graph(input, output)
+    Graph(conv1, output)
   }
 
   def keras(classNum: Int): nn.keras.Sequential[Float] = {
@@ -102,5 +103,32 @@ object LeNet5 {
       .add(mkldnn.Linear(500, 10).setName("ip2"))
       .add(mkldnn.ReorderMemory(mkldnn.HeapData(outputShape, Memory.Format.nc)))
     model
+  }
+
+  def dnn1(classNum: Int): mkldnn.Sequential = {
+    val model = mkldnn.Sequential()
+      .add(mkldnn.SpatialConvolution(1, 20, 5, 5).setName("conv1"))
+      .add(mkldnn.ReLU().setName("relu1"))
+      // .add(mkldnn.ReLU().setName("relu2"))
+    model
+  }
+
+  def graphTest(classNum: Int): Module[Float] = {
+    val input = Identity().inputs()
+    val conv1 = SpatialConvolution(1, 20, 5, 5).setName("conv1").inputs(input)
+    val relu1 = ReLU().setName("relu1").inputs(conv1)
+    // val relu2 = ReLU().setName("relu2").inputs(relu1)
+//    val tanh1 = SpatialBatchNormalization(20).inputs(relu1)
+//    val relu2 = tanh1 // ReLU().setName("relu2").inputs(tanh1)
+//    val pool1 = SpatialMaxPooling(2, 2, 2, 2).inputs(relu2)
+//    val conv2 = SpatialConvolution(20, 50, 5, 5).setName("conv2").inputs(pool1)
+//    val pool2 = SpatialMaxPooling(2, 2, 2, 2).inputs(conv2)
+//    val reshpe = Reshape(Array(50 * 4 * 4)).inputs(pool2)
+//    val fc1 = Linear(50 * 4 * 4, 500).setName("fc1").inputs(reshpe)
+//    val tanh3 = ReLU().inputs(fc1)
+//    val output = Linear(500, 10).setName("fc2").inputs(tanh3)
+
+    val output = relu1
+    Graph(input, output)
   }
 }

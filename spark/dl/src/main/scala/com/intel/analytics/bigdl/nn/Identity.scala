@@ -39,6 +39,11 @@ class Identity[T: ClassTag]()
     gradInput = gradOutput
     gradInput
   }
+
+  override def toDnnModule(): AbstractModule[Activity, Activity, T] = {
+    val t = mkldnn.Identity().setName(this.getName())
+    t.asInstanceOf[AbstractModule[Activity, Activity, T]]
+  }
 }
 
 object Identity {

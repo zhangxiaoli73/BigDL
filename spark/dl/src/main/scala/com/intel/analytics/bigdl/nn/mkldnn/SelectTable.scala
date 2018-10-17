@@ -78,13 +78,13 @@ class SelectTable(val index: Int)(implicit ev: TensorNumeric[Float]) extends Mkl
     state.map(_.hashCode()).foldLeft(0)((a, b) => 31 * a + b)
   }
 
-  override private[mkldnn] def initFwdPrimitives(inputs: Array[MemoryData], phase: Phase) = {
+  override private[bigdl] def initFwdPrimitives(inputs: Array[MemoryData], phase: Phase) = {
     _inputFormats = inputs
     _outputFormats = Array(inputs(index))
     (inputs, _outputFormats)
   }
 
-  override private[mkldnn] def initBwdPrimitives(grad: Array[MemoryData], phase: Phase) = {
+  override private[bigdl] def initBwdPrimitives(grad: Array[MemoryData], phase: Phase) = {
     _gradInputFormats = Array(grad(index))
     _gradOutputFormats = grad
     (grad, _gradInputFormats)

@@ -27,7 +27,7 @@ class ReorderMemory(inputFormat: MemoryData, outputFormat: MemoryData,
   _gradInputFormats = Array(gradInputFormat)
 
 
-  override private[mkldnn] def initFwdPrimitives(inputs: Array[MemoryData], phase: Phase) = {
+  override private[bigdl] def initFwdPrimitives(inputs: Array[MemoryData], phase: Phase) = {
     _inputFormats = if (inputFormat == null) inputs else Array(inputFormat)
     require(_inputFormats.length == 1, "Only accept one tensor as input")
 
@@ -45,7 +45,7 @@ class ReorderMemory(inputFormat: MemoryData, outputFormat: MemoryData,
     (_inputFormats, _outputFormats)
   }
 
-  override private[mkldnn] def initBwdPrimitives(grads: Array[MemoryData], phase: Phase) = {
+  override private[bigdl] def initBwdPrimitives(grads: Array[MemoryData], phase: Phase) = {
     _gradInputFormats = (gradInputFormat, inputFormat) match {
       case (null, null) => inputFormats()
       case (null, x) => Array(x)

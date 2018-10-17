@@ -17,7 +17,8 @@
 package com.intel.analytics.bigdl.nn.mkldnn
 
 import com.intel.analytics.bigdl.mkl.Memory
-import com.intel.analytics.bigdl.nn
+import com.intel.analytics.bigdl._
+import com.intel.analytics.bigdl.nn._
 import com.intel.analytics.bigdl.nn.abstractnn.Activity
 import com.intel.analytics.bigdl.nn.mkldnn.Phase.TrainingPhase
 import com.intel.analytics.bigdl.numeric.NumericFloat
@@ -423,6 +424,21 @@ class SpatialBatchNormalizationSpec extends FlatSpec with Matchers {
 //    DnnUtils.nearequals(gradWeight, blas.getParameters()._2, 1e-3) should be (true)
 //  }
 
+
+  def graphTest(classNum: Int): Module[Float] = {
+    val channel = 64
+    val epsilon = 1e-5
+
+    val initWeight = Tensor(channel).rand(-1, 1)
+    val initBias = Tensor(channel).fill(0)
+
+    val bn1 = SpatialBatchNormalization(channel, epsilon, initWeight = initWeight,
+      initBias = initBias).inputs()
+    val relu1 = mkldnn.ReLU().inputs(bn1)
+    val relu2 = mkldnn.ReLU().inputs(relu1)
+
+    Graph(bn1, relu2)
+  }
   "Sbn with relu fusion" should "work correctly" in {
     val (batchSize, channel, height, width) = (4, 64, 112, 112)
     val shape = Array(batchSize, channel, height, width)
@@ -433,25 +449,33 @@ class SpatialBatchNormalizationSpec extends FlatSpec with Matchers {
 
     val bn1 = SpatialBatchNormalization(channel, epsilon, initWeight = initWeight,
       initBias = initBias)
-    val reorder1 = ReorderMemory(HeapData(shape, Memory.Format.nchw))
+    // val reorder1 = ReorderMemory(HeapData(shape, Memory.Format.nchw))
     val bn2 = SpatialBatchNormalization(channel, epsilon, initWeight = initWeight,
       initBias = initBias)
-    val reorder2 = ReorderMemory(HeapData(shape, Memory.Format.nchw))
+    // val reorder2 = ReorderMemory(HeapData(shape, Memory.Format.nchw))
 
-    val model1 = Sequential().add(bn1).add(ReLU()).add(ReLU()).add(reorder1)
+    val model1 = Sequential().add(bn1).add(ReLU()).add(ReLU())
+    model1.compile(TrainingPhase, Array(HeapData(shape, Memory.Format.nchw)))
+
+    val model3 = model1.toDnnModule()
     model1.compile(TrainingPhase, Array(HeapData(shape, Memory.Format.nchw)))
 
     System.setProperty("bigdl.mkldnn.fusion.bnrelu", "true")
-    val model2 = Sequential().add(bn2).add(ReLU()).add(ReLU()).add(reorder2)
+    val model2 = Sequential().add(bn2).add(ReLU()).add(ReLU())
     model2.compile(TrainingPhase, Array(HeapData(shape, Memory.Format.nchw)))
     System.setProperty("bigdl.mkldnn.fusion.bnrelu", "false")
 
     val input = Tensor(batchSize, channel, height, width).rand(-1, 1)
 
-    model1.forward(input)
-    model2.forward(input)
+    val t1 = DnnTools.dense(model1.forward(input)).toTensor[Float]
+    val g1 = DnnTools.dense(model1.backward(input, t1)).toTensor[Float]
+    val t2 = DnnTools.dense(model2.forward(input)).toTensor[Float]
+    val g2 = DnnTools.dense(model2.backward(input, t2)).toTensor[Float]
 
-    model1.output should be (model2.output)
+    t1.almostEqual(t2, 1e-5) should be(true)
+    g1.almostEqual(g2, 1e-4) should be(true)
+    // model1.output should be (model2.output)
+    val t = 0
   }
 
   "a simple bach norm" should "work correctly" in {

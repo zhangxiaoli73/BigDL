@@ -31,10 +31,10 @@ class Linear(
   private val initGradWeight: Tensor[Float] = null,
   private val initGradBias: Tensor[Float] = null) extends MklDnnLayer with Initializable {
 
-  private[mkldnn] val weight: Blob = new Blob(Array(outputSize, inputSize))
-  private[mkldnn] val bias: Blob = new Blob(Array(outputSize))
-  private[mkldnn] val gradWeight: Blob = new Blob(Array(outputSize, inputSize))
-  private[mkldnn] val gradBias: Blob = new Blob(Array(outputSize))
+  private[bigdl] val weight: Blob = new Blob(Array(outputSize, inputSize))
+  private[bigdl] val bias: Blob = new Blob(Array(outputSize))
+  private[bigdl] val gradWeight: Blob = new Blob(Array(outputSize, inputSize))
+  private[bigdl] val gradBias: Blob = new Blob(Array(outputSize))
 
   @transient private var forwardPrimDesc: Long = 0L
 
@@ -71,7 +71,7 @@ class Linear(
     gradBias.zero()
   }
 
-  override private[mkldnn] def initFwdPrimitives(inputs: Array[MemoryData], phase: Phase) = {
+  override private[bigdl] def initFwdPrimitives(inputs: Array[MemoryData], phase: Phase) = {
     val weightShape = inputs(0).shape.length match {
       case 4 => Array(weight.size(1)) ++ inputs(0).shape.slice(1, 4)
       case _ => weight.size()
@@ -120,6 +120,10 @@ class Linear(
     updateOutputPrimitives = Array(primitive)
     output = initTensor(dst)
 
+    if (this.getName() == "fc2") {
+      val tmp = 0
+    }
+
     _inputFormats = Array(realSrc)
     _outputFormats = Array(realDst)
     (_inputFormats, _outputFormats)
@@ -145,10 +149,19 @@ class Linear(
     MklDnnOps.streamSubmit(runtime.stream, 1, updateOutputPrimitives, updateOutputPrimitives.length,
       updateOutputMemoryPrimitives, updateOutputTensors)
 
+    if (this.getName() == "ip2") {
+      val t = DnnTools.dense(output).asInstanceOf[Tensor[Float]]
+      // println(t)
+      val tmp = 0
+    }
+
     output
   }
 
-  override private[mkldnn] def initBwdPrimitives(grad: Array[MemoryData], phase: Phase) = {
+  override private[bigdl] def initBwdPrimitives(grad: Array[MemoryData], phase: Phase) = {
+    if (this.getName() == "fc2") {
+      val tmp = 0
+    }
     val weightShape = inputFormats()(0).shape.length match {
       case 4 => Array(weight.size(1)) ++ inputFormats()(0).shape.slice(1, 4)
       case _ => weight.size()
@@ -190,7 +203,7 @@ class Linear(
     (_gradOutputFormats, _gradInputFormats)
   }
 
-  override private[mkldnn] def initGradWPrimitives(grad: Array[MemoryData],
+  override private[bigdl] def initGradWPrimitives(grad: Array[MemoryData],
     phase: Phase): Array[MemoryData] = {
     val weightShape = inputFormats()(0).shape.length match {
       case 4 => Array(weight.size(1)) ++ inputFormats()(0).shape.slice(1, 4)

@@ -55,10 +55,10 @@ class SpatialConvolution(
   // It's `lazy` so the reordermanager need not serialized.
   @transient private lazy val reorderManager = new ReorderManager
 
-  private[mkldnn] val weight = new Blob(weightShape)
-  private[mkldnn] val bias = new Blob(Array(nOutputPlane))
-  private[mkldnn] val gradWeight = new Blob(weightShape)
-  private[mkldnn] val gradBias = new Blob(Array(nOutputPlane))
+  private[bigdl] val weight = new Blob(weightShape)
+  private[bigdl] val bias = new Blob(Array(nOutputPlane))
+  private[bigdl] val gradWeight = new Blob(weightShape)
+  private[bigdl] val gradBias = new Blob(Array(nOutputPlane))
 
   private var weightForBackward: DnnTensor[Float] = _
   private var weightForBackwardMemoryData: MemoryData = _
@@ -77,6 +77,13 @@ class SpatialConvolution(
   def relu: Boolean = _relu
   def setReLU(value: Boolean = true): this.type = {
     _relu = value
+    this
+  }
+
+  private var _batchNorm = false
+  def batchNorm: Boolean = _batchNorm
+  def setBatchNorm(value: Boolean = true): this.type = {
+    _batchNorm = value
     this
   }
 
@@ -141,7 +148,7 @@ class SpatialConvolution(
     gradBias.zero()
   }
 
-  override private[mkldnn] def initFwdPrimitives(inputs: Array[MemoryData], phase: Phase) = {
+  override private[bigdl] def initFwdPrimitives(inputs: Array[MemoryData], phase: Phase) = {
     reorderManager.setRuntime(runtime)
 
     val inputHeight = inputs(0).shape(2) // TODO only supports 4-D and nchw
@@ -255,7 +262,7 @@ class SpatialConvolution(
     output
   }
 
-  override private[mkldnn] def initBwdPrimitives(grad: Array[MemoryData], phase: Phase) = {
+  override private[bigdl] def initBwdPrimitives(grad: Array[MemoryData], phase: Phase) = {
     val inputShape = inputFormats()(0).shape.length match {
       case 1 => inputFormats()(0).shape ++ Array(1) // TODO Test
       case _ => inputFormats()(0).shape
@@ -306,6 +313,14 @@ class SpatialConvolution(
     weightForBackward = reorderManager.infer(Array(weight.memoryData()),
       Array(weightForBackwardMemoryData), weight.native).asInstanceOf[DnnTensor[Float]]
 
+    if (this.getName() == "conv1") {
+      val t1 = DnnTools.toNCHW(input.asInstanceOf[Tensor[Float]], _inputFormats(0))
+      val t2 = DnnTools.toNCHW(gradOutput.asInstanceOf[Tensor[Float]], _gradOutputFormats(0))
+
+      println(t1.valueAt(1, 1, 10, 10) + " input")
+      println(t2.valueAt(1, 1, 10, 10) + " output")
+    }
+
     if (updateGradInputTensors == null) {
       val buffer = new ArrayBuffer[Tensor[Float]]()
       buffer.append(gradOutput.asInstanceOf[Tensor[Float]])
@@ -321,9 +336,16 @@ class SpatialConvolution(
     MklDnnOps.streamSubmit(runtime.stream, 1, updateGradInputPrimitives,
       updateGradInputPrimitives.length, updateGradInputMemoryPrimitives, updateGradInputTensors)
 
+    if (this.getName() == "conv1") {
+      val t2 = DnnTools.toNCHW(gradInput.asInstanceOf[Tensor[Float]], _gradInputFormats(0))
+      println(t2.valueAt(1, 1, 10, 10) + " gradInput")
+
+      println(t2.valueAt(2, 1, 15, 10) + " gradInput")
+      val m = 0
+    }
     gradInput
   }
-  override private[mkldnn] def initGradWPrimitives(grad: Array[MemoryData],
+  override private[bigdl] def initGradWPrimitives(grad: Array[MemoryData],
     phase: Phase): Array[MemoryData] = {
     val inputShape = inputFormats()(0).shape
     val outputShape = inputFormats()(0).shape

@@ -33,7 +33,7 @@ class LRN(
   @transient private var fwdMemPrims: Array[Long] = _
   @transient private var bwdMemPrims: Array[Long] = _
 
-  override private[mkldnn] def initFwdPrimitives(inputs: Array[MemoryData], phase: Phase) = {
+  override private[bigdl] def initFwdPrimitives(inputs: Array[MemoryData], phase: Phase) = {
     _inputFormats = singleNativeData(inputs)
     val description = MklDnn.LRNForwardDescInit(
       PropKind.ForwardTraining, AlgKind.LrnAcrossChannels,
@@ -51,7 +51,7 @@ class LRN(
     (_inputFormats, _outputFormats)
   }
 
-  override private[mkldnn] def initBwdPrimitives(grad: Array[MemoryData], phase: Phase) = {
+  override private[bigdl] def initBwdPrimitives(grad: Array[MemoryData], phase: Phase) = {
     _gradOutputFormats = singleNativeData(grad)
     _gradOutputFormatsForWeight = _gradOutputFormats
     val description = MklDnn.LRNBackwardDescInit(AlgKind.LrnAcrossChannels,

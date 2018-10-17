@@ -61,6 +61,10 @@ abstract class AbstractModule[A <: Activity: ClassTag, B <: Activity: ClassTag, 
   // ================================= Public APIs =============================================
 
 
+  def toDnnModule(): AbstractModule[Activity, Activity, T] = {
+    throw new UnsupportedOperationException(s"This layer can not convert to dnn layer $this")
+  }
+
   /**
    * The cached output. So we don't compute it again when need it
    */

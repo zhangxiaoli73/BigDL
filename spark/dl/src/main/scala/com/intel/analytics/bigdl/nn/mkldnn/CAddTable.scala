@@ -20,7 +20,7 @@ import com.intel.analytics.bigdl.nn.abstractnn.Activity
 import com.intel.analytics.bigdl.utils.T
 
 class CAddTable extends MklDnnLayer {
-  override private[mkldnn] def initFwdPrimitives(inputs: Array[MemoryData], phase: Phase) = {
+  override private[bigdl] def initFwdPrimitives(inputs: Array[MemoryData], phase: Phase) = {
     _inputFormats = nativeData(inputs)
     val shape = inputs(0).shape.clone()
     for(i <- 1 until inputs.length) {
@@ -42,7 +42,7 @@ class CAddTable extends MklDnnLayer {
     (_inputFormats, _outputFormats)
   }
 
-  override private[mkldnn] def initBwdPrimitives(grad: Array[MemoryData], phase: Phase) = {
+  override private[bigdl] def initBwdPrimitives(grad: Array[MemoryData], phase: Phase) = {
     _gradOutputFormats = grad
     _gradOutputFormatsForWeight = grad
     _gradInputFormats = new Array[MemoryData](_inputFormats.length).map(a => grad(0))

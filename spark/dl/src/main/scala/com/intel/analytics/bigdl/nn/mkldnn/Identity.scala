@@ -37,13 +37,13 @@ class Identity() extends MklDnnLayer {
     gradInput
   }
 
-  override private[mkldnn] def initFwdPrimitives(inputs: Array[MemoryData], phase: Phase) = {
+  override private[bigdl] def initFwdPrimitives(inputs: Array[MemoryData], phase: Phase) = {
     _inputFormats = inputs
     _outputFormats = inputs
     (inputs, inputs)
   }
 
-  override private[mkldnn] def initBwdPrimitives(grad: Array[MemoryData], phase: Phase) = {
+  override private[bigdl] def initBwdPrimitives(grad: Array[MemoryData], phase: Phase) = {
     _gradOutputFormats = grad
     _gradOutputFormatsForWeight = grad
     _gradInputFormats = grad

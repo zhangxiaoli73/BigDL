@@ -16,6 +16,7 @@
 package com.intel.analytics.bigdl.nn.mkldnn
 
 import com.intel.analytics.bigdl.Module
+import com.intel.analytics.bigdl.nn.Graph._
 import com.intel.analytics.bigdl.nn.abstractnn.{AbstractModule, Activity}
 import com.intel.analytics.bigdl.nn.mkldnn.Phase.{InferencePhase, TrainingPhase}
 import com.intel.analytics.bigdl.nn.{Sequential => Seq}
@@ -36,7 +37,7 @@ class Sequential extends MklDnnContainer {
     super.add(module)
   }
 
-  override private[mkldnn] def fusion(phase: Phase): Unit = {
+  override private[bigdl] def fusion(phase: Phase): Unit = {
     modules.clear()
     modules.appendAll(getFusedModules(phase).map {x =>
       x.asInstanceOf[AbstractModule[Activity, Activity, Float]]
@@ -44,7 +45,7 @@ class Sequential extends MklDnnContainer {
     mklDnnModules = modules.map(_.asInstanceOf[MklDnnModule]).toArray
   }
 
-  override private[mkldnn] def initFwdPrimitives(inputs: Array[MemoryData], phase: Phase) = {
+  override private[bigdl] def initFwdPrimitives(inputs: Array[MemoryData], phase: Phase) = {
     var lastOutputFormats = inputs
     var firstRealInputFormats: Array[MemoryData] = null
     for (i <- 0 until mklDnnModules.length) {
@@ -59,7 +60,7 @@ class Sequential extends MklDnnContainer {
     (firstRealInputFormats, lastOutputFormats)
   }
 
-  override private[mkldnn] def initBwdPrimitives(grads: Array[MemoryData], phase: Phase) = {
+  override private[bigdl] def initBwdPrimitives(grads: Array[MemoryData], phase: Phase) = {
     var lastGradInputFormats = grads
     var firstRealGradOutputFormats: Array[MemoryData] = null
     for (i <- mklDnnModules.length - 1 to 0 by -1) {
@@ -74,7 +75,7 @@ class Sequential extends MklDnnContainer {
     (firstRealGradOutputFormats, lastGradInputFormats)
   }
 
-  override private[mkldnn] def initGradWPrimitives(grads: Array[MemoryData], phase: Phase) = {
+  override private[bigdl] def initGradWPrimitives(grads: Array[MemoryData], phase: Phase) = {
     var lastGradInputFormats = grads
     var firstRealGradOutputFormats: Array[MemoryData] = null
     for (i <- mklDnnModules.length - 1 to 0 by -1) {
@@ -152,23 +153,23 @@ class Sequential extends MklDnnContainer {
     modules(i).asyncGradient
   }
 
-  override private[mkldnn] def inputFormats() = {
+  override private[bigdl] def inputFormats() = {
     modules(0).asInstanceOf[MklDnnModule].inputFormats()
   }
 
-  override private[mkldnn] def gradInputFormats() = {
+  override private[bigdl] def gradInputFormats() = {
     modules(0).asInstanceOf[MklDnnModule].gradInputFormats()
   }
 
-  override private[mkldnn] def outputFormats() = {
+  override private[bigdl] def outputFormats() = {
     modules.last.asInstanceOf[MklDnnModule].outputFormats()
   }
 
-  override private[mkldnn] def gradOutputFormats() = {
+  override private[bigdl] def gradOutputFormats() = {
     modules.last.asInstanceOf[MklDnnModule].gradOutputFormats()
   }
 
-  override private[mkldnn] def gradOutputWeightFormats() = {
+  override private[bigdl] def gradOutputWeightFormats() = {
     modules.last.asInstanceOf[MklDnnModule].gradOutputWeightFormats()
   }
 
@@ -385,6 +386,16 @@ class Sequential extends MklDnnContainer {
         }.
           mkString(line + tab)
       }$line}"
+  }
+
+  override def getEndNodes(startNodes: Array[ModuleNode[Float]]): Array[ModuleNode[Float]] = {
+    var startnodes = startNodes
+    var curNodes: Array[ModuleNode[Float]] = null
+    for (i <- 0 to modules.size - 1) {
+      curNodes = modules(i).getEndNodes(startnodes)
+      startnodes = curNodes
+    }
+    curNodes
   }
 }
 

@@ -15,7 +15,7 @@
  */
 package com.intel.analytics.bigdl.nn
 
-import com.intel.analytics.bigdl.nn.abstractnn.{IdentityOutputShape, TensorModule}
+import com.intel.analytics.bigdl.nn.abstractnn.{AbstractModule, Activity, IdentityOutputShape, TensorModule}
 import com.intel.analytics.bigdl.tensor.{Storage, Tensor}
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
 import com.intel.analytics.bigdl.utils.Engine
@@ -206,6 +206,11 @@ class Dropout[T: ClassTag](
 
   override def toString(): String = {
     s"${getPrintName}($p)"
+  }
+
+  override def toDnnModule(): AbstractModule[Activity, Activity, T] = {
+    val dnn = mkldnn.Dropout(initP, inplace, scale).setName(this.getName())
+    dnn.asInstanceOf[AbstractModule[Activity, Activity, T]]
   }
 }
 

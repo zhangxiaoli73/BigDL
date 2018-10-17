@@ -25,7 +25,7 @@ class JoinTable(val dimension: Int) extends MklDnnLayer {
   @transient
   private var memoryPrims: Array[Array[Long]] = _
 
-  override private[mkldnn] def initFwdPrimitives(inputs: Array[MemoryData], phase: Phase) = {
+  override private[bigdl] def initFwdPrimitives(inputs: Array[MemoryData], phase: Phase) = {
     require(inputs.length > 0, s"at least one tensor, but is ${inputs.length}")
     _inputFormats = nativeData(inputs)
 
@@ -62,7 +62,7 @@ class JoinTable(val dimension: Int) extends MklDnnLayer {
     (_inputFormats, _outputFormats)
   }
 
-  override private[mkldnn] def initBwdPrimitives(grads: Array[MemoryData], phase: Phase) = {
+  override private[bigdl] def initBwdPrimitives(grads: Array[MemoryData], phase: Phase) = {
     _gradOutputFormats = singleNativeData(grads)
     _gradOutputFormatsForWeight = _gradOutputFormats
     _gradInputFormats = _inputFormats.map(f => {

@@ -16,7 +16,7 @@
 
 package com.intel.analytics.bigdl.nn
 
-import com.intel.analytics.bigdl.nn.abstractnn.IdentityOutputShape
+import com.intel.analytics.bigdl.nn.abstractnn.{AbstractModule, Activity, IdentityOutputShape}
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
 
 import scala.reflect.ClassTag
@@ -32,6 +32,11 @@ import scala.reflect.ClassTag
 @SerialVersionUID(1208478077576570643L)
 class ReLU[T: ClassTag](ip: Boolean = false)(
   implicit ev: TensorNumeric[T]) extends Threshold[T](0, 0, ip) {
+
+  override def toDnnModule(): AbstractModule[Activity, Activity, T] = {
+    val t = mkldnn.ReLU().setName(this.getName())
+    t.asInstanceOf[AbstractModule[Activity, Activity, T]]
+  }
 }
 
 object ReLU {

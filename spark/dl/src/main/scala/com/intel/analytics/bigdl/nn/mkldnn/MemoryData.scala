@@ -194,7 +194,7 @@ case class NativeData(private var _shape: Array[Int], private var _layout: Int) 
   override def cloneFormat(): MemoryData = new NativeData(_shape, _layout)
 }
 
-private[mkldnn] object MemoryData {
+private[bigdl] object MemoryData {
   def noUndef(formats: Array[MemoryData]): Boolean = {
     if (formats == null || formats.length == 0) return true
     formats.foreach(f => if (f.layout == Memory.Format.format_undef) return false)

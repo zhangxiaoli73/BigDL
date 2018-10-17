@@ -17,6 +17,7 @@ package com.intel.analytics.bigdl.nn
 
 import com.intel.analytics.bigdl.nn.Graph.ModuleNode
 import com.intel.analytics.bigdl.nn.abstractnn.{AbstractModule, Activity}
+import com.intel.analytics.bigdl.nn.mkldnn._
 import com.intel.analytics.bigdl.nn.tf.ControlDependency
 import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
@@ -65,6 +66,7 @@ class StaticGraph[T: ClassTag](
   }
 
   override def backward(input: Activity, gradOutput: Activity): Activity = {
+    println("222222222222222")
     val before = System.nanoTime()
     val gradients = backwardExecution(input, gradOutput, true)
     backwardTime += System.nanoTime() - before
@@ -146,5 +148,9 @@ class StaticGraph[T: ClassTag](
 
     gradInput = fetchModelGradInput()
     gradInput
+  }
+
+  override def toDnnModule(): AbstractModule[Activity, Activity, T] = {
+    new DnnGraph[T](_inputs, _outputs, _variables, enableExcludeChecking)
   }
 }

@@ -17,7 +17,7 @@
 package com.intel.analytics.bigdl.nn
 
 import com.intel.analytics.bigdl.Module
-import com.intel.analytics.bigdl.nn.abstractnn.{DataFormat, Initializable, TensorModule}
+import com.intel.analytics.bigdl.nn.abstractnn._
 import com.intel.analytics.bigdl.nn.quantized.Quantizable
 import com.intel.analytics.bigdl.optim.Regularizer
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
@@ -942,6 +942,16 @@ class SpatialConvolution[T: ClassTag](
 
       case _ => throw new UnsupportedOperationException(s"Only Float/Double supported")
     }
+  }
+
+  override def toDnnModule(): AbstractModule[Activity, Activity, T] = {
+    val dnn = mkldnn.SpatialConvolution(nInputPlane, nOutputPlane, kernelW, kernelH)
+              .setName(this.getName())
+    val params1 = dnn.getParameters()
+    val params2 = this.getParameters()
+    params1._1.asInstanceOf[Tensor[T]].copy(params2._1)
+    params1._2.asInstanceOf[Tensor[T]].copy(params2._2)
+    dnn.asInstanceOf[AbstractModule[Activity, Activity, T]]
   }
 }
 

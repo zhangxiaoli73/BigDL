@@ -144,6 +144,11 @@ class Reshape[T: ClassTag](
     }
     this
   }
+
+  override def toDnnModule(): AbstractModule[Activity, Activity, T] = {
+    val t = mkldnn.Identity().setName(this.getName())
+    t.asInstanceOf[AbstractModule[Activity, Activity, T]]
+  }
 }
 
 object Reshape extends ModuleSerializable {

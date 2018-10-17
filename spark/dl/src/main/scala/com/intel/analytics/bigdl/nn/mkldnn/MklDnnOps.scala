@@ -18,7 +18,7 @@ package com.intel.analytics.bigdl.nn.mkldnn
 import com.intel.analytics.bigdl.mkl.{Memory, MklDnn, Engine => DnnEngine, Stream => DnnStream}
 import com.intel.analytics.bigdl.tensor.{DnnTensor, Tensor}
 
-private[mkldnn] object MklDnnOps {
+private[bigdl] object MklDnnOps {
   def memorySetDataHandle(memory: Long, data: Tensor[Float], offset: Int): Long = {
     require(MklDnn.isLoaded, "mkldnn isn't loaded")
     MklDnn.MemorySetDataHandle(memory, data.storage().array(), offset)

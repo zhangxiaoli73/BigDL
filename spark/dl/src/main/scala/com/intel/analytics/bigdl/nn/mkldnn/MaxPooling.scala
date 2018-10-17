@@ -36,7 +36,7 @@ class MaxPooling(
   @transient private var paddingBR: Array[Int] = _
   @transient private var fwdPD: Long = _
 
-  override private[mkldnn] def initFwdPrimitives(inputs: Array[MemoryData], phase: Phase) = {
+  override private[bigdl] def initFwdPrimitives(inputs: Array[MemoryData], phase: Phase) = {
     _inputFormats = singleNativeData(inputs)
     val strides = Array(dW, dH)
     val kernel = Array(kH, kW)
@@ -68,7 +68,7 @@ class MaxPooling(
     (_inputFormats, _outputFormats)
   }
 
-  override private[mkldnn] def initBwdPrimitives(grad: Array[MemoryData], phase: Phase) = {
+  override private[bigdl] def initBwdPrimitives(grad: Array[MemoryData], phase: Phase) = {
     _gradOutputFormats = singleNativeData(grad)
     _gradOutputFormatsForWeight = _gradOutputFormats
     val strides = Array(dW, dH)

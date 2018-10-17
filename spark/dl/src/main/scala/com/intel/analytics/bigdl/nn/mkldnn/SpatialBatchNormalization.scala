@@ -51,8 +51,8 @@ class SpatialBatchNormalization(
   private val mean: DnnTensor[Float] = DnnTensor[Float](nOutput)
   private val variance: DnnTensor[Float] = DnnTensor[Float](nOutput)
 
-  private[mkldnn] val runningMean = new Blob(Array(nOutput))
-  private[mkldnn] val runningVariance = new Blob(Array(nOutput))
+  private[bigdl] val runningMean = new Blob(Array(nOutput))
+  private[bigdl] val runningVariance = new Blob(Array(nOutput))
   // TODO we should make it private. Currently, ResNet50 will use it out of this scope.
   val weightAndBias = new Blob(Array(nOutput * 2))
   val gradWeightAndBias = new Blob(Array(nOutput * 2))
@@ -105,7 +105,7 @@ class SpatialBatchNormalization(
     val variance = 4
   }
 
-  override private[mkldnn] def initFwdPrimitives(inputs: Array[MemoryData], phase: Phase) = {
+  override private[bigdl] def initFwdPrimitives(inputs: Array[MemoryData], phase: Phase) = {
     val m = inputs(0).shape.product / this.nOutput
     biasFactor = if (m > 1) { m.toFloat / (m - 1) } else { 1 }
 
@@ -236,7 +236,7 @@ class SpatialBatchNormalization(
     output
   }
 
-  override private[mkldnn] def initBwdPrimitives(grad: Array[MemoryData], phase: Phase) = {
+  override private[bigdl] def initBwdPrimitives(grad: Array[MemoryData], phase: Phase) = {
     _gradOutputFormats = Array(NativeData(outputFormats()(0).shape, outputFormats()(0).layout))
 
     // [PERF] the format of gradInput should be the same as input
@@ -296,6 +296,11 @@ class SpatialBatchNormalization(
 
     gradWeightAndBias.syncToHeap()
 
+//    val t = DnnTools.dense(gradInput).toTensor[Float]
+//    val t2 = DnnTools.dense(gradOutput).toTensor[Float]
+//
+//    println(t.select(1, 1))
+//    println(t2.select(1, 1))
     gradInput
   }
 

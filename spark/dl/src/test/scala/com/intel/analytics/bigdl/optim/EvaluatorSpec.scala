@@ -34,7 +34,7 @@ class EvaluatorSpec extends FlatSpec with Matchers with BeforeAndAfter{
 
   before {
     Engine.init(nodeNumber, coreNumber, true)
-    val conf = new SparkConf().setMaster("local[1]").setAppName("evaluator")
+    val conf = new SparkConf().setMaster(s"local[$coreNumber]").setAppName("evaluator")
     sc = new SparkContext(conf)
   }
 

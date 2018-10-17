@@ -410,6 +410,11 @@ class SpatialMaxPooling[T: ClassTag](
     indices.set()
     this
   }
+
+  override def toDnnModule(): AbstractModule[Activity, Activity, T] = {
+    val dnn = mkldnn.MaxPooling(kW, kH, dW, dH, padW, padH).setName(this.getName())
+    dnn.asInstanceOf[AbstractModule[Activity, Activity, T]]
+  }
 }
 
 object SpatialMaxPooling extends ModuleSerializable {

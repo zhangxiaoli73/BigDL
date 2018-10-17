@@ -30,7 +30,7 @@ class SoftMax() extends MklDnnLayer {
   @transient private var updateOutputTensors: Array[Tensor[Float]] = _
   @transient private var updateOutputMemoryPrimitives: Array[Long] = _
 
-  override private[mkldnn] def initFwdPrimitives(inputs: Array[MemoryData], phase: Phase) = {
+  override private[bigdl] def initFwdPrimitives(inputs: Array[MemoryData], phase: Phase) = {
     phase match {
       case TrainingPhase =>
         _inputFormats = inputs.clone()
@@ -69,7 +69,7 @@ class SoftMax() extends MklDnnLayer {
     }
   }
 
-  override private[mkldnn] def initBwdPrimitives(grad: Array[MemoryData], phase: Phase) = {
+  override private[bigdl] def initBwdPrimitives(grad: Array[MemoryData], phase: Phase) = {
     _gradInputFormats = grad.clone()
     _gradOutputFormats = grad.clone()
     (_gradInputFormats, _gradOutputFormats)
