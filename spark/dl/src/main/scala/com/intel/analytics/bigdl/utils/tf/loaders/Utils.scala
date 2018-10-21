@@ -54,7 +54,7 @@ object Utils {
     }
   }
 
-  private[loaders] def getString(attrMap: util.Map[String, AttrValue], key: String): String = {
+  private[bigdl] def getString(attrMap: util.Map[String, AttrValue], key: String): String = {
     require(attrMap.containsKey(key), s"Operation doesn't contain attributed $key")
     attrMap.get(key).getS.toString(Charset.defaultCharset())
   }
@@ -63,12 +63,12 @@ object Utils {
     getString(nodeDef.getAttrMap, key)
   }
 
-  private[loaders] def getInt(attrMap: util.Map[String, AttrValue], key: String): Int = {
+  private[bigdl] def getInt(attrMap: util.Map[String, AttrValue], key: String): Int = {
     require(attrMap.containsKey(key), s"Operation doesn't contain attributed $key")
     attrMap.get(key).getI.toInt
   }
 
-  private[loaders] def getFloat(attrMap: util.Map[String, AttrValue], key: String): Float = {
+  private[bigdl] def getFloat(attrMap: util.Map[String, AttrValue], key: String): Float = {
     require(attrMap.containsKey(key), s"Operation doesn't contain attributed $key")
     attrMap.get(key).getF
   }
@@ -82,7 +82,7 @@ object Utils {
     getBoolean(nodeDef.getAttrMap, key)
   }
 
-  private[loaders] def getIntList(attrMap: util.Map[String, AttrValue], key: String): Seq[Int] = {
+  private[bigdl] def getIntList(attrMap: util.Map[String, AttrValue], key: String): Seq[Int] = {
     require(attrMap.containsKey(key), s"Operation doesn't contain attributed $key")
     attrMap.get(key).getList.getIList.asScala.map(_.toInt)
   }

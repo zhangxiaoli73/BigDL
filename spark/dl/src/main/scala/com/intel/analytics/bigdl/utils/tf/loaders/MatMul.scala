@@ -31,6 +31,7 @@ class MatMul extends TensorflowOpsLoader {
     , context: Context[T])(implicit ev: TensorNumeric[T]): Module[T] = {
 
     val attr = nodeDef.getAttrMap
+    // todo: responding dnn layer???
     MM[T](getBoolean(attr, "transpose_a"), getBoolean(attr, "transpose_b"))
   }
 }

@@ -22,6 +22,7 @@ import java.util.UUID
 import com.google.protobuf.ByteString
 import com.intel.analytics.bigdl.dataset.{DistributedDataSet, MiniBatch}
 import com.intel.analytics.bigdl.nn._
+import com.intel.analytics.bigdl.nn.mkldnn.ToGraphWrapper
 import com.intel.analytics.bigdl.optim.{DistriOptimizer, Trigger}
 import com.intel.analytics.bigdl.tensor.{Storage, Tensor}
 import com.intel.analytics.bigdl.utils._
@@ -108,6 +109,19 @@ class TensorflowLoaderSpec extends TensorflowSpecHelper{
     val resource = getClass().getClassLoader().getResource("tf")
     val path = processPath(resource.getPath()) + JFile.separator + "test.pb"
     val results = TensorflowLoader.parse(path)
+    results.size() should be(14)
+  }
+
+  "Dnn loader" should "read a list of nodes from pb file" in {
+    val resource = getClass().getClassLoader().getResource("tf")
+    val path = processPath(resource.getPath()) + JFile.separator + "test.pb"
+    val results = TensorflowLoader.parse(path)
+
+    val model = TensorflowLoader.loadDef(path, Seq("Placeholder"), Seq("output"),
+      ByteOrder.LITTLE_ENDIAN)
+
+    val tmp = ToGraphWrapper(model)
+
     results.size() should be(14)
   }
 

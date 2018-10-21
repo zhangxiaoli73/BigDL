@@ -23,7 +23,7 @@ import java.util.{HashMap => JHashMap}
 
 import com.google.protobuf.{CodedInputStream, TextFormat}
 import com.intel.analytics.bigdl.Module
-import com.intel.analytics.bigdl.nn.Graph
+import com.intel.analytics.bigdl.nn.{GeneralGraph, Graph}
 import com.intel.analytics.bigdl.nn.abstractnn.{AbstractModule, Activity}
 import com.intel.analytics.bigdl.nn.tf.AssignGrad
 import com.intel.analytics.bigdl.python.api.{JTensor, PythonBigDL, PythonBigDLUtils}
@@ -83,6 +83,72 @@ object TensorflowLoader{
     // Build BigDL model from the tf node graph
     buildBigDLModel(tfGraph, newInputs, outputs, byteOrder, graphPrototxt,
       context, generatedBackward)
+  }
+
+  def loadDef[T: ClassTag](graphPrototxt: String, inputs: Seq[String], outputs: Seq[String],
+                        byteOrder: ByteOrder, binFile: Option[String] = None,
+                        generatedBackward: Boolean = true)(
+                         implicit ev: TensorNumeric[T]): GeneralGraph[T, NodeDef] = {
+    // Get node list
+    val nodeList = parse(graphPrototxt)
+
+    // Input name remove the port
+    val realInputNames = inputs.map(i => if (i.split(":").length == 2) i.split(":")(0) else i)
+      .distinct
+
+    // Construct tf node graph
+    val (tfGraph, newInputMap, _) =
+    buildTFGraph(nodeList, outputs, (node: NodeDef) => realInputNames.contains(node.getName),
+      Some(getInputPorts(inputs)))
+
+    // If you choose an internal node with multiple inputs, extra placeholder will be insert into
+    // the model
+    // Keep the order with the inputs list
+    val newInputs = ArrayBuffer[String]()
+    realInputNames.foreach(i => {
+      if (newInputMap.isDefinedAt(i)) {
+        newInputMap(i).foreach(n => newInputs.append(n))
+      }
+    })
+    // Try to load variables
+    val context = binFile.map(loadBinFiles(_))
+
+    // new GeneralGraph[T, NodeDef](tfGraph.topologySort.toList, newInputs, outputs)
+
+    import java.util.List
+
+    val name2Node = nodeList.asScala.map(n => new Node(n)).asJava
+
+    new GeneralGraph[T, NodeDef](name2Node, newInputs, outputs)
+
+    // Build BigDL model from the tf node graph
+//    buildBigDLModel(tfGraph, newInputs, outputs, byteOrder, graphPrototxt,
+//      context, generatedBackward)
+  }
+
+  private[bigdl] def buildToDirectedGraph(
+     nodes : List[Node[NodeDef]], outputs: Seq[String],
+     isInput: (NodeDef) => Boolean = (_: NodeDef) => false,
+     inputPorts: Option[mutable.Map[String, ArrayBuffer[Int]]] = None
+   ): (DirectedGraph[NodeDef], mutable.HashMap[String, ArrayBuffer[String]], Seq[String]) = {
+    // val name2Node = nodes.asScala.map(n => n.getName -> new Node(n)).toMap
+
+    val name2Node = nodes.asScala.map(n => (n.element.getName, n)).toMap
+
+    // Build graph
+    val outputNodes = if (outputs == null) {
+      name2Node.valuesIterator.filter(_.nextNodes.isEmpty).toArray
+    } else {
+      val results = name2Node.valuesIterator.toArray.filter(n =>
+        outputs.contains(n.element.getName))
+      require(results.length == outputs.length, "Invalid outputNode names")
+      results
+    }
+    val (inputs, originInputs) = connect(outputNodes, name2Node, isInput, inputPorts)
+
+    val dummyOutput = new Node[NodeDef](null)
+    outputNodes.foreach(_ -> dummyOutput)
+    (dummyOutput.graph(reverse = true), inputs, originInputs)
   }
 
   def checkpoints[T: ClassTag](graphFile: String, binFile: String, byteOrder: ByteOrder)(
@@ -198,6 +264,8 @@ object TensorflowLoader{
    * @param inputPorts if user want to use a part of the node input as model input
    * @return
    */
+
+  // todo: difference???
   private[bigdl] def buildTFGraph(
     nodes : List[NodeDef], outputs: Seq[String],
     isInput: (NodeDef) => Boolean = (_: NodeDef) => false,
@@ -517,6 +585,8 @@ object TensorflowLoader{
       val (result, inputs) = matchGraph(graph, patterns(i).topology)
       if (result.size != 0) {
         // get model
+        val tmp = patterns(0)
+        tmp.layer(graph, context, byteOrder)
         return Some(patterns(i).layer(graph, context, byteOrder), result, inputs)
       }
       i += 1
@@ -524,6 +594,7 @@ object TensorflowLoader{
     None
   }
 
+  // todo: why do this???
   private def matchGraph(graph: DirectedGraph[NodeDef], pattern: DirectedGraph[String])
       : (List[Node[NodeDef]], Seq[Node[NodeDef]]) = {
     require(graph.reverse && pattern.reverse, "Must pass in reversed graph")
@@ -589,7 +660,7 @@ object TensorflowLoader{
     return (patternToGraph.valuesIterator.toList.asJava, inputs)
   }
 
-  private def findCommonPrefix(data: Seq[String]): String = {
+  private[bigdl] def findCommonPrefix(data: Seq[String]): String = {
     if (data.length == 0) return ""
     var shortest = data(0).length
     data.foreach(s => if (s.length < shortest) shortest = s.length)
@@ -610,7 +681,7 @@ object TensorflowLoader{
     if (s.charAt(s.length - 1) == '/') s.substring(0, s.length - 1) else s
   }
 
-  private def removeColon(s: String): String = {
+  private[bigdl] def removeColon(s: String): String = {
     s.replaceAll(":", "")
   }
 }
