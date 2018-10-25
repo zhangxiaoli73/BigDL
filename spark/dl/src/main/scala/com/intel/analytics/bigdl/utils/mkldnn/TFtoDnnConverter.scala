@@ -17,9 +17,11 @@
 package com.intel.analytics.bigdl.utils.mkldnn
 
 import java.nio.ByteOrder
+import java.util
 import java.util.List
 
 import com.intel.analytics.bigdl._
+import com.intel.analytics.bigdl.nn.Graph._
 import com.intel.analytics.bigdl.nn.abstractnn.{AbstractModule, Activity}
 import com.intel.analytics.bigdl.nn.mkldnn.NodeType.TensorFlowNode
 import com.intel.analytics.bigdl.nn.{GeneralGraph, Graph, StaticGraph, mkldnn}
@@ -37,31 +39,38 @@ import scala.reflect.ClassTag
 
 
 class TFtoDnnConverter[T: ClassTag](defGraph: GeneralGraph[T, NodeDef])
-  (implicit ev: TensorNumeric[T]) extends DnnLayerConverter[T, NodeDef]{
+  (implicit ev: TensorNumeric[T]) extends DnnLayerConverter[T, NodeDef](defGraph) {
 
-  mappingSet = init()
+  override def mapping(node: NodeDef): MklDnnModule = {
+    val dnnNode = node.getOp match {
+      case "Relu" => mkldnn.ReLU()
+      case "DropOut" => mkldnn.Dropout()
+      case _ => throw new UnsupportedOperationException(s"Not support layer ${node.getOp}")
+    }
 
-  private def init(): mutable.HashMap[String, NodeDef => MklDnnModule] = {
-    val set = new mutable.HashMap[String, NodeDef => MklDnnModule]
-    set("RELU") = this.toRelu
-    set("DROPOUT") = this.toDropout
-    set
+    dnnNode.setName(node.getOp)
   }
 
-  override def toDnn(nodes: List[Node[NodeDef]]): Boolean = {
-    var i = 0
-    var enableDnn = true
-    while (i < nodes.toArray.length) {
-      val e = nodes.get(i)
-      if (e.element != null) {
-        if (!mappingSet.contains(e.element.getOp())) {
-          enableDnn = false
-          println(e.element.getOp)
+  override def toDnnGraph(): StaticGraph[T] = {
+    val nodes = defGraph.nodes()
+    val oldToNew = new util.HashMap[Node[NodeDef], Node[MklDnnModule]]()
+    nodes.foreach(node => {
+      val dnn = new Node(mapping(node.element))
+      oldToNew.put(node, dnn)
+    })
+
+    nodes.foreach(node => {
+      node.nextNodesAndEdges.foreach(nextNodeAndEdge => {
+        if (oldToNew.containsKey(nextNodeAndEdge._1)) {
+          oldToNew.get(node).add(oldToNew.get(nextNodeAndEdge._1), nextNodeAndEdge._2)
         }
-      }
-      i += 1
-    }
-    enableDnn
+      })
+    })
+
+    val inputs = defGraph.input_layers.toArray.map(n => oldToNew.get(n).asInstanceOf[ModuleNode[T]])
+    val outputs = defGraph.output_layers.toArray.map(n => oldToNew.get(n).asInstanceOf[ModuleNode[T]])
+
+    new StaticGraph[T](inputs, outputs)
   }
 
   override def convert(): Graph[T] = {

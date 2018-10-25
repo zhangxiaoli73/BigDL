@@ -16,35 +16,46 @@
 
 package com.intel.analytics.bigdl.utils.mkldnn
 
+import java.util
 import java.util.List
 
+import breeze.linalg.reverse
 import com.google.protobuf.GeneratedMessage
 import com.intel.analytics.bigdl.nn.Graph._
 import com.intel.analytics.bigdl.nn._
 import com.intel.analytics.bigdl.nn.abstractnn.{AbstractModule, Activity}
 import com.intel.analytics.bigdl.nn.mkldnn.MklDnnModule
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
-import com.intel.analytics.bigdl.utils.{Node, T}
+import com.intel.analytics.bigdl.utils.{DirectedGraph, Node, T}
 import org.tensorflow.framework.NodeDef
 
 import scala.collection.mutable
 import scala.reflect.ClassTag
 
 
-abstract class DnnLayerConverter[T: ClassTag, D: ClassTag](implicit ev: TensorNumeric[T]) {
+abstract class DnnLayerConverter[T: ClassTag, D: ClassTag](defGraph: GeneralGraph[T, D])
+                                                          (implicit ev: TensorNumeric[T]) {
 
-  var mappingSet: mutable.HashMap[String, D => MklDnnModule] = null
+  def mapping(node: D): MklDnnModule
 
-  def toRelu(node: D): MklDnnModule = {
-    mkldnn.ReLU()
+  def toDnnGraph(): StaticGraph[T]
+
+  def cloneGraph(): DirectedGraph[T] = {
+    val oldToNew = new util.HashMap[Node[D], Node[MklDnnModule]]()
+    val nodes = defGraph.nodes()
+    nodes.foreach(node => {
+      oldToNew.put(node, new Node[MklDnnModule](mkldnn.Identity()))
+    })
+    // Keep the order in the nextNodes array and prevNodes array of the current node.
+    // As we go through all node in bfs from source, the prevNodes order can be preserved.
+    // For each node, we iterate and add their nextNodes, the nextNodes order can also be preserved.
+    nodes.foreach(node => {
+      node.nextNodesAndEdges.foreach(nextNodeAndEdge => {
+        if (oldToNew.containsKey(nextNodeAndEdge._1)) {
+          oldToNew.get(node).add(oldToNew.get(nextNodeAndEdge._1), nextNodeAndEdge._2)
+        }
+      })
+    })
+    oldToNew
   }
-
-  def toDropout(node: D): MklDnnModule = {
-    // todo:
-    mkldnn.Dropout()
-  }
-
-  def toDnn(nodes: List[Node[D]]): Boolean
-
-  def convert(): StaticGraph[T]
 }
