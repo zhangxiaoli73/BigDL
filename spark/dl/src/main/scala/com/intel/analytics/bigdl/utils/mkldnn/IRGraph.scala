@@ -20,31 +20,23 @@ import java.util.List
 
 import com.intel.analytics.bigdl.nn.{Graph, keras}
 import com.intel.analytics.bigdl.nn.abstractnn.{AbstractModule, Activity}
-import com.intel.analytics.bigdl.nn.mkldnn.NodeType
-import com.intel.analytics.bigdl.nn.mkldnn.NodeType.BigDLNode
+import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
 import com.intel.analytics.bigdl.utils.{Node, T}
 
 import scala.collection.mutable.ArrayBuffer
 import scala.reflect.ClassTag
 
-class GeneralGraph[T: ClassTag, D](
-    listNodes: Array[Node[D]],
-    _inputs: Seq[String] = null,
-    _outputs: Seq[String] = null,
-    node: NodeType = BigDLNode)
+class IRGraph[T: ClassTag](
+    val inputs : Seq[Node[IRElement]],
+    val outputs : Seq[Node[IRElement]],
+    private[bigdl] val variables: Option[(Array[Tensor[T]], Array[Tensor[T]])] = None)
   (implicit ev: TensorNumeric[T]) extends AbstractModule[Activity, Activity, T] with Serializable {
 
-  def inputs(): Seq[String] = _inputs
-  def outputs(): Seq[String] = _outputs
 
-  var input_layers = new ArrayBuffer[Node[D]]
-  var output_layers = new ArrayBuffer[Node[D]]
+  var input_layers = new ArrayBuffer[Node[IRElement]]
+  var output_layers = new ArrayBuffer[Node[IRElement]]
   var layer_name_map = T()
-  var layer_map = listNodes
-
-  def nodeType(): NodeType = nodeType
-  def nodes(): Array[Node[D]] = listNodes
 
   var graph: Graph[T] = null
 
@@ -64,34 +56,25 @@ class GeneralGraph[T: ClassTag, D](
 
 
   def build(): Unit = {
-    // first mapping
-    makeInputLayers()
-    makeOutputLayers()
-    // create graph
-    // graph = Graph(input_layers, output_layers)
+    // build to generate BigDL graph
+  }
+}
+
+object IRGraph {
+  def apply[T: ClassTag](
+    inputs: Seq[Node[TFElement]],
+    outputs: Seq[Node[TFElement]],
+    variables: Option[(Array[Tensor[T]], Array[Tensor[T]])] = None
+  )( implicit ev: TensorNumeric[T]): IRGraph[T] = {
+    new IRGraph[T](inputs.asInstanceOf[Seq[Node[IRElement]]],
+      outputs.asInstanceOf[Seq[Node[IRElement]]], variables)
   }
 
-  def makeInputLayers(): Unit = {
-    var i = 0
-    while (i < layer_map.length) {
-      val n = layer_map(i)
-      // no previous node
-      if (n.prevNodes.length == 0) {
-        input_layers.append(n)
-      }
-      i += 1
-    }
-  }
-
-  def makeOutputLayers(): Unit = {
-    var i = 0
-    while (i < layer_map.length) {
-      val n = layer_map(i)
-      // no next nodes
-      if (n.nextNodes.length == 0) {
-       output_layers.append(n)
-      }
-      i += 1
-    }
-  }
+//  def apply[T: ClassTag](
+//    inputs: Seq[Node[IRElement]],
+//    outputs: Seq[Node[IRElement]],
+//    variables: Option[(Array[Tensor[T]], Array[Tensor[T]])] = None
+//  )( implicit ev: TensorNumeric[T]): IRGraph[T] = {
+//    new IRGraph[T](inputs, outputs, variables)
+//  }
 }

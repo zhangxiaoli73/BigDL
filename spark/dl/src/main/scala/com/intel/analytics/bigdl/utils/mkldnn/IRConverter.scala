@@ -18,8 +18,33 @@ package com.intel.analytics.bigdl.utils.mkldnn
 
 import org.apache.commons.lang.exception.ExceptionUtils
 
+import java.util
+import java.util.List
+
+import breeze.linalg.reverse
+import com.google.protobuf.GeneratedMessage
+import com.intel.analytics.bigdl.nn.Graph._
+import com.intel.analytics.bigdl.nn._
+import com.intel.analytics.bigdl.nn.abstractnn.{AbstractModule, Activity}
+import com.intel.analytics.bigdl.nn.mkldnn.MklDnnModule
+import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
+import com.intel.analytics.bigdl.utils.{DirectedGraph, Node, T}
+import org.tensorflow.framework.NodeDef
+
+import scala.collection.mutable
+import scala.reflect.ClassTag
+
+
+abstract class IRConverter[T: ClassTag](defGraph: IRGraph[T])
+                                       (implicit ev: TensorNumeric[T]) {
+
+  def mapping(node: IRElement): MklDnnModule
+
+  def toGraph(): Graph[T]
+}
+
 class FromTFConversionException (var conversionMsg: String,
-                                val error: Throwable = null) extends RuntimeException {
+                                 val error: Throwable = null) extends RuntimeException {
   override def toString: String = {
     val erroMsg = s"from TensorFlow to Dnn conversion error : $conversionMsg"
     if (error != null) {
@@ -30,7 +55,7 @@ class FromTFConversionException (var conversionMsg: String,
 }
 
 class FromCaffeConversionException (var conversionMsg: String,
-                                 val error: Throwable = null) extends RuntimeException {
+                                    val error: Throwable = null) extends RuntimeException {
   override def toString: String = {
     val erroMsg = s"from Caffe to Dnn conversion error : $conversionMsg"
     if (error != null) {

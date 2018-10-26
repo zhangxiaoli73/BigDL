@@ -13,34 +13,36 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.intel.analytics.bigdl.utils.tf
+package com.intel.analytics.bigdl.utils.mkldnn
 
 import java.io.{DataInputStream, InputStream, FileReader => JFileReader}
 import java.nio.ByteOrder
 import java.util
-import java.util.List
-import java.util.{HashMap => JHashMap}
+import java.util.{List, HashMap => JHashMap}
 
+import breeze.linalg.reverse
 import com.google.protobuf.{CodedInputStream, TextFormat}
 import com.intel.analytics.bigdl.Module
 import com.intel.analytics.bigdl.nn.Graph
+import com.intel.analytics.bigdl.nn.Graph._
 import com.intel.analytics.bigdl.nn.abstractnn.{AbstractModule, Activity}
-import com.intel.analytics.bigdl.nn.tf.AssignGrad
-import com.intel.analytics.bigdl.python.api.{JTensor, PythonBigDL, PythonBigDLUtils}
-import com.intel.analytics.bigdl.tensor.{DoubleType, FloatType, Tensor}
+import com.intel.analytics.bigdl.nn.mkldnn.MklDnnModule
+import com.intel.analytics.bigdl.nn.tf.{AssignGrad, SwitchControlNode, SwitchOps}
+import com.intel.analytics.bigdl.python.api.{JTensor, PythonBigDLUtils}
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
+import com.intel.analytics.bigdl.tensor.{DoubleType, FloatType, Tensor}
 import com.intel.analytics.bigdl.utils._
-import com.intel.analytics.bigdl.nn.tf.{SwitchControlNode, SwitchOps}
+import com.intel.analytics.bigdl.utils.tf.{BigDLSessionImpl, Context, Session}
 import com.intel.analytics.bigdl.utils.tf.TensorflowToBigDL._
 import com.intel.analytics.bigdl.utils.tf.loaders.TensorflowOpsLoader
 import org.tensorflow.framework.{GraphDef, NodeDef}
 
+import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 import scala.reflect.ClassTag
-import scala.collection.JavaConverters._
 
-object TensorflowLoader{
+object TensorflowParser{
   /**
    * Load tensorflow model from a prototxt file
    * @param graphPrototxt where is the tensorflow protobuf file
@@ -53,9 +55,9 @@ object TensorflowLoader{
    * @return
    */
   def load[T: ClassTag](graphPrototxt: String, inputs: Seq[String], outputs: Seq[String],
-        byteOrder: ByteOrder, binFile: Option[String] = None,
+        byteOrder: ByteOrder = ByteOrder.LITTLE_ENDIAN, binFile: Option[String] = None,
         generatedBackward: Boolean = true)(
-    implicit ev: TensorNumeric[T]): Module[T] = {
+    implicit ev: TensorNumeric[T]): IRGraph[T] = {
     // Get node list
     val nodeList = parse(graphPrototxt)
 
@@ -81,8 +83,100 @@ object TensorflowLoader{
     val context = binFile.map(loadBinFiles(_))
 
     // Build BigDL model from the tf node graph
-    buildBigDLModel(tfGraph, newInputs, outputs, byteOrder, graphPrototxt,
+    build2IRGraph(tfGraph, newInputs, outputs, byteOrder, graphPrototxt,
       context, generatedBackward)
+  }
+
+  private def genTFelement(node: NodeDef): TFElement = {
+    val name = node.getName
+    val op = node.getOp
+    val attrs = node.getAttrMap
+
+    new TFElement(name, op, attrs.asInstanceOf[Map[String, Any]])
+  }
+
+  private[bigdl] def build2IRGraph[T: ClassTag](
+    tfGraph: DirectedGraph[NodeDef],
+    inputs: Seq[String],
+    outputs: Seq[String],
+    byteOrder: ByteOrder,
+    graphPrototxt: String,
+    ctx: Option[Context[T]] = None,
+    generatedBackward: Boolean = true
+  )(implicit ev: TensorNumeric[T]): IRGraph[T] = {
+    val nameToNode = new mutable.HashMap[String, Node[TFElement]]()
+    val oldToNew = new util.HashMap[Node[NodeDef], Node[TFElement]]()
+    val context = ctx.getOrElse(new Context[T])
+
+    // BFS to keep the input order same
+    tfGraph.BFS.foreach(node => {
+      val dnn = new Node(genTFelement(node.element))
+      oldToNew.put(node, dnn)
+      nameToNode(node.element.getName) = dnn
+    })
+
+    tfGraph.BFS.foreach(node => {
+      node.nextNodesAndEdges.foreach(nextNodeAndEdge => {
+        if (oldToNew.containsKey(nextNodeAndEdge._1)) {
+          oldToNew.get(node).add(oldToNew.get(nextNodeAndEdge._1), nextNodeAndEdge._2)
+        }
+      })
+    })
+
+    val inputNodes = inputs
+    .map(n => nameToNode.getOrElse(n, throw new IllegalArgumentException(s"Can't find node $n")))
+    val outputNodes = outputs
+    .map(n => nameToNode.getOrElse(n, throw new IllegalArgumentException(s"Can't find node $n")))
+
+    val weights = ArrayBuffer[Tensor[T]]()
+    val gradients = ArrayBuffer[Tensor[T]]()
+    for ((weight, grad, _) <- context.tensors) {
+    weights += weight
+    gradients += grad
+    }
+
+    // todo: Append assign nodes ???
+    //    val adjustOutputs = if (context.assignGrads.isDefined) {
+    //      outputNodes.map(n => {
+    //        val matchNode = context.assignGrads.get.filter(_._2 == n.element.getName())
+    //        require(matchNode.size <= 1, "Invalid gradients output")
+    //        if (matchNode.size == 1) {
+    //          new AssignGrad[T](context(matchNode.head._1)._2).inputs(n)
+    //        } else {
+    //          n
+    //        }
+    //      })
+    //    } else {
+    //      outputNodes
+    //    }
+
+    // todo: Add more parameters for it
+    IRGraph[T](inputNodes, outputNodes)
+}
+
+  private[bigdl] def buildToDirectedGraph(
+     nodes : List[Node[NodeDef]], outputs: Seq[String],
+     isInput: (NodeDef) => Boolean = (_: NodeDef) => false,
+     inputPorts: Option[mutable.Map[String, ArrayBuffer[Int]]] = None
+   ): (DirectedGraph[NodeDef], mutable.HashMap[String, ArrayBuffer[String]], Seq[String]) = {
+    // val name2Node = nodes.asScala.map(n => n.getName -> new Node(n)).toMap
+
+    val name2Node = nodes.asScala.map(n => (n.element.getName, n)).toMap
+
+    // Build graph
+    val outputNodes = if (outputs == null) {
+      name2Node.valuesIterator.filter(_.nextNodes.isEmpty).toArray
+    } else {
+      val results = name2Node.valuesIterator.toArray.filter(n =>
+        outputs.contains(n.element.getName))
+      require(results.length == outputs.length, "Invalid outputNode names")
+      results
+    }
+    val (inputs, originInputs) = connect(outputNodes, name2Node, isInput, inputPorts)
+
+    val dummyOutput = new Node[NodeDef](null)
+    outputNodes.foreach(_ -> dummyOutput)
+    (dummyOutput.graph(reverse = true), inputs, originInputs)
   }
 
   def checkpoints[T: ClassTag](graphFile: String, binFile: String, byteOrder: ByteOrder)(
@@ -153,7 +247,6 @@ object TensorflowLoader{
       }
       save.put(n, saveTensor)
     })
-
     File.save(save, file, true)
   }
 
@@ -356,150 +449,6 @@ object TensorflowLoader{
     }
   }
 
-  private[bigdl] def buildBigDLModel[T: ClassTag](
-      tfGraph: DirectedGraph[NodeDef],
-      inputs: Seq[String],
-      outputs: Seq[String],
-      byteOrder: ByteOrder,
-      graphPrototxt: String,
-      ctx: Option[Context[T]] = None,
-      generatedBackward: Boolean = true
-    )(implicit ev: TensorNumeric[T]): Module[T] = {
-    import scala.collection.JavaConverters._
-
-    // Map from tensorflow node to the converted BigDL node
-    val convertedNode = new mutable.HashMap[Node[NodeDef],
-      Node[AbstractModule[Activity, Activity, T]]]()
-    val nameToNode =
-      new mutable.HashMap[String, Node[AbstractModule[Activity, Activity, T]]]()
-
-    val moduleToInputNodes =
-      new mutable.HashMap[Node[AbstractModule[Activity, Activity, T]], Seq[Node[NodeDef]]]()
-    val moduleToAllNodes =
-      new mutable.HashMap[Node[AbstractModule[Activity, Activity, T]], Set[Node[NodeDef]]]()
-    val context = ctx.getOrElse(new Context[T])
-
-    // BFS to keep the input order same
-    tfGraph.BFS.foreach(n => {
-      if (n.element == null) {
-        // Dummy node, skip
-      } else if (convertedNode.get(n).isDefined) {
-        // converted node, skip
-      } else {
-        val errorMsg =
-          s"""
-            | Cannot convert the given tensorflow operation graph to BigDL model. The convert fails
-            | at node ${n.element.getName}. Operation type is ${n.element.getOp}
-          """.stripMargin
-
-        val (module, nodes, inputNodes) =
-          extract[T](n.graph(reverse = true), context, byteOrder).getOrElse({
-            try {
-              val cls = Class.forName("com.intel.analytics.bigdl.utils.tf.loaders." +
-                n.element.getOp)
-              val builder = cls.getConstructors()(0).newInstance().asInstanceOf[TensorflowOpsLoader]
-              (builder.build[T](n.element, byteOrder, context), Seq(n).asJava, Seq(n))
-            } catch {
-              case e: Throwable =>
-                throw new UnsupportedOperationException(errorMsg, e)
-            }
-          })
-
-        // set name
-        if (nodes.size() == 1) {
-          // Use tf operation name if one to one map
-          module.setName(removeColon(nodes.get(0).element.getName()))
-        } else {
-          // Many to one map
-          val name = removeColon(findCommonPrefix(nodes.asScala.map(_.element.getName)))
-          if (name == "") {
-            // Use a name combine nodes
-            module.setName(s"[${nodes.asScala.map(_.element.getName).map(_.replaceAll("/", "\\\\"))
-              .map(removeColon(_)).mkString(", ")}]")
-          } else {
-            // Use the common name
-            module.setName(name + "/" + module.getName())
-          }
-        }
-        val node = module match {
-          case _: SwitchOps[_] => new SwitchControlNode(module)
-          case _ => Node(module)
-        }
-
-        nodes.asScala.foreach(m => {
-          convertedNode(m) = node
-          nameToNode(m.element.getName) = node
-        })
-
-        moduleToInputNodes(node) = inputNodes
-        moduleToAllNodes(node) = nodes.asScala.toSet
-
-      }
-    })
-
-    /**
-     * Go through all tensorflow nodes
-     * @param outputModuleNode
-     */
-    def connect(outputModuleNode: Seq[Node[AbstractModule[Activity, Activity, T]]]) = {
-      val queue = new mutable.Queue[Node[AbstractModule[Activity, Activity, T]]]()
-      val visited = mutable.Set[Node[AbstractModule[Activity, Activity, T]]]()
-      queue.enqueue(outputModuleNode: _*)
-
-      while (queue.nonEmpty) {
-        val currNode = queue.dequeue()
-        if (!visited(currNode)) {
-          visited += currNode
-          val inputNodes = moduleToInputNodes(currNode)
-          val allNodes = moduleToAllNodes(currNode)
-          val inputModuleNodes = inputNodes.flatMap(_.prevNodesAndEdges)
-            .filterNot(n => context.containsTensor(n._1.element.getName) &&
-              n._1.element.getOp() != "VariableV2")
-            .filterNot(n => allNodes(n._1))
-            .map(n => (convertedNode(n._1), n._2.newInstance())).filter(n => n._1 != currNode)
-          inputModuleNodes.foreach(n => n._1.add(currNode, n._2))
-          queue.enqueue(inputModuleNodes.map(_._1): _*)
-        }
-      }
-    }
-
-    val outputModules = tfGraph.source.prevNodes.map(_.element.getName).map(nameToNode)
-
-    connect(outputModules)
-
-    val inputNodes = inputs
-      .map(n => nameToNode.getOrElse(n, throw new IllegalArgumentException(s"Can't find node $n")))
-    val outputNodes = outputs
-      .map(n => nameToNode.getOrElse(n, throw new IllegalArgumentException(s"Can't find node $n")))
-
-
-    val weights = ArrayBuffer[Tensor[T]]()
-    val gradients = ArrayBuffer[Tensor[T]]()
-    for ((weight, grad, _) <- context.tensors) {
-      weights += weight
-      gradients += grad
-    }
-
-    // Append assign nodes
-    val adjustOutputs = if (context.assignGrads.isDefined) {
-      outputNodes.map(n => {
-        val matchNode = context.assignGrads.get.filter(_._2 == n.element.getName())
-        require(matchNode.size <= 1, "Invalid gradients output")
-        if (matchNode.size == 1) {
-          new AssignGrad[T](context(matchNode.head._1)._2).inputs(n)
-        } else {
-          n
-        }
-      })
-    } else {
-      outputNodes
-    }
-
-    Graph.dynamic(inputNodes.toArray, adjustOutputs.toArray,
-      Some((weights.toArray, gradients.toArray)),
-      generatedBackward)
-  }
-
   /**
    * Extract one module and the corresponding node list from the given graph
    * @param graph
@@ -518,6 +467,8 @@ object TensorflowLoader{
       val (result, inputs) = matchGraph(graph, patterns(i).topology)
       if (result.size != 0) {
         // get model
+        val tmp = patterns(0)
+        tmp.layer(graph, context, byteOrder)
         return Some(patterns(i).layer(graph, context, byteOrder), result, inputs)
       }
       i += 1
@@ -590,7 +541,7 @@ object TensorflowLoader{
     return (patternToGraph.valuesIterator.toList.asJava, inputs)
   }
 
-  private def findCommonPrefix(data: Seq[String]): String = {
+  private[bigdl] def findCommonPrefix(data: Seq[String]): String = {
     if (data.length == 0) return ""
     var shortest = data(0).length
     data.foreach(s => if (s.length < shortest) shortest = s.length)
@@ -611,7 +562,7 @@ object TensorflowLoader{
     if (s.charAt(s.length - 1) == '/') s.substring(0, s.length - 1) else s
   }
 
-  private def removeColon(s: String): String = {
+  private[bigdl] def removeColon(s: String): String = {
     s.replaceAll(":", "")
   }
 }

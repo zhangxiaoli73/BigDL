@@ -19,6 +19,7 @@ package com.intel.analytics.bigdl.example.tensorflow.loadandsave
 import com.intel.analytics.bigdl.nn.Module
 import com.intel.analytics.bigdl.numeric.NumericFloat
 import com.intel.analytics.bigdl.tensor.Tensor
+import com.intel.analytics.bigdl.utils.mkldnn.{IR2Dnn, TensorflowParser}
 
 /**
  * This example show how to load a tensorflow model defined in slim and
@@ -27,7 +28,12 @@ import com.intel.analytics.bigdl.tensor.Tensor
 object Load {
   def main(args: Array[String]): Unit = {
     require(args.length == 1, "Please input the model path as the first argument")
-    val model = Module.loadTF(args(0), Seq("Placeholder"), Seq("LeNet/fc4/BiasAdd"))
+//    val model = Module.loadTF(args(0), Seq("Placeholder"), Seq("LeNet/fc4/BiasAdd"))
+//    val result = model.forward(Tensor(1, 1, 28, 28).rand())
+//    println(result)
+
+    val modelDef = TensorflowParser.load(args(0), Seq("Placeholder"), Seq("LeNet/fc4/BiasAdd"))
+    val model = IR2Dnn[Float](modelDef).toGraph()
     val result = model.forward(Tensor(1, 1, 28, 28).rand())
     println(result)
   }

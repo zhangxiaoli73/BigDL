@@ -568,6 +568,9 @@ object Conv2D2 extends TensorflowToBigDL{
     byteOrder: ByteOrder)(
     implicit ev: TensorNumeric[T]): AbstractModule[Activity, Activity, T] = {
 
+
+    val t = tfGraph.source.prevNodes(0).element
+
     val attributes = tfGraph.source.prevNodes(0).element.getAttrMap
     val strideList = getIntList(attributes, "strides")
     val format = getString(attributes, "data_format")
