@@ -87,7 +87,7 @@ object Utils {
     attrMap.get(key).getList.getIList.asScala.map(_.toInt)
   }
 
-  private[loaders] def getType(attrMap: util.Map[String, AttrValue], key: String): DataType = {
+  private[bigdl] def getType(attrMap: util.Map[String, AttrValue], key: String): DataType = {
     require(attrMap.containsKey(key), s"Operation doesn't contain attributed $key")
     attrMap.get(key).getType
   }

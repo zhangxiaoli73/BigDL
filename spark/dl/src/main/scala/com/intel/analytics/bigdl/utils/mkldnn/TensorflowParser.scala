@@ -32,9 +32,10 @@ import com.intel.analytics.bigdl.python.api.{JTensor, PythonBigDLUtils}
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
 import com.intel.analytics.bigdl.tensor.{DoubleType, FloatType, Tensor}
 import com.intel.analytics.bigdl.utils._
-import com.intel.analytics.bigdl.utils.tf.{BigDLSessionImpl, Context, Session}
+import com.intel.analytics.bigdl.utils.tf.{BigDLSessionImpl, Context, Session, TensorflowLoader}
 import com.intel.analytics.bigdl.utils.tf.TensorflowToBigDL._
 import com.intel.analytics.bigdl.utils.tf.loaders.TensorflowOpsLoader
+import com.intel.analytics.bigdl.utils.tf.loaders.Utils._
 import org.tensorflow.framework.{GraphDef, NodeDef}
 
 import scala.collection.JavaConverters._
@@ -61,36 +62,42 @@ object TensorflowParser{
     // Get node list
     val nodeList = parse(graphPrototxt)
 
-    // Input name remove the port
-    val realInputNames = inputs.map(i => if (i.split(":").length == 2) i.split(":")(0) else i)
-      .distinct
-
-    // Construct tf node graph
-    val (tfGraph, newInputMap, _) =
-      buildTFGraph(nodeList, outputs, (node: NodeDef) => realInputNames.contains(node.getName),
-        Some(getInputPorts(inputs)))
-
-    // If you choose an internal node with multiple inputs, extra placeholder will be insert into
-    // the model
-    // Keep the order with the inputs list
-    val newInputs = ArrayBuffer[String]()
-    realInputNames.foreach(i => {
-      if (newInputMap.isDefinedAt(i)) {
-        newInputMap(i).foreach(n => newInputs.append(n))
-      }
-    })
-    // Try to load variables
-    val context = binFile.map(loadBinFiles(_))
+    val (tfGraph, newInputs, _) =
+      TensorflowLoader.buildTFGraph(nodeList, outputs.map(_.split(":")(0)),
+        (node: NodeDef) => node.getName == "input_node")
+    val context = new Context[Float]()
+//
+//    // Input name remove the port
+//    val realInputNames = inputs.map(i => if (i.split(":").length == 2) i.split(":")(0) else i)
+//      .distinct
+//
+//    // Construct tf node graph
+//    val (tfGraph, newInputMap, _) =
+//      buildTFGraph(nodeList, outputs, (node: NodeDef) => realInputNames.contains(node.getName),
+//        Some(getInputPorts(inputs)))
+//
+//    // If you choose an internal node with multiple inputs, extra placeholder will be insert into
+//    // the model
+//    // Keep the order with the inputs list
+//    val newInputs = ArrayBuffer[String]()
+//    realInputNames.foreach(i => {
+//      if (newInputMap.isDefinedAt(i)) {
+//        newInputMap(i).foreach(n => newInputs.append(n))
+//      }
+//    })
+//    // Try to load variables
+//    val context = binFile.map(loadBinFiles(_))
 
     // Build BigDL model from the tf node graph
-    build2IRGraph(tfGraph, newInputs, outputs, byteOrder, graphPrototxt,
-      context, generatedBackward)
+    build2IRGraph(tfGraph, newInputs.toSeq.map(_._2).flatten, outputs, byteOrder, graphPrototxt,
+      Some(context), generatedBackward).asInstanceOf[IRGraph[T]]
   }
 
   private def genTFelement(node: NodeDef): TFElement = {
     val name = node.getName
     val op = node.getOp
-    val attrs = node.getAttrMap
+    println("operation " + op)
+    val attrs = node.getAttrMap.asScala.toMap
 
     new TFElement(name, op, attrs.asInstanceOf[Map[String, Any]])
   }
@@ -110,9 +117,11 @@ object TensorflowParser{
 
     // BFS to keep the input order same
     tfGraph.BFS.foreach(node => {
-      val dnn = new Node(genTFelement(node.element))
-      oldToNew.put(node, dnn)
-      nameToNode(node.element.getName) = dnn
+      if (node.element != null) {
+        val dnn = new Node(genTFelement(node.element))
+        oldToNew.put(node, dnn)
+        nameToNode(node.element.getName) = dnn
+      }
     })
 
     tfGraph.BFS.foreach(node => {

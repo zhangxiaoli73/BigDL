@@ -23,6 +23,7 @@ from tensorflow.python.platform import gfile
 import tensorflow as tf
 
 import time
+from functools import reduce
 
 def merge_checkpoint(input_graph,
                  input_checkpoint,
@@ -68,7 +69,7 @@ def run_model(end_points, output_path, model_scope=None, backward=True):
     if backward:
         loss = reduce(lambda x, y: tf.abs(x - y), end_points)
         loss = loss * loss
-        for i in range(len(end_points)):
+        for i in range(len(list(end_points))):
             grad_input = tf.Variable(tf.random_uniform(tf.shape(end_points[i]), minval=0.5, maxval=1),
                                      name='grad_input' + str(i))
             grad_inputs.append(grad_input)
@@ -88,7 +89,7 @@ def run_model(end_points, output_path, model_scope=None, backward=True):
             grad_result = tf.assign(grad_var, gradients, name='grad_assign' + str(k))
             grad_results.append(grad_result)
             k = k + 1
-        print 'Compute {} variables for backward in {} ms'.format(k, tt)
+        #print 'Compute {} variables for backward in {} ms'.format(k, tt)
 
     saver = tf.train.Saver()
     output_results = []

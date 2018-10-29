@@ -397,6 +397,7 @@ object TensorflowLoader{
             try {
               val cls = Class.forName("com.intel.analytics.bigdl.utils.tf.loaders." +
                 n.element.getOp)
+              println(cls)
               val builder = cls.getConstructors()(0).newInstance().asInstanceOf[TensorflowOpsLoader]
               (builder.build[T](n.element, byteOrder, context), Seq(n).asJava, Seq(n))
             } catch {

@@ -605,7 +605,7 @@ class TensorflowLoaderSpec extends TensorflowSpecHelper{
     endPoints: Seq[String],
     backward: Boolean): Seq[(Tensor[Float], Tensor[Float])] = {
 
-     tfCheck()
+    tfCheck()
     // Generate command and prepare the temp folder
     val s = JFile.separator
     val modelsFolder = processPath(getClass().getClassLoader().getResource("tf").getPath()) +
@@ -634,6 +634,9 @@ class TensorflowLoaderSpec extends TensorflowSpecHelper{
       TensorflowLoader.buildTFGraph(tfNodes, endPoints.map(_.split(":")(0)),
         (node: NodeDef) => node.getName == "input_node")
     val context = new Context[Float]()
+
+    // Build BigDL model from the tf node graph
+
     val model = TensorflowLoader.buildBigDLModel(tfGraph, inputs.toSeq.map(_._2).flatten,
       endPoints.map(_.split(":")(0)), ByteOrder.LITTLE_ENDIAN, "", Some(context), backward)
 

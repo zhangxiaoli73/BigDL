@@ -29,16 +29,17 @@ object Load {
   def main(args: Array[String]): Unit = {
     // require(args.length == 1, "Please input the model path as the first argument")
 
-    val p = "/home/zhangli/workspace/vgg_16.ckpt"
-    val model = Module.loadTF(p, Seq("Placeholder"), Seq("LeNet/fc4/BiasAdd"))
+    val p = "/home/zhangli/workspace/vgg/model.pb"
+    val input = Seq("input0")
+    val output = Seq("vgg_16/fc8/squeezed")
+//    val model = Module.loadTF(p, Seq("Placeholder"), Seq("LeNet/fc4/BiasAdd"))
 
 //    val model = Module.loadTF(args(0), Seq("Placeholder"), Seq("LeNet/fc4/BiasAdd"))
 //    val result = model.forward(Tensor(1, 1, 28, 28).rand())
 //    println(result)
 
-    val modelDef = TensorflowParser.load(args(0), Seq("Placeholder"), Seq("LeNet/fc4/BiasAdd"))
-
-//    val model = IR2Dnn[Float](modelDef).toGraph()
+    val modelDef = TensorflowParser.load(p, input, output)
+    val model = IR2Dnn[Float](modelDef).toGraph()
 //    val result = model.forward(Tensor(1, 1, 28, 28).rand())
 //    println(result)
   }
