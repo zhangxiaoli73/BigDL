@@ -123,7 +123,10 @@ object DistriOptimizerPerf {
       dummyDataSet,
       criterion
     )
-    optimizer.setEndWhen(Trigger.maxEpoch(param.maxEpoch)).optimize()
+    optimizer.setEndWhen(Trigger.maxEpoch(param.maxEpoch))
+        .setEndWhen(Trigger.maxScore(1.0f))
+        .setEndWhen(Trigger.minLoss(1.0f))
+      .optimize()
     sc.stop()
   }
 }
@@ -138,7 +141,7 @@ object DistriOptimizerPerf {
  * @param inputData inputData input data type (constant / random)
  */
 case class DistriOptimizerPerfParam(
-  batchSize: Int = 128,
+  batchSize: Int = 4,
   maxEpoch: Int = 5,
   dataType: String = "float",
   module: String = "inception_v1",

@@ -605,7 +605,7 @@ class TensorflowLoaderSpec extends TensorflowSpecHelper{
     endPoints: Seq[String],
     backward: Boolean): Seq[(Tensor[Float], Tensor[Float])] = {
 
-    tfCheck()
+     tfCheck()
     // Generate command and prepare the temp folder
     val s = JFile.separator
     val modelsFolder = processPath(getClass().getClassLoader().getResource("tf").getPath()) +

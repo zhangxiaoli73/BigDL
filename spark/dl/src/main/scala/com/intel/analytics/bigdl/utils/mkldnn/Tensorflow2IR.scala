@@ -16,6 +16,13 @@
 
 package com.intel.analytics.bigdl.utils.mkldnn
 
+import org.tensorflow.framework.NodeDef
+
 class Tensorflow2IR {
 
+//  private def toAveragePooling(layer: NodeDef): IRElement = {
+//    val name = layer.getName
+//    val op = layer.getOp
+//    val
+//  }
 }

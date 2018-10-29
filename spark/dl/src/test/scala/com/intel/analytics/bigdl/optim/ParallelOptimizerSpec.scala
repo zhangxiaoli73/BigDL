@@ -59,6 +59,7 @@ class ParallelOptimizerSpec extends FlatSpec with Matchers with BeforeAndAfter {
     val optimizer = new DistriOptimizer[Float](model, dataSet, new ClassNLLCriterion[Float]())
       .setState(T("learningRate" -> 1.0))
       .setEndWhen(Trigger.maxIteration(10))
+      .setEndWhen(Trigger.maxEpoch(1))
 
     optimizer.optimize()
 
