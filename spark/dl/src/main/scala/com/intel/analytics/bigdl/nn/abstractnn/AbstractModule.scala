@@ -202,7 +202,7 @@ abstract class AbstractModule[A <: Activity: ClassTag, B <: Activity: ClassTag, 
    */
   def freeze(names: String*): this.type = {
     if (names.isEmpty) {
-      // in case when freeze is called many times
+      // in case when freeze is callacced many times
       if (scaleW != 0) {
         scaleWCache = scaleW
         scaleW = 0

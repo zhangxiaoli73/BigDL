@@ -278,8 +278,8 @@ object TensorflowLoader{
     //      outputNodes
     //    }
 
-    // todo: Add more parameters for it
-    IRGraph[T](inputNodes, outputNodes)
+    IRGraph[T](inputNodes, outputNodes,
+      Some((weights.toArray, gradients.toArray)), generatedBackward)
   }
 
   /**

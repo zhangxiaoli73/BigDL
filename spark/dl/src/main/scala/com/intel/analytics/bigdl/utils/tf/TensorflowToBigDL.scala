@@ -766,7 +766,6 @@ object Conv2D2 extends TensorflowToBigDL{
   }
 }
 
-  // todo: what dropout????
 object DropoutTF extends TensorflowToBigDL{
   private val graph = {
     val nodediv = Node("RealDiv")
@@ -818,7 +817,6 @@ object DropoutTF extends TensorflowToBigDL{
   }
 }
 
-// todo: what is this???
 object BatchNormV2NCHWTF extends TensorflowToBigDL{
   private val graph = {
     val nodeInput = Node("*")

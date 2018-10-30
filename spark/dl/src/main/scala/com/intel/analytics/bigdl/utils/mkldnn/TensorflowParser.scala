@@ -45,14 +45,14 @@ import scala.reflect.ClassTag
 
 object TensorflowParser {
 
-  // here just support some lops that can be converted to dnn
+  // here just support some ops that can be converted to dnn
   def default[T: ClassTag](node: NodeDef, byteOrder: ByteOrder, context: Context[T])
     : TFElement = {
     val name = node.getName
     val op = node.getOp
     val attrs = node.getAttrMap.asScala.toMap
 
-    new TFElement(name, op, attrs.asInstanceOf[Map[String, Any]])
+    new TFElement(name, op, attrs.asInstanceOf[Map[String, Any]], node)
   }
 
   def maxPool[T: ClassTag](node: NodeDef, byteOrder: ByteOrder, context: Context[T])
@@ -63,50 +63,7 @@ object TensorflowParser {
     val kernelList = getIntList(attributes, "ksize")
 
     new TFElement(" ", "MaxPool",
-      Map("data_format" -> DataFormat(format), "strides" -> strideList, "ksize" -> kernelList))
+      Map("data_format" -> DataFormat(format), "strides" -> strideList, "ksize" -> kernelList),
+      node)
    }
-
-//  private def averagepooing[T: ClassTag](
-//    node: NodeDef,
-//    byteOrder: ByteOrder,
-//    context: Context[T]): TFElement = {
-//    val attributes = node.getAttrMap
-//    val format = getString(attributes, "data_format")
-//    val strideList = getIntList(attributes, "strides")
-//    val kernelList = getIntList(attributes, "ksize")
-//
-//    val (strideH, strideW, ksizeH, ksizeW) = format match {
-//      case "NHWC" =>
-//        require(strideList(3) == 1, s"not support strides on depth")
-//        (strideList(1), strideList(2), kernelList(1), kernelList(2))
-//      case "NCHW" =>
-//        require(strideList(1) == 1, s"not support strides on depth")
-//        (strideList(2), strideList(3), kernelList(2), kernelList(3))
-//      case _ =>
-//        throw new IllegalArgumentException(s"not supported data format: $format")
-//    }
-//
-//    val (pW, pH) =
-//      if (getString(attributes, "padding") == "SAME") {
-//        (-1, -1)
-//      } else {
-//        (0, 0)
-//      }
-//
-//    SpatialAveragePooling[T](ksizeW, ksizeH, strideW, strideH, pW, pH,
-//      countIncludePad = false, format = DataFormat(format))
-//
-//    new TFElement("SpatialAveragePooling", "SpatialAveragePooling",
-//      Map("kW" -> ksizeW,
-//        "kH" -> ksizeH,
-//        "dW" -> strideW,
-//      "dH" -> strideH,
-//    "padW"-> 0,
-//    padH: Int = 0,
-//    globalPooling: Boolean = false,
-//    ceilMode: Boolean = false,
-//    countIncludePad: Boolean = true,
-//    divide: Boolean = true,
-//    format: DataFormat = DataFormat.NCHW))
-//  }
 }

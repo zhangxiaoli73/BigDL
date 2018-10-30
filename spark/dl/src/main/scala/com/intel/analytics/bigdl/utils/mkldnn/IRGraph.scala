@@ -32,50 +32,64 @@ import scala.reflect.ClassTag
 class IRGraph[T: ClassTag](
     val inputs : Seq[Node[IRElement]],
     val outputs : Seq[Node[IRElement]],
-    private[bigdl] val variables: Option[(Array[Tensor[T]], Array[Tensor[T]])] = None)
+    private[bigdl] val variables: Option[(Array[Tensor[T]], Array[Tensor[T]])] = None,
+    val generateBackward: Boolean = true)
   (implicit ev: TensorNumeric[T]) extends AbstractModule[Activity, Activity, T] with Serializable {
 
 
-  var input_layers = new ArrayBuffer[Node[IRElement]]
-  var output_layers = new ArrayBuffer[Node[IRElement]]
-  var allnodes = new ArrayBuffer[Node[IRElement]]
-  var layer_name_map = T()
+  // var input_layers = new ArrayBuffer[Node[IRElement]]
+  // var output_layers = new ArrayBuffer[Node[IRElement]]
+  var allNodes = new ArrayBuffer[Node[IRElement]]
+  // var layer_name_map = T()
 
   var graph: Graph[T] = null
 
+  // do init to generate all nodes
+  init()
 
-  private def getNodes(inputs: Seq[Node[IRElement]],
-                          allnode: ArrayBuffer[Node[IRElement]]): Unit = {
-    inputs.foreach(node => {
-      if (!allnodes.contains(node)) allnodes.append(node)
-      getNodes(node.nextNodes, allnodes)
+  private def init() : Unit = {
+    getNodes(inputs, allNodes)
+    // todo: some output nodes may not be searched from inputs
+    outputs.foreach(node => {
+      if (!allNodes.contains(node)) allNodes.append(node)
     })
   }
 
-  def getAllNodes(): Array[Node[IRElement]] = {
-    getNodes(inputs, allnodes)
-    allnodes.toArray
+  private def getNodes(inputs: Seq[Node[IRElement]],
+                       nodesBuffer: ArrayBuffer[Node[IRElement]]): Unit = {
+    if (inputs.length == 0) return
+    inputs.foreach(node => {
+      if (!nodesBuffer.contains(node)) nodesBuffer.append(node)
+      getNodes(node.nextNodes, nodesBuffer)
+    })
   }
 
   override def updateOutput(input: Activity): Activity = {
     if (graph == null) {
-      throw new UnsupportedOperationException("forward not supported")
+      throw new UnsupportedOperationException("forward not supported, Please build graph first")
     }
     graph.updateOutput(input)
   }
 
   override def updateGradInput(input: Activity, gradOutput: Activity): Activity = {
     if (graph == null) {
-      throw new UnsupportedOperationException("backward not supported")
+      throw new UnsupportedOperationException("backward not supported, Please build graph first")
     }
     graph.updateGradInput(input, gradOutput)
+  }
+
+  override def accGradParameters(input: Activity, gradOutput: Activity): Unit = {
+    if (graph == null) {
+      throw new UnsupportedOperationException("backward not supported, Please build graph first")
+    }
+    graph.accGradParameters(input, gradOutput)
   }
 
   def build(): Unit = {
     // build to generate BigDL graph
     if (Engine.getEngineType() == MklBlas) {
       // convert to Blas
-      graph = IR2Dnn(this).toGraph()
+      graph = IR2Blas(this).toGraph()
     } else if (IR2Dnn(this).enableConvert()) {
       // conver to dnn
       graph = IR2Dnn(this).toGraph()
@@ -87,19 +101,12 @@ class IRGraph[T: ClassTag](
 }
 
 object IRGraph {
-//  def apply[T: ClassTag](
-//    inputs: Seq[Node[TFElement]],
-//    outputs: Seq[Node[TFElement]],
-//    variables: Option[(Array[Tensor[T]], Array[Tensor[T]])] = None
-//  )( implicit ev: TensorNumeric[T]): IRGraph[T] = {
-//    new IRGraph[T](inputs.asInstanceOf[Seq[Node[IRElement]]],
-//      outputs.asInstanceOf[Seq[Node[IRElement]]], variables)
-//  }
   def apply[T: ClassTag](
     inputs: Seq[Node[IRElement]],
     outputs: Seq[Node[IRElement]],
-    variables: Option[(Array[Tensor[T]], Array[Tensor[T]])] = None
+    variables: Option[(Array[Tensor[T]], Array[Tensor[T]])] = None,
+    generateBackward: Boolean = true
   )( implicit ev: TensorNumeric[T]): IRGraph[T] = {
-    new IRGraph[T](inputs, outputs, variables)
+    new IRGraph[T](inputs, outputs, variables, generateBackward)
   }
 }

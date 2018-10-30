@@ -70,14 +70,11 @@ class IRElement(
 class TFElement(
   private val name: String,
   private val op_type: String,
-  private val attr_map: Map[String, Any])
+  private val attr_map: Map[String, Any],
+  private val tf_layer: NodeDef)
   extends IRElement(name, op_type, attr_map) {
 
-  private var layer : NodeDef = _
-
-  def setLayer(tfLayer: NodeDef): Unit = {
-    layer = tfLayer
-  }
+  private var layer : NodeDef = tf_layer
 
   def getLayer() : NodeDef = {
     layer
@@ -87,4 +84,8 @@ class TFElement(
 object IRElement {
   def apply(name: String, op_type: String, attr_map: Map[String, Any]): IRElement =
     new IRElement(name, op_type, attr_map)
+
+  def apply(name: String, op_type: String, attr_map: Map[String, Any], tf_layer: NodeDef)
+  : IRElement =
+    new TFElement(name, op_type, attr_map, tf_layer)
 }

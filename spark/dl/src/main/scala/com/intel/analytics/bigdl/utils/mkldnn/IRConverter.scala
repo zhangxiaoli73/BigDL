@@ -38,31 +38,9 @@ import scala.reflect.ClassTag
 abstract class IRConverter[T: ClassTag](defGraph: IRGraph[T])
                                        (implicit ev: TensorNumeric[T]) {
 
-  def mapping(node: IRElement): Module[T]
+  def mapInit(): Unit = {}
 
   def toGraph(): Graph[T]
 
   def enableConvert(): Boolean
-}
-
-class FromTFConversionException (var conversionMsg: String,
-                                 val error: Throwable = null) extends RuntimeException {
-  override def toString: String = {
-    val erroMsg = s"from TensorFlow to Dnn conversion error : $conversionMsg"
-    if (error != null) {
-      erroMsg + ExceptionUtils.getFullStackTrace(error)
-    }
-    erroMsg
-  }
-}
-
-class FromCaffeConversionException (var conversionMsg: String,
-                                    val error: Throwable = null) extends RuntimeException {
-  override def toString: String = {
-    val erroMsg = s"from Caffe to Dnn conversion error : $conversionMsg"
-    if (error != null) {
-      erroMsg + ExceptionUtils.getFullStackTrace(error)
-    }
-    erroMsg
-  }
 }
