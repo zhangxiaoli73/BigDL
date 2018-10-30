@@ -20,7 +20,7 @@ import java.nio.{ByteBuffer, ByteOrder}
 import java.util
 
 import collection.JavaConverters._
-import com.intel.analytics.bigdl.nn._
+import com.intel.analytics.bigdl.nn.{Contiguous, Transpose, _}
 import com.intel.analytics.bigdl.tensor.{DoubleType, FloatType, Storage, Tensor}
 import com.intel.analytics.bigdl.nn.ops._
 import com.intel.analytics.bigdl.tensor._
@@ -28,6 +28,7 @@ import org.tensorflow.framework.{AttrValue, DataType, NodeDef, TensorProto}
 import com.intel.analytics.bigdl.nn.abstractnn.{AbstractModule, Activity, DataFormat}
 import com.intel.analytics.bigdl.nn.tf._
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
+import com.intel.analytics.bigdl.utils.mkldnn.IRElement
 import com.intel.analytics.bigdl.utils.tf.FullConnectionTF.getOrSetTensor
 import com.intel.analytics.bigdl.utils.{DirectedGraph, Node, T}
 import com.intel.analytics.bigdl.utils.tf.TensorflowToBigDL._
@@ -57,6 +58,12 @@ trait TensorflowToBigDL {
     context: Context[T],
     byteOrder: ByteOrder
   )(implicit ev: TensorNumeric[T]): AbstractModule[Activity, Activity, T]
+
+  def element[T: ClassTag](
+    tfGraph: DirectedGraph[NodeDef],
+    context: Context[T],
+    byteOrder: ByteOrder
+  )(implicit ev: TensorNumeric[T]): Array[Node[IRElement]] = null
 
   protected def getOrSetTensor[T: ClassTag](
     node: NodeDef, context: Context[T], byteOrder: ByteOrder,
@@ -276,6 +283,24 @@ object FullConnectionTF extends TensorflowToBigDL{
       initWeight = weight, initGradWeight = gradWeight, initBias = bias, initGradBias = gradBias)
       .asInstanceOf[AbstractModule[Activity, Activity, T]]
   }
+
+  override def element[T: ClassTag](
+    tfGraph: DirectedGraph[NodeDef],
+    context: Context[T],
+    byteOrder: ByteOrder
+  )(implicit ev: TensorNumeric[T]): Array[Node[IRElement]] = {
+    val biasNode = tfGraph.source.prevNodes(1).prevNodes.head.element
+    val weightNode = tfGraph.source.prevNodes.head.prevNodes(1).prevNodes.head.element
+    val (bias, gradBias) = getOrSetTensor(biasNode, context, byteOrder)
+    val (weight, gradWeight) = getOrSetTensor(weightNode, context, byteOrder, Some(Seq((1, 2))))
+
+
+    val linear = Node(IRElement(" ", "Linear",
+      Map("inputSize" -> weight.size(2), "outputSize" -> weight.size(1),
+        "initWeight" -> weight, "initGradWeight" -> gradWeight,
+        "initBias" -> bias, "initGradBias" -> gradBias)))
+    Array(linear, linear)
+  }
 }
 
 object FullConnectionWithoutBiasTF extends TensorflowToBigDL{
@@ -285,6 +310,7 @@ object FullConnectionWithoutBiasTF extends TensorflowToBigDL{
     Node("Const") -> Node("Identity") -> mul
     mul.graph(reverse = true)
   }
+
   override def topology: DirectedGraph[String] = graph
 
 
@@ -609,6 +635,57 @@ object Conv2D2 extends TensorflowToBigDL{
       initGradWeight = gradWeights,
       initGradBias = gradBias).asInstanceOf[AbstractModule[Activity, Activity, T]]
   }
+
+  override def element[T: ClassTag](
+     tfGraph: DirectedGraph[NodeDef],
+     context: Context[T],
+     byteOrder: ByteOrder
+   )(implicit ev: TensorNumeric[T]): Array[Node[IRElement]] = {
+    val t = tfGraph.source.prevNodes(0).element
+
+    val attributes = tfGraph.source.prevNodes(0).element.getAttrMap
+    val strideList = getIntList(attributes, "strides")
+    val format = getString(attributes, "data_format")
+    require(strideList.head == 1, s"not support strides on batch")
+    require(format == "NCHW", "NCHW should be used for this sub-graph")
+
+    require(strideList(1) == 1, s"not support strides on depth")
+    val (strideH, strideW) = (strideList(2), strideList(3))
+
+    val biasNode = tfGraph.source.prevNodes(1).prevNodes(0).prevNodes.head.element
+    val (bias, gradBias) = getOrSetTensor(biasNode, context, byteOrder)
+
+    val weightNode = tfGraph.source.prevNodes.head.prevNodes(1).prevNodes.head.element
+    val (weights, gradWeights) =
+      getOrSetTensor(weightNode, context, byteOrder, Some(Seq((1, 4), (2, 3), (3, 4))))
+
+    val nOuputPlane = weights.size(1)
+    val nInputPlane = weights.size(2)
+    val kernelH = weights.size(3)
+    val kernelW = weights.size(4)
+
+    val (pW, pH) =
+      if (getString(attributes, "padding") == "SAME") {
+        (-1, -1)
+      } else {
+        (0, 0)
+      }
+
+    val conv = Node(IRElement(" ", "SpatialConvolution",
+      Map("nInputPlane" -> nInputPlane,
+        "nOutputPlane" -> nOuputPlane,
+        "kernelW" -> kernelW,
+        "kernelH" -> kernelH,
+        "strideW" -> strideW,
+        "strideH" -> strideH,
+        "padW" -> pW,
+        "padH" -> pH,
+        "initWeight" -> weights,
+        "initBias" -> bias,
+        "initGradWeight" -> gradWeights,
+        "initGradBias" -> gradBias)))
+    Array(conv, conv)
+  }
 }
 
   // todo: what dropout????
@@ -645,6 +722,21 @@ object DropoutTF extends TensorflowToBigDL{
     model.add(SelectTable(1))
     model.add(Dropout[T](keepProp))
     model.asInstanceOf[AbstractModule[Activity, Activity, T]]
+  }
+
+  override def element[T: ClassTag](
+     tfGraph: DirectedGraph[NodeDef],
+     context: Context[T],
+     byteOrder: ByteOrder
+   )(implicit ev: TensorNumeric[T]): Array[Node[IRElement]] = {
+    val keepProp = tfGraph.source.prevNodes(0).prevNodes(1).element
+      .getAttrMap.get("value").getTensor.getFloatVal(0)
+
+    val select = Node(IRElement(" ", "SelectTable", Map("dimension" -> 1)))
+    val drop = Node(IRElement(" ", "Dropout", Map("initP" -> keepProp)))
+
+    select -> drop
+    Array(select, drop)
   }
 }
 
@@ -718,6 +810,29 @@ object BatchNormV2NCHWTF extends TensorflowToBigDL{
     model.add(batchNorm)
     model.asInstanceOf[AbstractModule[Activity, Activity, T]]
   }
+
+  override def element[T: ClassTag](
+     tfGraph: DirectedGraph[NodeDef],
+     context: Context[T],
+     byteOrder: ByteOrder
+   )(implicit ev: TensorNumeric[T]): Array[Node[IRElement]] = {
+    val biasNode = tfGraph.source.prevNodes(1).prevNodes.head.prevNodes.head.prevNodes.head.element
+    val weightNode = tfGraph.source.prevNodes(1).prevNodes(1).prevNodes(1)
+      .prevNodes(1).prevNodes.head.prevNodes.head.element
+    val (weights, gradWeights) = getOrSetTensor[T](weightNode, context, byteOrder)
+    val (bias, gradBias) = getOrSetTensor[T](biasNode, context, byteOrder)
+
+    val select = Node(IRElement(" ", "SelectTable", Map("dimension" -> 1)))
+    val bn = Node(IRElement(" ", "SpatialBatchNormalization",
+      Map("nOutput" -> weights.size(1),
+        "initWeight" -> weights,
+        "initBias" -> bias,
+        "initGradWeight" -> gradWeights,
+        "initGradBias" -> gradBias)))
+
+    select -> bn
+    Array(select, bn)
+  }
 }
 
 object BatchNormV2NHWCTF extends TensorflowToBigDL{
@@ -785,6 +900,35 @@ object BatchNormV2NHWCTF extends TensorflowToBigDL{
     layer.add(Contiguous())
 
     layer.asInstanceOf[AbstractModule[Activity, Activity, T]]
+  }
+
+  override def element[T: ClassTag](
+     tfGraph: DirectedGraph[NodeDef],
+     context: Context[T],
+     byteOrder: ByteOrder
+   )(implicit ev: TensorNumeric[T]): Array[Node[IRElement]] = {
+
+    val biasNode = tfGraph.source.prevNodes(1).prevNodes.head.prevNodes.head.element
+    val weightNode = tfGraph.source.prevNodes(1).prevNodes(1).prevNodes(1)
+      .prevNodes(1).prevNodes.head.element
+    val (weights, gradWeights) = getOrSetTensor[T](weightNode, context, byteOrder)
+    val (bias, gradBias) = getOrSetTensor[T](biasNode, context, byteOrder)
+
+    val select = Node(IRElement(" ", "SelectTable", Map("dimension" -> 1)))
+    val transpose = Node(IRElement(" ", "Transpose", Map("elems" -> Array(2, 4))))
+    val contiguous = Node(IRElement(" ", "Contiguous", Map()))
+    val batchNorm = Node(IRElement(" ", "SpatialBatchNormalization",
+      Map("nOutput" -> weights.size(1),
+      "initWeight" -> weights,
+      "initBias" -> bias,
+      "initGradWeight" -> gradWeights,
+      "initGradBias" -> gradBias)))
+    val transpose2 = Node(IRElement(" ", "Transpose", Map("elems" -> Array(2, 4))))
+    val contiguous2 = Node(IRElement(" ", "Contiguous", Map()))
+
+    select -> transpose -> contiguous -> batchNorm -> transpose2 -> contiguous2
+
+    Array(select, contiguous2)
   }
 }
 
@@ -854,6 +998,32 @@ object BatchNormTF extends TensorflowToBigDL{
     model.add(SelectTable(1))
     model.add(batchNorm)
     model.asInstanceOf[AbstractModule[Activity, Activity, T]]
+  }
+
+  override def element[T: ClassTag](
+    tfGraph: DirectedGraph[NodeDef],
+    context: Context[T],
+    byteOrder: ByteOrder
+    )(implicit ev: TensorNumeric[T]): Array[Node[IRElement]] = {
+    val nOutput = tfGraph.source.prevNodes(1).prevNodes(1).prevNodes(1)
+      .prevNodes(1).prevNodes(0).element.getAttrMap.get("value").getTensor.getIntVal(0)
+
+    val weightNode = tfGraph.source.prevNodes(1).prevNodes.head.prevNodes.head.element
+    val biasNode = tfGraph.source.prevNodes(1).prevNodes(1).prevNodes(1)
+      .prevNodes.head.prevNodes.head.element
+    val (weights, gradWeights) = getOrSetTensor[T](weightNode, context, byteOrder)
+    val (bias, gradBias) = getOrSetTensor[T](weightNode, context, byteOrder)
+
+    val select = Node(IRElement(" ", "SelectTable", Map("dimension" -> 1)))
+    val bn = Node(IRElement(" ", "SpatialBatchNormalization",
+      Map("nOutput" -> nOutput,
+      "initWeight" -> weights,
+      "initBias" -> bias,
+      "initGradWeight" -> gradWeights,
+      "initGradBias" -> gradBias)))
+
+    select -> bn
+    Array(select, bn)
   }
 }
 

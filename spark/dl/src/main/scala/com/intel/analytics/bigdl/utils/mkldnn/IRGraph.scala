@@ -61,20 +61,19 @@ class IRGraph[T: ClassTag](
 }
 
 object IRGraph {
-  def apply[T: ClassTag](
-    inputs: Seq[Node[TFElement]],
-    outputs: Seq[Node[TFElement]],
-    variables: Option[(Array[Tensor[T]], Array[Tensor[T]])] = None
-  )( implicit ev: TensorNumeric[T]): IRGraph[T] = {
-    new IRGraph[T](inputs.asInstanceOf[Seq[Node[IRElement]]],
-      outputs.asInstanceOf[Seq[Node[IRElement]]], variables)
-  }
-
 //  def apply[T: ClassTag](
-//    inputs: Seq[Node[IRElement]],
-//    outputs: Seq[Node[IRElement]],
+//    inputs: Seq[Node[TFElement]],
+//    outputs: Seq[Node[TFElement]],
 //    variables: Option[(Array[Tensor[T]], Array[Tensor[T]])] = None
 //  )( implicit ev: TensorNumeric[T]): IRGraph[T] = {
-//    new IRGraph[T](inputs, outputs, variables)
+//    new IRGraph[T](inputs.asInstanceOf[Seq[Node[IRElement]]],
+//      outputs.asInstanceOf[Seq[Node[IRElement]]], variables)
 //  }
+  def apply[T: ClassTag](
+    inputs: Seq[Node[IRElement]],
+    outputs: Seq[Node[IRElement]],
+    variables: Option[(Array[Tensor[T]], Array[Tensor[T]])] = None
+  )( implicit ev: TensorNumeric[T]): IRGraph[T] = {
+    new IRGraph[T](inputs, outputs, variables)
+  }
 }

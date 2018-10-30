@@ -83,3 +83,8 @@ class TFElement(
     layer
   }
 }
+
+object IRElement {
+  def apply(name: String, op_type: String, attr_map: Map[String, Any]): IRElement =
+    new IRElement(name, op_type, attr_map)
+}

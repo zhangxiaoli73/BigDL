@@ -20,6 +20,7 @@ import com.intel.analytics.bigdl.nn.Module
 import com.intel.analytics.bigdl.numeric.NumericFloat
 import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.utils.mkldnn.{IR2Dnn, TensorflowParser}
+import com.intel.analytics.bigdl.utils.tf.TensorflowLoader
 
 /**
  * This example show how to load a tensorflow model defined in slim and
@@ -38,9 +39,11 @@ object Load {
 //    val result = model.forward(Tensor(1, 1, 28, 28).rand())
 //    println(result)
 
-    val modelDef = TensorflowParser.load(p, input, output)
-    val model = IR2Dnn[Float](modelDef).toGraph()
+    val modelDef = TensorflowLoader.loadToIR(p, input, output)
+//    val model = IR2Dnn[Float](modelDef).toGraph()
 //    val result = model.forward(Tensor(1, 1, 28, 28).rand())
 //    println(result)
+
+    val tmp = 0
   }
 }
