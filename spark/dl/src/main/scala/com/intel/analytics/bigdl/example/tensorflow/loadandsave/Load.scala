@@ -16,6 +16,8 @@
 
 package com.intel.analytics.bigdl.example.tensorflow.loadandsave
 
+import java.nio.ByteOrder
+
 import com.intel.analytics.bigdl.nn.Module
 import com.intel.analytics.bigdl.numeric.NumericFloat
 import com.intel.analytics.bigdl.tensor.Tensor
@@ -31,7 +33,7 @@ object Load {
     // require(args.length == 1, "Please input the model path as the first argument")
 
     val p = "/home/zhangli/workspace/vgg/model.pb"
-    val input = Seq("input0")
+    val input = Seq("input_node")
     val output = Seq("vgg_16/fc8/squeezed")
 //    val model = Module.loadTF(p, Seq("Placeholder"), Seq("LeNet/fc4/BiasAdd"))
 
@@ -39,8 +41,9 @@ object Load {
 //    val result = model.forward(Tensor(1, 1, 28, 28).rand())
 //    println(result)
 
+    val model = TensorflowLoader.load(p, input, output, ByteOrder.LITTLE_ENDIAN)
     val modelDef = TensorflowLoader.loadToIR(p, input, output)
-//    val model = IR2Dnn[Float](modelDef).toGraph()
+    modelDef.build()
 //    val result = model.forward(Tensor(1, 1, 28, 28).rand())
 //    println(result)
 

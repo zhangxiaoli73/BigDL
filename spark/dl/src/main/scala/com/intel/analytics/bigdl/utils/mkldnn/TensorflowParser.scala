@@ -23,7 +23,7 @@ import java.util.{List, HashMap => JHashMap}
 import breeze.linalg.reverse
 import com.google.protobuf.{CodedInputStream, TextFormat}
 import com.intel.analytics.bigdl.Module
-import com.intel.analytics.bigdl.nn.{Graph, SpatialAveragePooling}
+import com.intel.analytics.bigdl.nn.{Graph, SpatialAveragePooling, SpatialMaxPooling}
 import com.intel.analytics.bigdl.nn.Graph._
 import com.intel.analytics.bigdl.nn.abstractnn.{AbstractModule, Activity, DataFormat}
 import com.intel.analytics.bigdl.nn.mkldnn.MklDnnModule
@@ -46,14 +46,25 @@ import scala.reflect.ClassTag
 object TensorflowParser {
 
   // here just support some lops that can be converted to dnn
-  private def default[T: ClassTag](node: NodeDef, byteOrder: ByteOrder, context: Context[T])
-  : TFElement = {
+  def default[T: ClassTag](node: NodeDef, byteOrder: ByteOrder, context: Context[T])
+    : TFElement = {
     val name = node.getName
     val op = node.getOp
     val attrs = node.getAttrMap.asScala.toMap
 
     new TFElement(name, op, attrs.asInstanceOf[Map[String, Any]])
   }
+
+  def maxPool[T: ClassTag](node: NodeDef, byteOrder: ByteOrder, context: Context[T])
+    : TFElement = {
+    val attributes = node.getAttrMap
+    val format = getString(attributes, "data_format")
+    val strideList = getIntList(attributes, "strides")
+    val kernelList = getIntList(attributes, "ksize")
+
+    new TFElement(" ", "MaxPool",
+      Map("data_format" -> DataFormat(format), "strides" -> strideList, "ksize" -> kernelList))
+   }
 
 //  private def averagepooing[T: ClassTag](
 //    node: NodeDef,

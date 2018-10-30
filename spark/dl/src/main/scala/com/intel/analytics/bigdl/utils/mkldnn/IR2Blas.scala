@@ -16,9 +16,55 @@
 
 package com.intel.analytics.bigdl.utils.mkldnn
 
-/**
-  * Created by zhangli on 18-10-26.
-  */
-class IR2Blas {
+import java.util
 
+import com.intel.analytics.bigdl.nn.{Graph, StaticGraph}
+import com.intel.analytics.bigdl.nn.Graph._
+import com.intel.analytics.bigdl.nn.abstractnn.{AbstractModule, Activity}
+import com.intel.analytics.bigdl.nn.mkldnn.MklDnnModule
+import com.intel.analytics.bigdl.{Module, nn}
+import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
+import com.intel.analytics.bigdl.utils.Node
+
+import scala.reflect.ClassTag
+
+
+class IR2Blas[T: ClassTag](IRgraph: IRGraph[T])
+  (implicit ev: TensorNumeric[T]) extends IRConverter[T](IRgraph) {
+
+  override def mapping(node: IRElement): Module[T] = {
+    import com.intel.analytics.bigdl.nn
+    nn.ReLU().asInstanceOf[Module[T]]
+  }
+
+  override def toGraph(): Graph[T] = {
+    val nodes = IRgraph.inputs
+    val oldToNew = new util.HashMap[Node[IRElement], Node[Module[T]]]()
+    nodes.foreach(node => {
+      val dnn = new Node(mapping(node.element))
+      oldToNew.put(node, dnn)
+    })
+
+    nodes.foreach(node => {
+      node.nextNodesAndEdges.foreach(nextNodeAndEdge => {
+        if (oldToNew.containsKey(nextNodeAndEdge._1)) {
+          oldToNew.get(node).add(oldToNew.get(nextNodeAndEdge._1), nextNodeAndEdge._2)
+        }
+      })
+    })
+
+    val inputs = IRgraph.inputs.toArray.map(n => oldToNew.get(n).asInstanceOf[ModuleNode[T]])
+    val outputs = IRgraph.outputs.toArray.map(n => oldToNew.get(n).asInstanceOf[ModuleNode[T]])
+
+    new StaticGraph[T](inputs, outputs)
+  }
+
+  override def enableConvert(): Boolean = {
+   true
+  }
+}
+
+object IR2Blas {
+  def apply[T: ClassTag](IRgraph: IRGraph[T])
+                        (implicit ev: TensorNumeric[T]): IR2Blas[T] = new IR2Blas(IRgraph)
 }

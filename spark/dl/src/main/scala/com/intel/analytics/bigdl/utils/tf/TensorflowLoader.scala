@@ -31,7 +31,7 @@ import com.intel.analytics.bigdl.tensor.{DoubleType, FloatType, Tensor}
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
 import com.intel.analytics.bigdl.utils._
 import com.intel.analytics.bigdl.nn.tf.{SwitchControlNode, SwitchOps}
-import com.intel.analytics.bigdl.utils.mkldnn.{IRElement, IRGraph, TFElement}
+import com.intel.analytics.bigdl.utils.mkldnn.{IRElement, IRGraph, TFElement, TensorflowParser}
 import com.intel.analytics.bigdl.utils.tf.TensorflowToBigDL._
 import com.intel.analytics.bigdl.utils.tf.loaders.TensorflowOpsLoader
 import org.tensorflow.framework.{GraphDef, NodeDef}
@@ -135,9 +135,12 @@ object TensorflowLoader{
   : TFElement = {
     val name = node.getName
     val op = node.getOp
-    val attrs = node.getAttrMap.asScala.toMap
-
-    new TFElement(name, op, attrs.asInstanceOf[Map[String, Any]])
+    val ele = if (op != "MaxPool") {
+      TensorflowParser.default(node, byteOrder, context)
+    } else {
+      TensorflowParser.maxPool(node, byteOrder, context)
+    }
+    ele
   }
 
   private[bigdl] def build2IRGraph[T: ClassTag](
@@ -172,6 +175,7 @@ object TensorflowLoader{
           """.stripMargin
 
         val (module, nodes, inputNodes) =
+          // todo: just one element
           extractNode[T](n.graph(reverse = true), context, byteOrder).getOrElse({
             // (builder.build[T](n.element, byteOrder, context), Seq(n).asJava, Seq(n))
             // todo: use byteOrder & context
@@ -200,6 +204,9 @@ object TensorflowLoader{
 //          case _ => module(0)
 //        }
 
+        if (module == null || module.length == 0) {
+          val tmp = 0
+        }
         val node = module(0)
 
         nodes.asScala.foreach(m => {
@@ -255,110 +262,6 @@ object TensorflowLoader{
       weights += weight
       gradients += grad
     }
-
-    // Append assign nodes
-//    val adjustOutputs = if (context.assignGrads.isDefined) {
-//      outputNodes.map(n => {
-//        val matchNode = context.assignGrads.get.filter(_._2 == n.element.getName())
-//        require(matchNode.size <= 1, "Invalid gradients output")
-//        if (matchNode.size == 1) {
-//          new AssignGrad[T](context(matchNode.head._1)._2).inputs(n)
-//        } else {
-//          n
-//        }
-//      })
-//    } else {
-//      outputNodes
-//    }
-
-//    Graph.dynamic(inputNodes.toArray, adjustOutputs.toArray,
-//      Some((weights.toArray, gradients.toArray)),
-//      generatedBackward)
-
-
-
-//    // Map from tensorflow node to the converted IR node
-//    val convertedNode = new mutable.HashMap[Node[NodeDef], Node[IRElement]]()
-//    val nameToNode = new mutable.HashMap[String, Node[IRElement]]()
-//    val oldToNew = new util.HashMap[Node[NodeDef], Node[IRElement]]()
-//    val context = ctx.getOrElse(new Context[T])
-//
-//    // BFS to keep the input order same
-//
-//    tfGraph.BFS.foreach(n => {
-//      if (n.element == null) {
-//        // Dummy node, skip
-//      } else if (convertedNode.get(n).isDefined) {
-//        // converted node, skip
-//      } else {
-//        val (module, nodes, inputNodes) =
-//          extractNode[T](n.graph(reverse = true), context, byteOrder).getOrElse({
-//          val irNode = new Node(genTFelement(n.element)).asInstanceOf[Node[IRElement]]
-//          (Array(irNode, irNode), Seq(n).asJava, Seq(n))
-//          })
-//
-//        // todo: set name
-//        nodes.asScala.foreach(m => {
-//          convertedNode(m) = module(0)
-//          nameToNode(m.element.getName) = module(0)
-//        })
-//
-//        oldToNew.put(node, dnn)
-//      }
-//    })
-//
-//
-//    tfGraph.BFS.foreach(node => {
-//      if (node.element != null) {
-//
-//        val dnn = new Node(genTFelement(node.element))
-//
-//        // set name
-//        if (nodes.size() == 1) {
-//          // Use tf operation name if one to one map
-//          module.setName(removeColon(nodes.get(0).element.getName()))
-//        } else {
-//          // Many to one map
-//          val name = removeColon(findCommonPrefix(nodes.asScala.map(_.element.getName)))
-//          if (name == "") {
-//            // Use a name combine nodes
-//            module.setName(s"[${nodes.asScala.map(_.element.getName).map(_.replaceAll("/", "\\\\"))
-//              .map(removeColon(_)).mkString(", ")}]")
-//          } else {
-//            // Use the common name
-//            module.setName(name + "/" + module.getName())
-//          }
-//        }
-//        val node = module match {
-//          case _: SwitchOps[_] => new SwitchControlNode(module)
-//          case _ => Node(module)
-//        }
-//
-//
-//        oldToNew.put(node, dnn)
-//        nameToNode(node.element.getName) = dnn
-//      }
-//    })
-//
-//    tfGraph.BFS.foreach(node => {
-//      node.nextNodesAndEdges.foreach(nextNodeAndEdge => {
-//        if (oldToNew.containsKey(nextNodeAndEdge._1)) {
-//          oldToNew.get(node).add(oldToNew.get(nextNodeAndEdge._1), nextNodeAndEdge._2)
-//        }
-//      })
-//    })
-//
-//    val inputNodes = inputs
-//      .map(n => nameToNode.getOrElse(n, throw new IllegalArgumentException(s"Can't find node $n")))
-//    val outputNodes = outputs
-//      .map(n => nameToNode.getOrElse(n, throw new IllegalArgumentException(s"Can't find node $n")))
-//
-//    val weights = ArrayBuffer[Tensor[T]]()
-//    val gradients = ArrayBuffer[Tensor[T]]()
-//    for ((weight, grad, _) <- context.tensors) {
-//      weights += weight
-//      gradients += grad
-//    }
 
     // todo: Append assign nodes ???
     //    val adjustOutputs = if (context.assignGrads.isDefined) {

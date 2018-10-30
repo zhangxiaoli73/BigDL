@@ -17,12 +17,12 @@
 package com.intel.analytics.bigdl.utils.mkldnn
 
 import org.apache.commons.lang.exception.ExceptionUtils
-
 import java.util
 import java.util.List
 
 import breeze.linalg.reverse
 import com.google.protobuf.GeneratedMessage
+import com.intel.analytics.bigdl.Module
 import com.intel.analytics.bigdl.nn.Graph._
 import com.intel.analytics.bigdl.nn._
 import com.intel.analytics.bigdl.nn.abstractnn.{AbstractModule, Activity}
@@ -38,9 +38,11 @@ import scala.reflect.ClassTag
 abstract class IRConverter[T: ClassTag](defGraph: IRGraph[T])
                                        (implicit ev: TensorNumeric[T]) {
 
-  def mapping(node: IRElement): MklDnnModule
+  def mapping(node: IRElement): Module[T]
 
   def toGraph(): Graph[T]
+
+  def enableConvert(): Boolean
 }
 
 class FromTFConversionException (var conversionMsg: String,

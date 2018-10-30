@@ -18,12 +18,14 @@ package com.intel.analytics.bigdl.utils.mkldnn
 
 import java.util.List
 
+import breeze.linalg.reverse
 import com.intel.analytics.bigdl.nn.{Graph, keras}
 import com.intel.analytics.bigdl.nn.abstractnn.{AbstractModule, Activity}
 import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
-import com.intel.analytics.bigdl.utils.{Node, T}
+import com.intel.analytics.bigdl.utils.{Engine, MklBlas, Node, T}
 
+import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 import scala.reflect.ClassTag
 
@@ -36,9 +38,24 @@ class IRGraph[T: ClassTag](
 
   var input_layers = new ArrayBuffer[Node[IRElement]]
   var output_layers = new ArrayBuffer[Node[IRElement]]
+  var allnodes = new ArrayBuffer[Node[IRElement]]
   var layer_name_map = T()
 
   var graph: Graph[T] = null
+
+
+  private def getNodes(inputs: Seq[Node[IRElement]],
+                          allnode: ArrayBuffer[Node[IRElement]]): Unit = {
+    inputs.foreach(node => {
+      if (!allnodes.contains(node)) allnodes.append(node)
+      getNodes(node.nextNodes, allnodes)
+    })
+  }
+
+  def getAllNodes(): Array[Node[IRElement]] = {
+    getNodes(inputs, allnodes)
+    allnodes.toArray
+  }
 
   override def updateOutput(input: Activity): Activity = {
     if (graph == null) {
@@ -54,9 +71,18 @@ class IRGraph[T: ClassTag](
     graph.updateGradInput(input, gradOutput)
   }
 
-
   def build(): Unit = {
     // build to generate BigDL graph
+    if (Engine.getEngineType() == MklBlas) {
+      // convert to Blas
+      graph = IR2Dnn(this).toGraph()
+    } else if (IR2Dnn(this).enableConvert()) {
+      // conver to dnn
+      graph = IR2Dnn(this).toGraph()
+    } else {
+      // conver to Blas
+      graph = IR2Blas(this).toGraph()
+    }
   }
 }
 

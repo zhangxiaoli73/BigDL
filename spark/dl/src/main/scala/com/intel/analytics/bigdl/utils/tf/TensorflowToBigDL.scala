@@ -35,6 +35,7 @@ import com.intel.analytics.bigdl.utils.tf.TensorflowToBigDL._
 
 import scala.collection.mutable.ArrayBuffer
 import scala.reflect.{ClassTag, classTag}
+import spire.macros.Auto.scala
 
 /**
  * Represent a mapping from tensorflow operations graph to BigDL Module
@@ -490,7 +491,7 @@ object Conv2DWithoutBias extends TensorflowToBigDL{
   }
 }
 
-object Conv2D extends TensorflowToBigDL{
+object Conv2D extends TensorflowToBigDL {
   private val graph = {
     val add = Node("BiasAdd")
     val conv = Node("Conv2D")
@@ -504,9 +505,9 @@ object Conv2D extends TensorflowToBigDL{
   override def topology: DirectedGraph[String] = graph
 
   override def layer[T: ClassTag](tfGraph: DirectedGraph[NodeDef],
-    context: Context[T],
-    byteOrder: ByteOrder)(
-    implicit ev: TensorNumeric[T]): AbstractModule[Activity, Activity, T] = {
+                                  context: Context[T],
+                                  byteOrder: ByteOrder)(
+                                   implicit ev: TensorNumeric[T]): AbstractModule[Activity, Activity, T] = {
 
     val attributes = tfGraph.source.prevNodes.head.element.getAttrMap
     val (pW, pH) =
@@ -570,6 +571,83 @@ object Conv2D extends TensorflowToBigDL{
     }
     conv.asInstanceOf[AbstractModule[Activity, Activity, T]]
   }
+
+  override def element[T: ClassTag](
+                                     tfGraph: DirectedGraph[NodeDef],
+                                     context: Context[T],
+                                     byteOrder: ByteOrder
+                                   )(implicit ev: TensorNumeric[T]): Array[Node[IRElement]] = {
+    val attributes = tfGraph.source.prevNodes.head.element.getAttrMap
+    val (pW, pH) =
+      if (getString(attributes, "padding") == "SAME") {
+        (-1, -1)
+      } else {
+        (0, 0)
+      }
+    val strideList = getIntList(attributes, "strides")
+    require(strideList.head == 1, s"not support strides on batch")
+
+    val format = getString(attributes, "data_format")
+    val conv = format match {
+      case "NHWC" =>
+        require(strideList(3) == 1, s"not support strides on depth")
+        val strideW = strideList(1)
+        val strideH = strideList(2)
+        val biasNode = tfGraph.source.prevNodes(1).prevNodes.head.element
+        val (bias, gradBias) = getOrSetTensor(biasNode, context, byteOrder)
+        val weightNode = tfGraph.source.prevNodes.head.prevNodes(1).prevNodes.head.element
+        val (weights, gradWeights) = getOrSetTensor(weightNode, context, byteOrder)
+        val nOuputPlane = weights.size(4)
+        val nInputPlane = weights.size(3)
+        val kernelH = weights.size(1)
+        val kernelW = weights.size(2)
+        Node(IRElement(" ", "SpatialConvolution",
+          Map("nInputPlane" -> nInputPlane,
+            "nOutputPlane" -> nOuputPlane,
+            "kernelW" -> kernelW,
+            "kernelH" -> kernelH,
+            "strideW" -> strideW,
+            "strideH" -> strideH,
+            "padW" -> pW,
+            "padH" -> pH,
+            "initWeight" -> weights,
+            "initBias" -> bias,
+            "initGradWeight" -> gradWeights,
+            "initGradBias" -> gradBias,
+            "format" -> DataFormat.NHWC)))
+      case "NCHW" =>
+        require(strideList(1) == 1, s"not support strides on depth")
+        val strideW = strideList(2)
+        val strideH = strideList(3)
+        val biasNode = tfGraph.source.prevNodes(1).prevNodes.head.element
+        val (bias, gradBias) = getOrSetTensor(biasNode, context, byteOrder)
+
+        val weightNode = tfGraph.source.prevNodes.head.prevNodes(1).prevNodes.head.element
+        val (weights, gradWeights) =
+          getOrSetTensor(weightNode, context, byteOrder, Some(Seq((1, 4), (2, 3), (3, 4))))
+        val nOuputPlane = weights.size(1)
+        val nInputPlane = weights.size(2)
+        val kernelH = weights.size(3)
+        val kernelW = weights.size(4)
+        Node(IRElement(" ", "SpatialConvolution",
+          Map("nInputPlane" -> nInputPlane,
+            "nOutputPlane" -> nOuputPlane,
+            "kernelW" -> kernelW,
+            "kernelH" -> kernelH,
+            "strideW" -> strideW,
+            "strideH" -> strideH,
+            "padW" -> pW,
+            "padH" -> pH,
+            "initWeight" -> weights,
+            "initBias" -> bias,
+            "initGradWeight" -> gradWeights,
+            "initGradBias" -> gradBias,
+            "format" -> DataFormat.NCHW)))
+      case _ =>
+        throw new IllegalArgumentException(s"not supported data format: $format")
+    }
+      Array(conv, conv)
+    }
 }
 
 object Conv2D2 extends TensorflowToBigDL{
