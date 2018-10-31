@@ -221,7 +221,7 @@ trait MklDnnLayer extends AbstractModule[Activity, Activity, Float] with MklDnnM
   }
 
   override private[mkldnn] def gradInputFormats() = {
-    require(_gradInputFormats != null, "You should call initBwdPrimitives first")
+    require(_gradInputFormats != null, s"You should call initBwdPrimitives first ${this.getName()}")
     _gradInputFormats
   }
 

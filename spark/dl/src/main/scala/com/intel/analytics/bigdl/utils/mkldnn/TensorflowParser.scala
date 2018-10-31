@@ -63,7 +63,7 @@ object TensorflowParser {
     val kernelList = getIntList(attributes, "ksize")
 
     new TFElement(" ", "MaxPool",
-      Map("data_format" -> DataFormat(format), "strides" -> strideList, "ksize" -> kernelList),
+      Map("data_format" -> format, "strides" -> strideList, "ksize" -> kernelList),
       node)
    }
 }

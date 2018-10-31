@@ -25,7 +25,7 @@ import com.intel.analytics.bigdl._
 import com.intel.analytics.bigdl.nn.Graph._
 import com.intel.analytics.bigdl.nn.abstractnn.{AbstractModule, Activity, DataFormat}
 import com.intel.analytics.bigdl.nn.{Module => _, _}
-import com.intel.analytics.bigdl.nn.mkldnn.MklDnnModule
+import com.intel.analytics.bigdl.nn.mkldnn._
 import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
 import com.intel.analytics.bigdl.utils.{DirectedGraph, Node, T}
@@ -41,6 +41,8 @@ private[mkldnn] class IR2Dnn[T: ClassTag](IRgraph: IRGraph[T])
   // converter function mappings
   private val IR2DnnMap = new mutable.HashMap[String, (IRElement) => Module[Float]]
 
+  mapInit()
+
   override def mapInit(): Unit = {
     IR2DnnMap("Placeholder") = fromPlaceholder
     IR2DnnMap("Relu") = fromRelu
@@ -51,7 +53,7 @@ private[mkldnn] class IR2Dnn[T: ClassTag](IRgraph: IRGraph[T])
     IR2DnnMap("Squeeze") = fromSqueeze
   }
 
-  override def toGraph(): StaticGraph[T] = {
+  override def toGraph(): Graph[T] = {
     val allNodes = IRgraph.allNodes
     val oldToNew = new util.HashMap[Node[IRElement], Node[MklDnnModule]]()
     allNodes.foreach(node => {
@@ -67,10 +69,14 @@ private[mkldnn] class IR2Dnn[T: ClassTag](IRgraph: IRGraph[T])
       })
     })
 
-    val inputs = IRgraph.inputs.toArray.map(n => oldToNew.get(n).asInstanceOf[ModuleNode[T]])
-    val outputs = IRgraph.outputs.toArray.map(n => oldToNew.get(n).asInstanceOf[ModuleNode[T]])
+    val inputs = IRgraph.inputs.toArray.map(n => oldToNew.get(n).asInstanceOf[ModuleNode[Float]])
+    val outputs = IRgraph.outputs.toArray.map(n => oldToNew.get(n).asInstanceOf[ModuleNode[Float]])
 
-    new StaticGraph[T](inputs, outputs, IRgraph.variables, IRgraph.generateBackward)
+    val m = DnnGraph(inputs, outputs, IRgraph.generateBackward)
+
+    m.compile(Phase.TrainingPhase, Array(HeapData(Array(1, 3, 32, 32), 5)))
+
+    m.asInstanceOf[Graph[T]]
   }
 
   override def enableConvert(): Boolean = {
@@ -81,12 +87,16 @@ private[mkldnn] class IR2Dnn[T: ClassTag](IRgraph: IRGraph[T])
       if (!IR2DnnMap.contains(node.element.getOp())) {
         convert = false
       } else {
-        val f = node.element.getAttr[String]("data_format").getOrElse(null)
-        // todo: add more format case for it
-        if ((node.element.getOp() == "SpatialConvolution" && f != "NCHW") ||
-            (node.element.getOp() == "MaxPool" && f != "NCHW")) {
-          convert = false
-        }
+//        println(node.element.getOp())
+//        if (node.element.getOp() == "MaxPool") {
+//          val tmp = 0
+//        }
+//        val f = node.element.getAttr[String]("data_format").getOrElse(null)
+//        // todo: add more format case for it
+//        if ((node.element.getOp() == "SpatialConvolution" && f != "NCHW") ||
+//            (node.element.getOp() == "MaxPool" && f != "NCHW")) {
+//          convert = false
+//        }
       }
     })
     convert
@@ -119,8 +129,8 @@ private[mkldnn] class IR2Dnn[T: ClassTag](IRgraph: IRGraph[T])
     val initBias = t.getOrElse("bias", null).asInstanceOf[Tensor[Float]]
     val initGradWeight = t.getOrElse("gradWeights", null).asInstanceOf[Tensor[Float]]
     val initGradBias = t.getOrElse("gradBias", null).asInstanceOf[Tensor[Float]]
-    val format = t.getOrElse("format", null).asInstanceOf[String]
-    require(format == "NCHW", s"not supported data format: $format")
+    val format = t.getOrElse("data_format", null).asInstanceOf[String]
+//    require(format == "NCHW", s"not supported data format: $format")
 
     mkldnn.SpatialConvolution(nInputPlane, nOutputPlane, kernelW, kernelH,
       strideW, strideH, padW, padH, initWeight = initWeight, initBias = initBias,
@@ -130,7 +140,7 @@ private[mkldnn] class IR2Dnn[T: ClassTag](IRgraph: IRGraph[T])
   private def fromMaxPooling(node: IRElement) : Module[Float] = {
     val t = node.getAttrMap()
     val format = t.getOrElse("data_format", null).asInstanceOf[String]
-    require(format == "NCHW", s"not supported data format: $format")
+    // require(format == "NCHW", s"not supported data format: $format")
     val strideList = t.getOrElse("strides", null).asInstanceOf[ArrayBuffer[Int]]
     val kernelList = t.getOrElse("ksize", null).asInstanceOf[ArrayBuffer[Int]]
 

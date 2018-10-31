@@ -38,6 +38,7 @@ class IR2Blas[T: ClassTag](IRgraph: IRGraph[T])
   (implicit ev: TensorNumeric[T]) extends IRConverter[T](IRgraph) {
 
   private val IR2BlasMap = new mutable.HashMap[String, (IRElement) => Module[Float]]
+
   override def mapInit(): Unit = {
     IR2BlasMap("DropOut") = fromDropout
     IR2BlasMap("Identity") = fromIdentity

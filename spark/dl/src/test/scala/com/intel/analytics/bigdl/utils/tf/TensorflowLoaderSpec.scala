@@ -634,7 +634,14 @@ class TensorflowLoaderSpec extends TensorflowSpecHelper{
       TensorflowLoader.buildTFGraph(tfNodes, endPoints.map(_.split(":")(0)),
         (node: NodeDef) => node.getName == "input_node")
     val context = new Context[Float]()
+println("starts")
+    tfGraph.DFS.foreach(n => if (n.element != null) {
+      println(n.element.getOp)
 
+      if (n.element.getOp == "Placeholder") {
+        val tmp = 0
+      }
+    })
     // Build BigDL model from the tf node graph
 
     val model = TensorflowLoader.buildBigDLModel(tfGraph, inputs.toSeq.map(_._2).flatten,

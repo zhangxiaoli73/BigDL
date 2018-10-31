@@ -87,9 +87,10 @@ class IRGraph[T: ClassTag](
 
   def build(): Unit = {
     // build to generate BigDL graph
-    if (Engine.getEngineType() == MklBlas) {
+    if (false) { // Engine.getEngineType() == MklBlas) {
       // convert to Blas
-      graph = IR2Blas(this).toGraph()
+      // graph = IR2Blas(this).toGraph()
+      // graph = IR2Dnn(this).toGraph()
     } else if (IR2Dnn(this).enableConvert()) {
       // conver to dnn
       graph = IR2Dnn(this).toGraph()

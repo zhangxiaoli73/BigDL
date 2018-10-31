@@ -328,6 +328,8 @@ object FullConnectionWithoutBiasTF extends TensorflowToBigDL{
       initWeight = weight, initGradWeight = gradWeight)
       .asInstanceOf[AbstractModule[Activity, Activity, T]]
   }
+
+  // todo: add element
 }
 
 object Conv1D extends TensorflowToBigDL {
@@ -413,6 +415,7 @@ object Conv1D extends TensorflowToBigDL {
     result.asInstanceOf[AbstractModule[Activity, Activity, T]]
   }
 
+  // todo: add element
 
 }
 
@@ -489,6 +492,8 @@ object Conv2DWithoutBias extends TensorflowToBigDL{
     }
     conv.asInstanceOf[AbstractModule[Activity, Activity, T]]
   }
+
+  // todo : add elelment
 }
 
 object Conv2D extends TensorflowToBigDL {
@@ -614,7 +619,7 @@ object Conv2D extends TensorflowToBigDL {
             "initBias" -> bias,
             "initGradWeight" -> gradWeights,
             "initGradBias" -> gradBias,
-            "format" -> DataFormat.NHWC)))
+            "data_format" -> "NHWC")))
       case "NCHW" =>
         require(strideList(1) == 1, s"not support strides on depth")
         val strideW = strideList(2)
@@ -642,7 +647,7 @@ object Conv2D extends TensorflowToBigDL {
             "initBias" -> bias,
             "initGradWeight" -> gradWeights,
             "initGradBias" -> gradBias,
-            "format" -> DataFormat.NCHW)))
+            "data_format" -> "NCHW")))
       case _ =>
         throw new IllegalArgumentException(s"not supported data format: $format")
     }
@@ -761,7 +766,8 @@ object Conv2D2 extends TensorflowToBigDL{
         "initWeight" -> weights,
         "initBias" -> bias,
         "initGradWeight" -> gradWeights,
-        "initGradBias" -> gradBias)))
+        "initGradBias" -> gradBias,
+         "data_format" -> "NCHW")))
     Array(conv, conv)
   }
 }
@@ -904,7 +910,8 @@ object BatchNormV2NCHWTF extends TensorflowToBigDL{
         "initWeight" -> weights,
         "initBias" -> bias,
         "initGradWeight" -> gradWeights,
-        "initGradBias" -> gradBias)))
+        "initGradBias" -> gradBias,
+        "data_format" -> "NCHW")))
 
     select -> bn
     Array(select, bn)
@@ -998,7 +1005,8 @@ object BatchNormV2NHWCTF extends TensorflowToBigDL{
       "initWeight" -> weights,
       "initBias" -> bias,
       "initGradWeight" -> gradWeights,
-      "initGradBias" -> gradBias)))
+      "initGradBias" -> gradBias,
+      "data_format" -> "NCHW")))
     val transpose2 = Node(IRElement(" ", "Transpose", Map("elems" -> Array(2, 4))))
     val contiguous2 = Node(IRElement(" ", "Contiguous", Map()))
 
@@ -1096,7 +1104,8 @@ object BatchNormTF extends TensorflowToBigDL{
       "initWeight" -> weights,
       "initBias" -> bias,
       "initGradWeight" -> gradWeights,
-      "initGradBias" -> gradBias)))
+      "initGradBias" -> gradBias,
+      "data_format" -> "NCHW")))
 
     select -> bn
     Array(select, bn)

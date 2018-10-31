@@ -27,9 +27,7 @@ class IRElement(
   private val op_type: String,
   private val attr_map: Map[String, Any]) {
 
-
   private var inputs : Seq[String] = _
-  private var attrMap : Map[String, Any] = attr_map
 
   // Get the element name
   final def getName() : String = {
@@ -41,7 +39,7 @@ class IRElement(
   }
 
   final def getAttrMap() : Map[String, Any] = {
-    attrMap
+    attr_map
   }
 
 //  final def setAttr[T](key: String, value: Any): Unit = {
@@ -53,7 +51,7 @@ class IRElement(
 //  }
 
   final def getAttr[T](key: String) : Option[T] = {
-    attrMap.get(key).map(_.asInstanceOf[T])
+    attr_map.get(key).map(_.asInstanceOf[T])
   }
 
   // option methos
