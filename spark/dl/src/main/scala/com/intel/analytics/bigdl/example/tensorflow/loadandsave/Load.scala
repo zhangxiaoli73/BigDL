@@ -16,9 +16,12 @@
 
 package com.intel.analytics.bigdl.example.tensorflow.loadandsave
 
-import com.intel.analytics.bigdl.nn.Module
+import java.nio.ByteOrder
+
+import com.intel.analytics.bigdl.nn.{Graph, Module}
 import com.intel.analytics.bigdl.numeric.NumericFloat
 import com.intel.analytics.bigdl.tensor.Tensor
+import com.intel.analytics.bigdl.utils.tf.TensorflowLoader
 
 /**
  * This example show how to load a tensorflow model defined in slim and
@@ -26,9 +29,36 @@ import com.intel.analytics.bigdl.tensor.Tensor
  */
 object Load {
   def main(args: Array[String]): Unit = {
-    require(args.length == 1, "Please input the model path as the first argument")
-    val model = Module.loadTF(args(0), Seq("Placeholder"), Seq("LeNet/fc4/BiasAdd"))
-    val result = model.forward(Tensor(1, 1, 28, 28).rand())
-    println(result)
+    // require(args.length == 1, "Please input the model path as the first argument")
+
+//    val p = "/home/zhangli/workspace/vgg/model.pb"
+//    val input = Seq("input_node")
+//    val output = Seq("vgg_16/fc8/squeezed")
+
+    val p = "/home/zhangli/workspace/vgg/lenet.pb"
+    val input = Seq("input_node")
+    val output = Seq("LeNet/pool2/MaxPool")
+
+//    val model = Module.loadTF(p, Seq("Placeholder"), Seq("LeNet/fc4/BiasAdd"))
+
+//    val model = Module.loadTF(args(0), Seq("Placeholder"), Seq("LeNet/fc4/BiasAdd"))
+//    val result = model.forward(Tensor(1, 1, 28, 28).rand())
+//    println(result)
+
+    val in = Tensor[Float](1, 32, 32, 3).rand()
+    val model = TensorflowLoader.load(p, input, output, ByteOrder.LITTLE_ENDIAN)
+
+    val m = model.asInstanceOf[Graph[Float]].modules
+
+    val modelDef = TensorflowLoader.loadToIR(p, input, output)
+    modelDef.build()
+
+    val out1 = model.forward(in)
+    val out2 = modelDef.forward(in)
+
+//    val result = model.forward(Tensor(1, 1, 28, 28).rand())
+//    println(result)
+
+    val tmp = 0
   }
 }
