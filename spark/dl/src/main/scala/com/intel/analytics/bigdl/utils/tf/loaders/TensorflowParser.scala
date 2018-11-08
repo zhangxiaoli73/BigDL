@@ -19,12 +19,8 @@ import java.io.{FileReader => JFileReader}
 import java.nio.ByteOrder
 import java.util.{HashMap => JHashMap}
 
-import com.intel.analytics.bigdl._
-import com.intel.analytics.bigdl.nn.{SpatialAveragePooling, SpatialCrossMapLRN, Squeeze}
-import com.intel.analytics.bigdl.nn.abstractnn.DataFormat
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
-import com.intel.analytics.bigdl.utils.mkldnn.OperateType.TFElement
-import com.intel.analytics.bigdl.utils.mkldnn.{IROperate, OperateType, TFElement}
+import com.intel.analytics.bigdl.utils.mkldnn._
 import com.intel.analytics.bigdl.utils.tf.Context
 import com.intel.analytics.bigdl.utils.tf.loaders.Utils._
 import org.tensorflow.framework.NodeDef
@@ -38,65 +34,54 @@ abstract class TensorflowParser() {
                         (implicit ev: TensorNumeric[T]): TFElement
 }
 
-class MaxPool extends TensorflowParser {
+class tfMaxPool extends TensorflowParser {
   override def build[T: ClassTag](node: NodeDef, byteOrder: ByteOrder,
                                   context: Context[T])(implicit ev: TensorNumeric[T]): TFElement = {
     val attributes = node.getAttrMap
-    IROperate.SpatialMaxPooling.data_format = getString(attributes, "data_format")
-    IROperate.SpatialMaxPooling.strides = getIntList(attributes, "strides")
-    IROperate.SpatialMaxPooling.ksize = getIntList(attributes, "ksize")
-    new TFElement(node.getName, IROperate.SpatialMaxPooling, node)
+    val data_format = getString(attributes, "data_format")
+    val strides = getIntList(attributes, "strides")
+    val ksize = getIntList(attributes, "ksize")
+    val padding = getString(attributes, "padding")
+    new TFElement(node.getName, IRSpatialMaxPooling(data_format, strides, ksize, padding), node)
   }
 }
 
-class AvePool extends TensorflowParser {
+class tfAvePool extends TensorflowParser {
   override def build[T: ClassTag](node: NodeDef, byteOrder: ByteOrder,
                                   context: Context[T])(implicit ev: TensorNumeric[T]): TFElement = {
     val attributes = node.getAttrMap
-    IROperate.SpatialAvePooling.data_format = getString(attributes, "data_format")
-    IROperate.SpatialAvePooling.strides = getIntList(attributes, "strides")
-    IROperate.SpatialAvePooling.ksize = getIntList(attributes, "ksize")
-    IROperate.SpatialAvePooling.countIncludePad = false
-
-    new TFElement(node.getName, IROperate.SpatialAvePooling, node)
+    val data_format = getString(attributes, "data_format")
+    val strides = getIntList(attributes, "strides")
+    val ksize = getIntList(attributes, "ksize")
+    val padding = getString(attributes, "padding")
+    new TFElement(node.getName,
+      IRSpatialAvePooling(data_format, strides, ksize, padding, false), node)
   }
 }
 
-//class Conv2D extends TensorflowParser {
-//  override def build[T: ClassTag](node: NodeDef, byteOrder: ByteOrder,
-//                                  context: Context[T])(implicit ev: TensorNumeric[T]): TFElement = {
-//  ....
-//  }
-//}
-
-class LRN extends TensorflowParser {
+class tfLRN extends TensorflowParser {
   override def build[T: ClassTag](node: NodeDef, byteOrder: ByteOrder,
                                   context: Context[T])(implicit ev: TensorNumeric[T]): TFElement = {
-    val size = getInt(node.getAttrMap, "depth_radius")
-    val k = getFloat(node.getAttrMap, "bias")
-    val alpha = getFloat(node.getAttrMap, "alpha")
-    val beta = getFloat(node.getAttrMap, "beta")
+    val attributes = node.getAttrMap
+    val size = getInt(attributes, "depth_radius")
+    val k = getFloat(attributes, "bias")
+    val alpha = getFloat(attributes, "alpha")
+    val beta = getFloat(attributes, "beta")
+    val data_format = getString(attributes, "data_format")
 
-    new TFElement(node.getName, OperateType.LRN,
-      Map("data_format" -> "NHWC", "size" -> (size * 2 + 1),
-        "ksize" -> k, "alpha" -> alpha * (size * 2 + 1), "beta" -> beta),
+    new TFElement(node.getName, IRLRN(size*2 + 1, k, alpha * (size * 2) + 1, beta, data_format),
       node)
   }
 }
 
-class Identity extends TensorflowParser {
+class tfIdentity extends TensorflowParser {
   override def build[T: ClassTag](node: NodeDef, byteOrder: ByteOrder,
                                   context: Context[T])(implicit ev: TensorNumeric[T]): TFElement = {
-    val size = getInt(node.getAttrMap, "depth_radius")
-    val k = getFloat(node.getAttrMap, "bias")
-    val alpha = getFloat(node.getAttrMap, "alpha")
-    val beta = getFloat(node.getAttrMap, "beta")
-
-    new TFElement(node.getName, OperateType.Identity, Map(), node)
+    new TFElement(node.getName, IRIdentity(), node)
   }
 }
 
-class Squeeze extends TensorflowParser {
+class tfSqueeze extends TensorflowParser {
   override def build[T: ClassTag](node: NodeDef, byteOrder: ByteOrder,
                                   context: Context[T])(implicit ev: TensorNumeric[T]): TFElement = {
 
@@ -105,7 +90,24 @@ class Squeeze extends TensorflowParser {
 
     dims = if (dims.isEmpty) null else dims
 
-    new TFElement(node.getName, OperateType.Squeeze,
-      Map("dims" -> dims, "batchMode" -> false), node)
+    new TFElement(node.getName, IRSqueeze(dims, false), node)
+  }
+}
+
+class tfRelu extends TensorflowParser {
+  override def build[T: ClassTag](node: NodeDef, byteOrder: ByteOrder,
+                                  context: Context[T])(implicit ev: TensorNumeric[T]): TFElement = {
+    new TFElement(node.getName, IRReLu(), node)
+  }
+}
+
+class tfPlaceholder extends TensorflowParser {
+  override def build[T: ClassTag](node: NodeDef, byteOrder: ByteOrder,
+                                  context: Context[T])(implicit ev: TensorNumeric[T]): TFElement = {
+//    val attributes = node.getAttrMap
+//    val data_format = getString(attributes, "data_format")
+
+    // todo: ????
+    new TFElement(node.getName, IRIdentity(), node)
   }
 }

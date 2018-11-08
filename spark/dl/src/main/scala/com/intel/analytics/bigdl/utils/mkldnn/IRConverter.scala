@@ -16,15 +16,17 @@
 
 package com.intel.analytics.bigdl.utils.mkldnn
 
-import com.intel.analytics.bigdl.mkl.Engine
-import com.intel.analytics.bigdl.nn.Graph
+import com.intel.analytics.bigdl.mkl.{Engine, Memory}
+import com.intel.analytics.bigdl.nn.{Graph, StaticGraph}
 import com.intel.analytics.bigdl.nn.Graph.ModuleNode
-import com.intel.analytics.bigdl.nn.mkldnn.{DnnGraph, MklDnnModule}
+import com.intel.analytics.bigdl.nn.abstractnn.DataFormat
+import com.intel.analytics.bigdl.nn.mkldnn.{DnnGraph, HeapData, MklDnnModule, ReorderMemory}
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
 import com.intel.analytics.bigdl.{Module, utils}
 import com.intel.analytics.bigdl.utils.{MklBlas, Node}
 
 import scala.collection.mutable
+import scala.collection.mutable.ArrayBuffer
 import scala.reflect.ClassTag
 
 
@@ -35,7 +37,6 @@ private[bigdl] class IRConverter[T: ClassTag](IRgraph: IRGraph[T])(implicit ev: 
   private def enableConvertDnn(): Boolean = {
     var convert = true
     IRgraph.allNodes.foreach(node => {
-      // todo: data format not match should be also false
       if (!IRLayer2Dnn[T].enableConvert(node.element)) {
         convert = false
       }
@@ -47,7 +48,6 @@ private[bigdl] class IRConverter[T: ClassTag](IRgraph: IRGraph[T])(implicit ev: 
   private def enableConvertBlas(): Boolean = {
     var convert = true
     IRgraph.allNodes.foreach(node => {
-      // todo: data format not match should be also false
       if (!IRLayer2Blas[T].enableConvert(node.element)) {
         convert = false
       }
@@ -58,7 +58,7 @@ private[bigdl] class IRConverter[T: ClassTag](IRgraph: IRGraph[T])(implicit ev: 
 
   def toGraph() : Graph[T] = {
     // build to generate BigDL graph
-    if (utils.Engine.getEngineType() == MklBlas) {
+    if (false) { // utils.Engine.getEngineType() == MklBlas) {
       // convert to Blas
       require(enableConvertBlas(), "this IR graph can not convert to Blas layer")
       toBlasGraph()
@@ -89,11 +89,46 @@ private[bigdl] class IRConverter[T: ClassTag](IRgraph: IRGraph[T])(implicit ev: 
         }
       })
     })
+
     val inputs = IRgraph.inputs.toArray.map(n => oldToNew.get(n).asInstanceOf[ModuleNode[Float]])
     val outputs = IRgraph.outputs.toArray.map(n => oldToNew.get(n).asInstanceOf[ModuleNode[Float]])
+    // todo: check input formats, if NHWC, then add reorder layer
 
-    // DnnGraph(inputs, outputs, IRgraph.generateBackward)
-    DnnGraph(inputs, outputs).asInstanceOf[Graph[T]]
+    // todo: check outputs formats, add output reorder layer
+    val realOutputs = IRgraph.outputs.map(out => {
+      val shape = out.element.outputShape
+      require(shape.length == 2 || shape.length == 4, s"output shape should be 2 or 4 dims," +
+        s"but get ${shape.length}, and this IRElement name is ${out.element.getName()}")
+      val realOut = if (shape.length == 2) {
+        val realOutFormat = new HeapData(shape, Memory.Format.nc)
+        val layer = ReorderMemory(inputFormat = null, outputFormat = realOutFormat,
+          gradInputFormat = null, gradOutputFomat = realOutFormat)
+        layer
+      } else if (shape.length == 4) {
+        val layer = out.element.getformats() match {
+          case "NHWC" =>
+            // todo: as mkld nn layer only support nchw format, so here has to do transpose
+            // from NHWC to NCHW
+            val realOutFormat = new HeapData(out.element.outputShape, Memory.Format.nhwc)
+            // val realGradInput = new HeapData(out.element.outputShape, Memory.Format.nchw)
+            ReorderMemory(inputFormat = null, outputFormat = realOutFormat,
+              gradInputFormat = null, gradOutputFomat = realOutFormat)
+          case "NCHW" =>
+            val realOutFormat = new HeapData(shape, Memory.Format.nchw)
+            ReorderMemory(inputFormat = null, outputFormat = realOutFormat,
+              gradInputFormat = null, gradOutputFomat = realOutFormat)
+          case _ => throw new UnsupportedOperationException(
+            s"not support format ${out.element.getformats()}")
+        }
+        layer
+      }
+      val realNode = new Node(realOut.asInstanceOf[Module[Float]])
+      oldToNew.get(out).get.add(realNode)
+      realNode
+    })
+
+    // val outputsFormats = outputs.foreach(n => n.element.asInstanceOf)
+    DnnGraph(inputs, realOutputs).asInstanceOf[Graph[T]]
   }
 
   private def toBlasGraph(): Graph[T] = {
@@ -101,8 +136,7 @@ private[bigdl] class IRConverter[T: ClassTag](IRgraph: IRGraph[T])(implicit ev: 
     val oldToNew = new mutable.HashMap[Node[IRElement], Node[Module[T]]]()
     allNodes.foreach(node => {
       require(IRLayer2Blas[T].enableConvert(node.element), "")
-      val blas = new Node(IRLayer2Blas[T].convertIRLayer(node.element))
-      oldToNew.put(node, blas)
+      oldToNew.put(node, new Node(IRLayer2Blas[T].convertIRLayer(node.element)))
     })
 
     allNodes.foreach(node => {
@@ -112,6 +146,17 @@ private[bigdl] class IRConverter[T: ClassTag](IRgraph: IRGraph[T])(implicit ev: 
         }
       })
     })
+
+//    allNodes.foreach(node => {
+//      node.nextNodesAndEdges.foreach(nextNodeAndEdge => {
+//        if (oldToNew.contains(nextNodeAndEdge._1)) {
+//          val n = oldToNew.get(node).get
+//          // todo: use last node
+//          n(n.length - 1).add(
+//            oldToNew.get(nextNodeAndEdge._1).get(0), nextNodeAndEdge._2)
+//        }
+//      })
+//    })
 
     val inputs = IRgraph.inputs.toArray.map(n => oldToNew.get(n).asInstanceOf[ModuleNode[T]])
     val outputs = IRgraph.outputs.toArray.map(n => oldToNew.get(n).asInstanceOf[ModuleNode[T]])

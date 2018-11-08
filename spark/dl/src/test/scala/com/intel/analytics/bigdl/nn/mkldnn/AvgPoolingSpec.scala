@@ -26,6 +26,8 @@ import org.apache.commons.lang3.SerializationUtils
 import scala.util.Random
 
 class AvgPoolingSpec extends BigDLSpecHelper {
+
+
   "Avg Pooling test1" should "be correct" in {
     val batchSize = 2
     val input = Tensor[Float](batchSize, 480, 28, 28).apply1(e => Random.nextFloat())

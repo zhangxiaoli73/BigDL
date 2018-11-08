@@ -21,7 +21,10 @@ import org.scalatest.{FlatSpec, Matchers}
 
 import scala.math._
 import com.intel.analytics.bigdl._
+import com.intel.analytics.bigdl.mkl.Memory
 import com.intel.analytics.bigdl.nn.abstractnn.DataFormat
+import com.intel.analytics.bigdl.nn.mkldnn.Phase.TrainingPhase
+import com.intel.analytics.bigdl.nn.mkldnn.{HeapData, MklDnnRuntime, Tools}
 import com.intel.analytics.bigdl.optim.{L2Regularizer, SGD}
 import com.intel.analytics.bigdl.utils.RandomGenerator._
 import com.intel.analytics.bigdl.utils.serializer.ModuleSerializationTest
@@ -305,12 +308,13 @@ class SpatialConvolutionSpec extends FlatSpec with Matchers {
   }
 
   "A SpatialConvolution layer" should "generate same output with NCHW and NHWC" in {
-    import tensor.TensorNumericMath.TensorNumeric.NumericDouble
+    import tensor.TensorNumericMath.TensorNumeric.NumericFloat
     case class Conv(nIn: Int, nOut: Int, kW: Int,
                     kH: Int, dW: Int, dH: Int, pW: Int, pH: Int)
     val params = List(
-      Conv(1, 1, 1, 1, 2, 2, -1, -1),
       Conv(1, 1, 3, 3, 1, 1, 0, 0),
+      Conv(3, 32, 5, 5, 1, 1, -1, -1),
+      Conv(1, 1, 1, 1, 2, 2, -1, -1),
       Conv(1, 1, 1, 1, 1, 1, 0, 0),
       Conv(1, 1, 5, 5, 1, 1, 0, 0),
       Conv(4, 4, 3, 3, 1, 1, 0, 0),
@@ -334,10 +338,21 @@ class SpatialConvolutionSpec extends FlatSpec with Matchers {
       val layerNHWC = new SpatialConvolution(param.nIn, param.nOut,
         param.kW, param.kH, param.dW, param.dH, param.pW, param.pH, format = DataFormat.NHWC)
 
-      val input = Tensor(Array(4, param.nIn, 7, 7)).randn()
+      // *******
+      val layerDnnNHWC = mkldnn.SpatialConvolution(param.nIn, param.nOut,
+        param.kW, param.kH, param.dW, param.dH, param.pW, param.pH, format = DataFormat.NHWC)
+//      layerDnnNHWC.setRuntime(new MklDnnRuntime)
+//      layerDnnNHWC.initFwdPrimitives(Array(HeapData(Array(4, 7, 7, param.nIn), Memory.Format.nhwc)), TrainingPhase)
+      // ****************
+
+      val input = Tensor(Array(4, param.nIn, 7, 7)).fill(0.01f) // .randn()
 
       val inputNHWC = Tensor(input.size())
         .copy(input).transpose(2, 4).transpose(2, 3).contiguous()
+
+      val outputNHWC22 = layerNHWC.forward(inputNHWC)
+      layerDnnNHWC.setRuntime(new MklDnnRuntime)
+      layerDnnNHWC.initFwdPrimitives(Array(HeapData(Array(4, 7, 7, param.nIn), Memory.Format.nhwc)), TrainingPhase)
 
       val kernel = Tensor(Array(param.nOut, param.nIn, param.kH, param.kW)).randn()
       val bias = Tensor(Array(param.nOut)).randn()
@@ -348,31 +363,36 @@ class SpatialConvolutionSpec extends FlatSpec with Matchers {
 
       layer.weight.copy(kernel)
       layerNHWC.weight.copy(kernelNHWC)
+      layerDnnNHWC.weight.copy(kernelNHWC)
       layer.bias.copy(bias)
       layerNHWC.bias.copy(biasNHWC)
+      layerDnnNHWC.bias.copy(biasNHWC)
 
       val output = layer.forward(input)
       val outputNHWC = layerNHWC.forward(inputNHWC)
-      val gradOutput = Tensor(output.size()).fill(1.0)
-      val gradOutputNHWC = Tensor(outputNHWC.size()).fill(1.0)
+      val outputDnnNHWC = layerDnnNHWC.forward(inputNHWC)
+
+      val gradOutput = Tensor(output.size()).fill(1.0f)
+      val gradOutputNHWC = Tensor(outputNHWC.size()).fill(1.0f)
 
       val gradInput = layer.backward(input, gradOutput)
       val gradInputNHWC = layerNHWC.backward(inputNHWC, gradOutputNHWC)
 
 
+      val tmp = outputNHWC.transpose(2, 4).transpose(3, 4).sub(output)
       outputNHWC.transpose(2, 4).transpose(3, 4)
-        .sub(output).pow(2).sum() should be < 1e-7
+        .sub(output).pow(2).sum() should be < 1e-7f
 
       gradInputNHWC.transpose(2, 4).transpose(3, 4)
-        .sub(gradInput).pow(2).sum() should be < 1e-7
+        .sub(gradInput).pow(2).sum() should be < 1e-7f
 
       val (weight1, grad1) = layer.getParameters()
-      weight1.add(-0.01, grad1)
+      weight1.add(-0.01f, grad1)
       val (weight2, grad2) = layerNHWC.getParameters()
-      weight2.add(-0.01, grad2)
+      weight2.add(-0.01f, grad2)
 
       val transWeight = layerNHWC.weight.transpose(2, 5).transpose(3, 4).transpose(4, 5)
-      transWeight.sub(layer.weight).pow(2).sum() should be < 1e-7
+      transWeight.sub(layer.weight).pow(2).sum() should be < 1e-7f
 
     }
   }

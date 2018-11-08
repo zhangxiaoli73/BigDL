@@ -26,11 +26,21 @@ class ReorderMemory(inputFormat: MemoryData, outputFormat: MemoryData,
   _outputFormats = Array(outputFormat)
   _gradInputFormats = Array(gradInputFormat)
 
+  if (this.getName() == "test") {
+    val tmp = 0
+  }
 
-  override private[mkldnn] def initFwdPrimitives(inputs: Array[MemoryData], phase: Phase) = {
+  override private[bigdl] def initFwdPrimitives(inputs: Array[MemoryData], phase: Phase) = {
     _inputFormats = if (inputFormat == null) inputs else Array(inputFormat)
+
+    if (_outputFormats != null) {
+      _inputFormats = Array(HeapData(_outputFormats(0).shape, _inputFormats(0).layout))
+    }
     require(_inputFormats.length == 1, "Only accept one tensor as input")
 
+    if (this.getName() == "testRE") {
+      val tmp = 0
+    }
     require(_inputFormats(0).shape.product == outputFormat.shape.product,
       "input output memory not match")
     val fwdReorderPrimDesc = MklDnn.ReorderPrimitiveDescCreate(
@@ -45,7 +55,7 @@ class ReorderMemory(inputFormat: MemoryData, outputFormat: MemoryData,
     (_inputFormats, _outputFormats)
   }
 
-  override private[mkldnn] def initBwdPrimitives(grads: Array[MemoryData], phase: Phase) = {
+  override private[bigdl] def initBwdPrimitives(grads: Array[MemoryData], phase: Phase) = {
     _gradInputFormats = (gradInputFormat, inputFormat) match {
       case (null, null) => inputFormats()
       case (null, x) => Array(x)
@@ -54,6 +64,16 @@ class ReorderMemory(inputFormat: MemoryData, outputFormat: MemoryData,
 
     _gradOutputFormats = if (gradOutputFormat == null) grads else Array(gradOutputFormat)
     _gradOutputFormatsForWeight = if (gradOutputFormat == null) grads else Array(gradOutputFormat)
+
+    if (_gradInputFormats != null) {
+      _gradOutputFormats = Array(HeapData(_gradInputFormats(0).shape, _gradOutputFormats(0).layout))
+      _gradOutputFormatsForWeight =
+        Array(HeapData(_gradInputFormats(0).shape, _gradOutputFormatsForWeight(0).layout))
+    }
+
+    if (this.getName() == "test") {
+      val tmp = 0
+    }
     require(_gradOutputFormats.length == 1, "Only accept one tensor as input")
 
     require(_gradOutputFormats(0).shape.product == _gradInputFormats(0).shape.product,

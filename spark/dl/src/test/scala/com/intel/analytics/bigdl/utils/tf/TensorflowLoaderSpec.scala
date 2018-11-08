@@ -656,6 +656,18 @@ println("starts")
     val input = TensorflowToBigDL.toTensor(tfInputTensor,
       ByteOrder.LITTLE_ENDIAN)
 
+    // test
+    model.getParameters()._1.fill(0.01f)
+    model.getParameters()._2.fill(0.0f)
+
+//    val modelNCHW = model.cloneModule()
+//
+//    modelNCHW.getOutputShape()
+//
+//    val inputNCHW = input.transpose(2, 4).transpose(3, 4).contiguous().clone()
+//
+//    val outputNCHW = modelNCHW.forward(inputNCHW)
+
     val bigdlOutputs = if (endPoints.length == 1) {
       Seq(model.forward(input).toTensor)
     } else {

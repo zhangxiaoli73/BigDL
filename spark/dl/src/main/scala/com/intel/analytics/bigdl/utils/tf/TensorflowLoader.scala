@@ -33,7 +33,7 @@ import com.intel.analytics.bigdl.utils._
 import com.intel.analytics.bigdl.nn.tf.{SwitchControlNode, SwitchOps}
 import com.intel.analytics.bigdl.utils.mkldnn.{IRElement, IRGraph, TFElement}
 import com.intel.analytics.bigdl.utils.tf.TensorflowToBigDL._
-import com.intel.analytics.bigdl.utils.tf.loaders.{TensorflowOpsLoader, TensorflowParser}
+import com.intel.analytics.bigdl.utils.tf.loaders.{Relu, TensorflowOpsLoader, TensorflowParser}
 import org.tensorflow.framework.{GraphDef, NodeDef}
 import spire.syntax.module
 
@@ -131,18 +131,6 @@ object TensorflowLoader{
       context, generatedBackward)
   }
 
-  private def genTFelement[T: ClassTag](node: NodeDef, byteOrder: ByteOrder, context: Context[T])
-  : TFElement = {
-    val name = node.getName
-    val op = node.getOp
-    val ele = if (op != "MaxPool") {
-      TensorflowParser.default(node, byteOrder, context)
-    } else {
-      TensorflowParser.maxPool(node, byteOrder, context)
-    }
-    ele
-  }
-
   private[bigdl] def build2IRGraph[T: ClassTag](
      tfGraph: DirectedGraph[NodeDef],
      inputs: Seq[String],
@@ -177,10 +165,18 @@ object TensorflowLoader{
         val (module, nodes, inputNodes) =
           // todo: just one element
           extractNode[T](n.graph(reverse = true), context, byteOrder).getOrElse({
-            // (builder.build[T](n.element, byteOrder, context), Seq(n).asJava, Seq(n))
-            // todo: use byteOrder & context
-            val irNode = new Node(genTFelement(n.element, byteOrder, context)).asInstanceOf[Node[IRElement]]
-            (Array(irNode, irNode), Seq(n).asJava, Seq(n))
+            try {
+              val cls = Class.forName("com.intel.analytics.bigdl.utils.tf.loaders.tf" +
+                n.element.getOp)
+              println(cls)
+              val builder = cls.getConstructors()(0).newInstance().asInstanceOf[TensorflowParser]
+              val m = new Node(builder.build[T](n.element, byteOrder, context)
+                .asInstanceOf[IRElement])
+              (Array(m), Seq(n).asJava, Seq(n))
+            } catch {
+              case e: Throwable =>
+                  throw new UnsupportedOperationException(errorMsg, e)
+            }
           })
 
         // todo: set name
@@ -584,13 +580,26 @@ object TensorflowLoader{
         val (module, nodes, inputNodes) =
           extract[T](n.graph(reverse = true), context, byteOrder).getOrElse({
             try {
+              if (n.element.getOp() == "Relu") {
+                val tmp = 0
+              }
               val cls = Class.forName("com.intel.analytics.bigdl.utils.tf.loaders." +
                 n.element.getOp)
+              if (n.element.getOp() == "Relu") {
+                val tmp = 0
+              }
               println(cls)
               val builder = cls.getConstructors()(0).newInstance().asInstanceOf[TensorflowOpsLoader]
-              (builder.build[T](n.element, byteOrder, context), Seq(n).asJava, Seq(n))
+              val tmp = (builder.build[T](n.element, byteOrder, context), Seq(n).asJava, Seq(n))
+              tmp
             } catch {
               case e: Throwable =>
+                val tmp = 0
+                if (n.element.getOp() == "Relu") {
+                  val cls = new Relu()
+
+                  val tmp = 0
+                }
                 throw new UnsupportedOperationException(errorMsg, e)
             }
           })
@@ -729,7 +738,13 @@ object TensorflowLoader{
       val (result, inputs) = matchGraph(graph, patterns(i).topology)
       if (result.size != 0) {
         // get model
-        return Some(patterns(i).element(graph, context, byteOrder), result, inputs)
+        val res = patterns(i).element(graph, context, byteOrder)
+        if (res == null) {
+          return None
+        }
+        else {
+          return Some(res, result, inputs)
+        }
       }
       i += 1
     }

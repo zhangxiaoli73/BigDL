@@ -28,7 +28,6 @@ import com.intel.analytics.bigdl.{Module, nn}
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
 import com.intel.analytics.bigdl.utils.Node
 import com.intel.analytics.bigdl.utils.caffe.CaffeConversionException
-import com.intel.analytics.bigdl.utils.mkldnn.OperateType.{DropOut, SpatialConv}
 import com.intel.analytics.bigdl.utils.tf.loaders.TensorflowOpsLoader
 
 import scala.collection.mutable
@@ -38,27 +37,25 @@ import scala.reflect.ClassTag
 
 class IRLayer2Blas[T: ClassTag](implicit ev: TensorNumeric[T]) {
 
-  private val IR2BlasMap = new mutable.HashMap[OperateType, (IRElement) => Module[T]]
+  private val IR2BlasMap = new mutable.HashMap[String, (IRElement) => Module[T]]
 
   mapInit()
 
   def enableConvert(layer: IRElement) : Boolean = {
     val layerType = layer.getOp()
-    if (IR2BlasMap.contains(layerType)) true
+    if (IR2BlasMap.contains(layerType.name)) true
     else false
   }
 
   def convertIRLayer(layer : IRElement) : Module[T] = {
     val layerType = layer.getOp()
-    require(IR2BlasMap.contains(layerType), s"not support convert ${layerType} to dnn layer")
-    IR2BlasMap(layerType)(layer)
+    require(IR2BlasMap.contains(layerType.name), s"not support convert ${layerType} to dnn layer")
+    IR2BlasMap(layerType.name)(layer)
   }
 
   private def mapInit(): Unit = {
-    IR2BlasMap(OperateType.DropOut) = fromDropout
-    IR2BlasMap(OperateType.Identity) = fromIdentity
-    IR2BlasMap(OperateType.SpatialConv) = fromConv
-    IR2BlasMap(OperateType.MaxPool) = fromMaxPooling
+    IR2BlasMap("IRSpatialConv") = fromConv
+    IR2BlasMap("IRSpatialMaxPooling") = fromMaxPooling
     // todo: not complete
   }
 
@@ -73,25 +70,6 @@ class IRLayer2Blas[T: ClassTag](implicit ev: TensorNumeric[T]) {
 
   private def fromSpatialBatchNormalization(node: IRElement): Module[T] =
     throw new UnsupportedOperationException("not implement")
-
-  private def fromTranspose(node: IRElement): Module[T] =
-    throw new UnsupportedOperationException("not implement")
-
-  private def fromContiguous(node: IRElement): Module[T] =
-    throw new UnsupportedOperationException("not implement")
-
-  private def fromTemporalConvolution(node: IRElement): Module[T] =
-    throw new UnsupportedOperationException("not implement")
-
-  private def fromLinear(node: IRElement): Module[T] =
-    throw new UnsupportedOperationException("not implement")
-
-  private def fromDropout(node: IRElement): Module[T] =
-    throw new UnsupportedOperationException("not implement")
-
-  private def fromIdentity(node: IRElement): Module[T] =
-    throw new UnsupportedOperationException("not implement")
-
 }
 
 object IRLayer2Blas {

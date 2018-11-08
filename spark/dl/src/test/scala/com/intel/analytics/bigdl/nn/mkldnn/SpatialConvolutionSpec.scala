@@ -18,38 +18,110 @@ package com.intel.analytics.bigdl.nn.mkldnn
 
 import com.intel.analytics.bigdl._
 import com.intel.analytics.bigdl.mkl._
+import com.intel.analytics.bigdl.nn.abstractnn.DataFormat
 import com.intel.analytics.bigdl.nn.mkldnn.Phase.TrainingPhase
-import com.intel.analytics.bigdl.nn.{Xavier, Zeros}
+import com.intel.analytics.bigdl.nn.{Xavier, Zeros, mkldnn}
 import com.intel.analytics.bigdl.numeric.NumericFloat
 import com.intel.analytics.bigdl.tensor.{DnnStorage, Tensor}
 import com.intel.analytics.bigdl.utils.RandomGenerator._
+import com.intel.analytics.bigdl.utils.tf.TensorflowDataFormat.NHWC
 import org.apache.commons.lang3.SerializationUtils
 import org.scalatest.{FlatSpec, Matchers}
 
 import scala.util.Random
 
 class SpatialConvolutionSpec extends FlatSpec with Matchers {
-  "ConvolutionDnn with format=nchw and ngroup=1" should "work correctly" in {
-    val nInputPlane = 2
-    val nOutputPlane = 4
-    val kW = 3
-    val kH = 3
-    val dW = 4
-    val dH = 4
+
+  "ConvolutionDnn with format=nhwc and ngroup=1" should "work correctly" in {
+    val nInputPlane = 3
+    val nOutputPlane = 32
+    val kW = 5
+    val kH = 5
+    val dW = 1
+    val dH = 1
     val padW = 0
     val padH = 0
 
-    val input = Tensor[Float](2, 2, 23, 23).apply1(e => Random.nextFloat())
+    val input = Tensor[Float](1, 32, 32, 3).apply1(e => Random.nextFloat())
+    val input2 = Tools.toNCHW(input, HeapData(Array(1, 32, 32, 3), Memory.Format.nhwc))
+
+    val inputss = Tensor[Float](1, 3, 32, 32).copy(input2)
+
+
+    val input3 = Tensor[Float](1, 3, 32, 32).apply1(e => Random.nextFloat())
     val gradOutput = Tensor[Float](2, 4, 6, 6).apply1(e => Random.nextFloat())
+    RNG.setSeed(100)
+    val conv = SpatialConvolution(nInputPlane, nOutputPlane, kW, kH, dW, dH, padW, padH)
+    RNG.setSeed(100)
+    val layer = nn.SpatialConvolution[Float](
+      nInputPlane, nOutputPlane, kW, kH, dW, dH, padW, padH, format = DataFormat("NHWC"))
+
+    // val out1 = layer.forward(input)
+
+
+    val out1 = layer.forward(input)
+
+    conv.setRuntime(new MklDnnRuntime)
+    conv.initFwdPrimitives(Array(HeapData(Array(1, 3, 32, 32), Memory.Format.nchw)), TrainingPhase)
+
+    val output = Tools.toNCHW(conv.forward(inputss).toTensor, conv.outputFormats()(0))
+
+    val output22 = Tools.fromNCHW(output, HeapData(Array(1, 28, 28, 32), Memory.Format.nhwc))
+
+
+    val grad1 = Tools.toNCHW(conv.updateGradInput(input, gradOutput).toTensor,
+      conv.gradInputFormats()(0))
+    conv.accGradParameters(input, gradOutput)
+
+    val weight1 = Tools.toOIHW(conv.weight.native, conv.parametersWithShape()._1(0))
+    val gradweight1 = Tools.toOIHW(conv.gradWeight.native, conv.parametersWithShape()._2(0))
+    val bias1 = Tools.dense(conv.bias.native).toTensor[Float]
+    val gradbias1 = Tools.dense(conv.gradBias.dense).toTensor
+
+    val output2 = layer.forward(input)
+    val grad2 = layer.updateGradInput(input, gradOutput)
+    layer.accGradParameters(input, gradOutput)
+
+    val weight2 = layer.weight
+    val gradweight2 = layer.gradWeight
+    val bias2 = layer.bias
+    val gradbias2 = layer.gradBias
+
+
+//
+//    Equivalent.nearequals(weight1, weight2.resizeAs(weight1)) should be(true)
+//    Equivalent.nearequals(gradweight1, gradweight2.resizeAs(gradweight1)) should be(true)
+//    Equivalent.nearequals(bias1, bias2) should be(true)
+//    Equivalent.nearequals(gradbias1, gradbias2) should be(true)
+//    Equivalent.nearequals(output.toTensor, output2) should be(true)
+//    Equivalent.nearequals(grad1.toTensor, grad2) should be(true)
+  }
+
+
+  "ConvolutionDnn with format=nchw and ngroup=1" should "work correctly" in {
+    val nInputPlane = 3
+    val nOutputPlane = 32
+    val kW = 5
+    val kH = 5
+    val dW = 1
+    val dH = 1
+    val padW = 0
+    val padH = 0
+
+    val input = Tensor[Float](1, 3, 32, 32).apply1(e => Random.nextFloat())
+    val gradOutput = Tensor[Float](1, 32, 32, 32).apply1(e => Random.nextFloat())
     RNG.setSeed(100)
     val conv = SpatialConvolution(nInputPlane, nOutputPlane, kW, kH, dW, dH, padW, padH)
     RNG.setSeed(100)
     val layer = nn.SpatialConvolution[Float](nInputPlane, nOutputPlane, kW, kH, dW, dH, padW, padH)
 
+
+    // val tt = layer.forward(input)
+
     conv.setRuntime(new MklDnnRuntime)
-    conv.initFwdPrimitives(Array(HeapData(Array(2, 2, 23, 23), Memory.Format.nchw)), TrainingPhase)
-    conv.initBwdPrimitives(Array(HeapData(Array(2, 4, 6, 6), Memory.Format.nchw)), TrainingPhase)
-    conv.initGradWPrimitives(Array(HeapData(Array(2, 4, 6, 6), Memory.Format.nchw)), TrainingPhase)
+    conv.initFwdPrimitives(Array(HeapData(Array(1, 3, 32, 32), Memory.Format.nchw)), TrainingPhase)
+    conv.initBwdPrimitives(Array(HeapData(Array(1, 32, 32, 32), Memory.Format.nchw)), TrainingPhase)
+    conv.initGradWPrimitives(Array(HeapData(Array(1, 32, 32, 32), Memory.Format.nchw)), TrainingPhase)
 
     val output = Tools.toNCHW(conv.forward(input).toTensor, conv.outputFormats()(0))
     val grad1 = Tools.toNCHW(conv.updateGradInput(input, gradOutput).toTensor,

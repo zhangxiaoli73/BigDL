@@ -20,7 +20,7 @@ import java.util.List
 
 import breeze.linalg.reverse
 import com.intel.analytics.bigdl.nn.{Graph, keras}
-import com.intel.analytics.bigdl.nn.abstractnn.{AbstractModule, Activity}
+import com.intel.analytics.bigdl.nn.abstractnn.{AbstractModule, Activity, DataFormat}
 import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
 import com.intel.analytics.bigdl.utils.{Engine, MklBlas, Node, T}
@@ -38,9 +38,12 @@ class IRGraph[T: ClassTag](
 
 
   var allNodes = new ArrayBuffer[Node[IRElement]]
-  private var graph: Graph[T] = null
+  private[bigdl] var graph: Graph[T] = null
 
-  // do init to generate all nodes
+  /* init should do:
+   * 1. find all nodes and 4 dimention formats
+   * 2. infer input shape & output shape for all IRelement
+   */
   init()
 
   private def init() : Unit = {
@@ -48,6 +51,14 @@ class IRGraph[T: ClassTag](
     // todo: some output nodes may not be searched from inputs
     outputs.foreach(node => {
       if (!allNodes.contains(node)) allNodes.append(node)
+    })
+
+    // check formats
+    val inputFormats = DataFormat(checkModelFormats())
+
+    // add format type for all nodes element
+    allNodes.foreach(node => {
+      node.element.setFormats(inputFormats.value)
     })
   }
 
@@ -58,6 +69,17 @@ class IRGraph[T: ClassTag](
       if (!nodesBuffer.contains(node)) nodesBuffer.append(node)
       getNodes(node.nextNodes, nodesBuffer)
     })
+  }
+
+  private def checkModelFormats() : String = {
+    var formats = new ArrayBuffer[String]()
+    allNodes.foreach(node => {
+      // todo: data format not match should be also false
+      val f = node.element.getformats()
+      if (f != "" && f != null) formats.append(f)
+    })
+    require(formats.distinct.length == 1, "wrong format transfer")
+    formats(0)
   }
 
   override def updateOutput(input: Activity): Activity = {

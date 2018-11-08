@@ -39,30 +39,31 @@ import spire.macros.Auto.scala
 private[mkldnn] class IRLayer2Dnn {
 
   // converter function mappings
-  private val IR2DnnMap = new mutable.HashMap[OperateType, (IRElement) => Module[Float]]
+  private val IR2DnnMap = new mutable.HashMap[String, (IRElement) => Module[Float]]
 
   mapInit()
 
   def enableConvert(layer: IRElement) : Boolean = {
     val layerType = layer.getOp()
-    if (IR2DnnMap.contains(layerType)) true
+    if (IR2DnnMap.contains(layerType.name)) true
     else false
   }
 
   def convertIRLayer(layer : IRElement) : Module[Float] = {
     val layerType = layer.getOp()
-    require(IR2DnnMap.contains(layerType), s"not support convert ${layerType} to dnn layer")
-    IR2DnnMap(layerType)(layer)
+    require(IR2DnnMap.contains(layerType.name), s"not support convert ${layerType} to dnn layer")
+    IR2DnnMap(layerType.name)(layer)
   }
 
   private def mapInit(): Unit = {
-    IR2DnnMap(OperateType.Identity) = fromPlaceholder
-    IR2DnnMap(OperateType.ReLu) = fromRelu
-    IR2DnnMap(OperateType.DropOut) = fromDropOut
-    IR2DnnMap(OperateType.Identity) = fromIdentity
-    IR2DnnMap(OperateType.SpatialConv) = fromConv
-    IR2DnnMap(OperateType.MaxPool) = fromMaxPooling
-    IR2DnnMap(OperateType.Squeeze) = fromSqueeze
+    IR2DnnMap("IRIdentity") = fromPlaceholder
+    IR2DnnMap("IRReLu") = fromRelu
+    IR2DnnMap("IRDropout") = fromDropOut
+    IR2DnnMap("IRIdentity") = fromIdentity
+    IR2DnnMap("IRSpatialConv") = fromConv
+    IR2DnnMap("IRSpatialMaxPooling") = fromMaxPooling
+    IR2DnnMap("IRSqueeze") = fromSqueeze
+    // IR2DnnMap("IRLinear") = fromLinear
   }
 
   private def fromRelu(node: IRElement) : Module[Float] = mkldnn.ReLU()
@@ -79,38 +80,55 @@ private[mkldnn] class IRLayer2Dnn {
   }
 
   private def fromConv(node: IRElement) : Module[Float] = {
-    val t = node.getAttrMap()
-    val nInputPlane = t.getOrElse("nInputPlane", null).asInstanceOf[Int]
-    val nOutputPlane = t.getOrElse("nOutputPlane", null).asInstanceOf[Int]
-    val kernelW = t.getOrElse("kernelW", null).asInstanceOf[Int]
-    val kernelH = t.getOrElse("kernelH", null).asInstanceOf[Int]
-    val strideW = t.getOrElse("strideW", null).asInstanceOf[Int]
-    val strideH = t.getOrElse("strideH", null).asInstanceOf[Int]
-    val padW = t.getOrElse("pW", null).asInstanceOf[Int]
-    val padH = t.getOrElse("pH", null).asInstanceOf[Int]
-    val initWeight = t.getOrElse("weights", null).asInstanceOf[Tensor[Float]]
-    val initBias = t.getOrElse("bias", null).asInstanceOf[Tensor[Float]]
-    val initGradWeight = t.getOrElse("gradWeights", null).asInstanceOf[Tensor[Float]]
-    val initGradBias = t.getOrElse("gradBias", null).asInstanceOf[Tensor[Float]]
-    val format = t.getOrElse("data_format", null).asInstanceOf[String]
-//    require(format == "NCHW", s"not supported data format: $format")
+    val t = node.getOp().asInstanceOf[IRSpatialConv[Float]]
+    val nInputPlane = t.nInputPlane.asInstanceOf[Int]
+    val nOutputPlane = t.nOutputPlane.asInstanceOf[Int]
+    val kernelW = t.ksize(0)
+    val kernelH = t.ksize(1)
+    val strideW = t.strides(0)
+    val strideH = t.strides(1)
 
-    mkldnn.SpatialConvolution(nInputPlane, nOutputPlane, kernelW, kernelH,
-      strideW, strideH, padW, padH, initWeight = initWeight, initBias = initBias,
-      initGradWeight = initGradWeight, initGradBias = initGradBias)
+    val padding = t.paddingType
+    val (padW, padH) =
+      if (padding == "SAME") {
+        (-1, -1)
+      } else {
+        (0, 0)
+      }
+
+    if (node.getformats() == "NCHW") {
+      val initWeight = t.weights
+      val initBias = t.bias
+      val initGradWeight = t.gradWeights
+      val initGradBias = t.gradBias
+      mkldnn.SpatialConvolution(nInputPlane, nOutputPlane, kernelW, kernelH,
+        strideW, strideH, padW, padH, initBias = initBias, initGradBias = initGradBias,
+        initWeight = initWeight, initGradWeight = initGradWeight)
+    } else {
+      // from NHWC -> NCHW
+      val initWeight = t.weights.
+        transpose(1, 4).transpose(2, 3).transpose(3, 4).contiguous().clone()
+      val initBias = t.bias
+      val initGradWeight = t.gradWeights.
+        transpose(1, 4).transpose(2, 3).transpose(3, 4).contiguous().clone()
+      val initGradBias = t.gradBias
+      mkldnn.SpatialConvolution(nInputPlane, nOutputPlane, kernelW, kernelH,
+        strideW, strideH, padW, padH, initBias = initBias, initGradBias = initGradBias,
+        initWeight = initWeight, initGradWeight = initGradWeight)
+    }
   }
 
   private def fromMaxPooling(node: IRElement) : Module[Float] = {
-    val t = node.getAttrMap()
-    val format = t.getOrElse("data_format", null).asInstanceOf[String]
+    val t = node.getOp().asInstanceOf[IRSpatialMaxPooling]
+    val format = t.data_format
     // require(format == "NCHW", s"not supported data format: $format")
-    val strideList = t.getOrElse("strides", null).asInstanceOf[ArrayBuffer[Int]]
-    val kernelList = t.getOrElse("ksize", null).asInstanceOf[ArrayBuffer[Int]]
+    val strideList = t.strides
+    val kernelList = t.ksize
 
     val (strideH, strideW, ksizeH, ksizeW) =
       (strideList(1), strideList(2), kernelList(1), kernelList(2))
 
-    val padding = t.get("padding")
+    val padding = t.paddingType
     val (pW, pH) =
       if (padding == "SAME") {
         (-1, -1)
@@ -119,6 +137,20 @@ private[mkldnn] class IRLayer2Dnn {
       }
     mkldnn.MaxPooling(ksizeW, ksizeH, strideW, strideH, pW, pH)
   }
+
+  private def fromLRN(node: IRElement) : Module[Float] = {
+    val t = node.getOp().asInstanceOf[IRLRN]
+    val size = t.size
+    val alpha = t.alpha
+    val beta = t.beta
+    val k = t.k
+    mkldnn.LRN(size, alpha, beta, k)
+  }
+
+//  private def fromLinear(node: IRElement) : Module[Float] = {
+//    val t = node.getOp().asInstanceOf[IRLinear]
+//    mkldnn.LRN(size, alpha, beta, k)
+//  }
 }
 
 object IRLayer2Dnn {

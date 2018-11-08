@@ -28,7 +28,7 @@ import org.tensorflow.framework.{AttrValue, DataType, NodeDef, TensorProto}
 import com.intel.analytics.bigdl.nn.abstractnn.{AbstractModule, Activity, DataFormat}
 import com.intel.analytics.bigdl.nn.tf._
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
-import com.intel.analytics.bigdl.utils.mkldnn.IRElement
+import com.intel.analytics.bigdl.utils.mkldnn._
 import com.intel.analytics.bigdl.utils.tf.FullConnectionTF.getOrSetTensor
 import com.intel.analytics.bigdl.utils.{DirectedGraph, Node, T}
 import com.intel.analytics.bigdl.utils.tf.TensorflowToBigDL._
@@ -296,10 +296,9 @@ object FullConnectionTF extends TensorflowToBigDL{
     val (weight, gradWeight) = getOrSetTensor(weightNode, context, byteOrder, Some(Seq((1, 2))))
 
 
-    val linear = Node(IRElement(" ", "Linear",
-      Map("inputSize" -> weight.size(2), "outputSize" -> weight.size(1),
-        "initWeight" -> weight, "initGradWeight" -> gradWeight,
-        "initBias" -> bias, "initGradBias" -> gradBias)))
+    val linear = Node(IRElement(" ", IRLinear[T](weight.size(2),
+              weight.size(1), initWeight = weight, initGradWeight = gradWeight,
+              initBias = bias, initGradBias = gradBias)))
     Array(linear, linear)
   }
 }
@@ -329,7 +328,20 @@ object FullConnectionWithoutBiasTF extends TensorflowToBigDL{
       .asInstanceOf[AbstractModule[Activity, Activity, T]]
   }
 
-  // todo: add element
+  override def element[T: ClassTag](
+    tfGraph: DirectedGraph[NodeDef],
+    context: Context[T],
+    byteOrder: ByteOrder
+  )(implicit ev: TensorNumeric[T]): Array[Node[IRElement]] = {
+
+    val weightNode = tfGraph.source.prevNodes(1).prevNodes.head.element
+    val (weight, gradWeight) = getOrSetTensor(weightNode, context, byteOrder, Some(Seq((1, 2))))
+
+    val linear = Node(IRElement(" ", IRLinear(weight.size(2),
+      weight.size(1), false, initWeight = weight, initGradWeight = gradWeight)))
+
+    Array(linear, linear)
+  }
 }
 
 object Conv1D extends TensorflowToBigDL {
@@ -415,7 +427,7 @@ object Conv1D extends TensorflowToBigDL {
     result.asInstanceOf[AbstractModule[Activity, Activity, T]]
   }
 
-  // todo: add element
+  // todo: this element can not support
 
 }
 
@@ -493,7 +505,56 @@ object Conv2DWithoutBias extends TensorflowToBigDL{
     conv.asInstanceOf[AbstractModule[Activity, Activity, T]]
   }
 
-  // todo : add elelment
+  override def element[T: ClassTag](
+                                   tfGraph: DirectedGraph[NodeDef],
+                                   context: Context[T],
+                                   byteOrder: ByteOrder
+                                 )(implicit ev: TensorNumeric[T]): Array[Node[IRElement]] = {
+    val attributes = tfGraph.source.element.getAttrMap
+    val padding = getString(attributes, "padding")
+    val strideList = getIntList(attributes, "strides")
+    require(strideList.head == 1, s"not support strides on batch")
+
+    val format = getString(attributes, "data_format")
+    val conv = format match {
+      case "NHWC" =>
+        require(strideList(3) == 1, s"not support strides on depth")
+        val strideW = strideList(1)
+        val strideH = strideList(2)
+        val weightNode = tfGraph.source.prevNodes(1).prevNodes.head.element
+        val (weights, gradWeights) = getOrSetTensor(weightNode, context, byteOrder)
+        val nOuputPlane = weights.size(4)
+        val nInputPlane = weights.size(3)
+        val kernelH = weights.size(1)
+        val kernelW = weights.size(2)
+
+        Node(IRElement(" ", IRSpatialConv[T]("NHWC",
+          nInputPlane, nOuputPlane, Seq(kernelW, kernelW), Seq(strideW, strideH),
+          padding, nGroup = 1, weights = weights, gradWeights = gradWeights, withBias = false)))
+
+      case "NCHW" =>
+        require(strideList(1) == 1, s"not support strides on depth")
+        val strideW = strideList(2)
+        val strideH = strideList(3)
+        val weightNode = tfGraph.source.prevNodes(1).prevNodes.head.element
+        val (weights, gradWeights) =
+          getOrSetTensor(weightNode, context, byteOrder, Some(Seq((1, 4), (2, 3), (3, 4))))
+        val nOuputPlane = weights.size(1)
+        val nInputPlane = weights.size(2)
+        val kernelH = weights.size(3)
+        val kernelW = weights.size(4)
+
+        Node(IRElement(" ", IRSpatialConv[T]("NHWC",
+          nInputPlane, nOuputPlane, ksize = Seq(kernelW, kernelH), Seq(strideW, strideH),
+          paddingType = padding, nGroup = 1,
+          weights = weights, gradWeights = gradWeights, withBias = false)))
+
+      case _ =>
+        throw new IllegalArgumentException(s"not supported data format: $format")
+    }
+
+    Array(conv, conv)
+  }
 }
 
 object Conv2D extends TensorflowToBigDL {
@@ -512,7 +573,7 @@ object Conv2D extends TensorflowToBigDL {
   override def layer[T: ClassTag](tfGraph: DirectedGraph[NodeDef],
                                   context: Context[T],
                                   byteOrder: ByteOrder)(
-                                   implicit ev: TensorNumeric[T]): AbstractModule[Activity, Activity, T] = {
+                                  implicit ev: TensorNumeric[T]): AbstractModule[Activity, Activity, T] = {
 
     val attributes = tfGraph.source.prevNodes.head.element.getAttrMap
     val (pW, pH) =
@@ -583,12 +644,7 @@ object Conv2D extends TensorflowToBigDL {
                                      byteOrder: ByteOrder
                                    )(implicit ev: TensorNumeric[T]): Array[Node[IRElement]] = {
     val attributes = tfGraph.source.prevNodes.head.element.getAttrMap
-    val (pW, pH) =
-      if (getString(attributes, "padding") == "SAME") {
-        (-1, -1)
-      } else {
-        (0, 0)
-      }
+    val padding = getString(attributes, "padding")
     val strideList = getIntList(attributes, "strides")
     require(strideList.head == 1, s"not support strides on batch")
 
@@ -606,20 +662,11 @@ object Conv2D extends TensorflowToBigDL {
         val nInputPlane = weights.size(3)
         val kernelH = weights.size(1)
         val kernelW = weights.size(2)
-        Node(IRElement(" ", "SpatialConvolution",
-          Map("nInputPlane" -> nInputPlane,
-            "nOutputPlane" -> nOuputPlane,
-            "kernelW" -> kernelW,
-            "kernelH" -> kernelH,
-            "strideW" -> strideW,
-            "strideH" -> strideH,
-            "padW" -> pW,
-            "padH" -> pH,
-            "initWeight" -> weights,
-            "initBias" -> bias,
-            "initGradWeight" -> gradWeights,
-            "initGradBias" -> gradBias,
-            "data_format" -> "NHWC")))
+
+        Node(IRElement(" ", IRSpatialConv[T]("NHWC",
+          nInputPlane, nOuputPlane, Seq(kernelW, kernelW), Seq(strideW, strideH),
+          padding, nGroup = 1, weights, bias, gradWeights, gradBias)))
+
       case "NCHW" =>
         require(strideList(1) == 1, s"not support strides on depth")
         val strideW = strideList(2)
@@ -634,20 +681,11 @@ object Conv2D extends TensorflowToBigDL {
         val nInputPlane = weights.size(2)
         val kernelH = weights.size(3)
         val kernelW = weights.size(4)
-        Node(IRElement(" ", "SpatialConvolution",
-          Map("nInputPlane" -> nInputPlane,
-            "nOutputPlane" -> nOuputPlane,
-            "kernelW" -> kernelW,
-            "kernelH" -> kernelH,
-            "strideW" -> strideW,
-            "strideH" -> strideH,
-            "padW" -> pW,
-            "padH" -> pH,
-            "initWeight" -> weights,
-            "initBias" -> bias,
-            "initGradWeight" -> gradWeights,
-            "initGradBias" -> gradBias,
-            "data_format" -> "NCHW")))
+
+        Node(IRElement(" ", IRSpatialConv[T]("NCHW",
+          nInputPlane, nOuputPlane, ksize = Seq(kernelW, kernelH), Seq(strideW, strideH),
+          padding, nGroup = 1, weights, bias, gradWeights, gradBias)))
+
       case _ =>
         throw new IllegalArgumentException(s"not supported data format: $format")
     }
@@ -746,6 +784,7 @@ object Conv2D2 extends TensorflowToBigDL{
     val nInputPlane = weights.size(2)
     val kernelH = weights.size(3)
     val kernelW = weights.size(4)
+    val padding = getString(attributes, "padding")
 
     val (pW, pH) =
       if (getString(attributes, "padding") == "SAME") {
@@ -754,20 +793,10 @@ object Conv2D2 extends TensorflowToBigDL{
         (0, 0)
       }
 
-    val conv = Node(IRElement(" ", "SpatialConvolution",
-      Map("nInputPlane" -> nInputPlane,
-        "nOutputPlane" -> nOuputPlane,
-        "kernelW" -> kernelW,
-        "kernelH" -> kernelH,
-        "strideW" -> strideW,
-        "strideH" -> strideH,
-        "padW" -> pW,
-        "padH" -> pH,
-        "initWeight" -> weights,
-        "initBias" -> bias,
-        "initGradWeight" -> gradWeights,
-        "initGradBias" -> gradBias,
-         "data_format" -> "NCHW")))
+    val conv = Node(IRElement(" ", IRSpatialConv[T]("NCHW",
+                    nInputPlane, nOuputPlane, Seq(kernelW, kernelW), Seq(strideW, strideH),
+                    padding, nGroup = 1, weights, bias, gradWeights, gradBias)))
+
     Array(conv, conv)
   }
 }
@@ -815,8 +844,8 @@ object DropoutTF extends TensorflowToBigDL{
     val keepProp = tfGraph.source.prevNodes(0).prevNodes(1).element
       .getAttrMap.get("value").getTensor.getFloatVal(0)
 
-    val select = Node(IRElement(" ", "SelectTable", Map("dimension" -> 1)))
-    val drop = Node(IRElement(" ", "Dropout", Map("initP" -> keepProp)))
+    val select = Node(IRElement(" ", IRSelectTable(1)))
+    val drop = Node(IRElement(" ", IRDropout(keepProp)))
 
     select -> drop
     Array(select, drop)
@@ -904,14 +933,9 @@ object BatchNormV2NCHWTF extends TensorflowToBigDL{
     val (weights, gradWeights) = getOrSetTensor[T](weightNode, context, byteOrder)
     val (bias, gradBias) = getOrSetTensor[T](biasNode, context, byteOrder)
 
-    val select = Node(IRElement(" ", "SelectTable", Map("dimension" -> 1)))
-    val bn = Node(IRElement(" ", "SpatialBatchNormalization",
-      Map("nOutput" -> weights.size(1),
-        "initWeight" -> weights,
-        "initBias" -> bias,
-        "initGradWeight" -> gradWeights,
-        "initGradBias" -> gradBias,
-        "data_format" -> "NCHW")))
+    val select = Node(IRElement(" ", IRSelectTable(1)))
+    val bn = Node(IRElement(" ", IRSpatialBatchNorm[T](
+      weights.size(1), weights, bias, gradWeights, gradBias, data_format = "NCHW")))
 
     select -> bn
     Array(select, bn)
@@ -985,6 +1009,8 @@ object BatchNormV2NHWCTF extends TensorflowToBigDL{
     layer.asInstanceOf[AbstractModule[Activity, Activity, T]]
   }
 
+
+/*
   override def element[T: ClassTag](
      tfGraph: DirectedGraph[NodeDef],
      context: Context[T],
@@ -1014,6 +1040,7 @@ object BatchNormV2NHWCTF extends TensorflowToBigDL{
 
     Array(select, contiguous2)
   }
+  */
 }
 
 object BatchNormTF extends TensorflowToBigDL{
@@ -1098,14 +1125,9 @@ object BatchNormTF extends TensorflowToBigDL{
     val (weights, gradWeights) = getOrSetTensor[T](weightNode, context, byteOrder)
     val (bias, gradBias) = getOrSetTensor[T](weightNode, context, byteOrder)
 
-    val select = Node(IRElement(" ", "SelectTable", Map("dimension" -> 1)))
-    val bn = Node(IRElement(" ", "SpatialBatchNormalization",
-      Map("nOutput" -> nOutput,
-      "initWeight" -> weights,
-      "initBias" -> bias,
-      "initGradWeight" -> gradWeights,
-      "initGradBias" -> gradBias,
-      "data_format" -> "NCHW")))
+    val select = Node(IRElement(" ", IRSelectTable(1)))
+    val bn = Node(IRElement(" ", IRSpatialBatchNorm[T](
+      nOutput, weights, bias, gradWeights, gradBias, data_format = "NCHW")))
 
     select -> bn
     Array(select, bn)

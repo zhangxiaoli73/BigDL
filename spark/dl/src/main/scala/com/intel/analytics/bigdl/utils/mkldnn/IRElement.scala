@@ -17,69 +17,70 @@
 package com.intel.analytics.bigdl.utils.mkldnn
 
 import com.intel.analytics.bigdl.nn.abstractnn.DataFormat
-import com.intel.analytics.bigdl.serialization.Bigdl.AttrValue
-import com.intel.analytics.bigdl.utils.{T, Table}
-import org.apache.spark.sql.execution.streaming
-import org.apache.spark.sql.execution.streaming.state
+import com.intel.analytics.bigdl.optim.Regularizer
+import com.intel.analytics.bigdl.tensor.Tensor
 import org.tensorflow.framework.NodeDef
 
-sealed class IROperate
+import scala.reflect.ClassTag
 
-object IROperate {
-
-  case object SpatialMaxPooling extends IROperate {
-    var data_format : String = ""
-    var strides : Seq[Int] = _
-    var ksize : Seq[Int] = _
-  }
-
-  case object SpatialAvePooling extends IROperate {
-    var data_format : String = ""
-    var strides : Seq[Int] = _
-    var ksize : Seq[Int] = _
-    var countIncludePad : Boolean = true
-  }
-
-  case object SpatialConv extends IROperate {
-
-  }
-
-  case object SpatialBatchNorm extends IROperate {
-
-  }
-
-  case object Identity extends IROperate {
-
-  }
-
-  case object DropOut extends IROperate {
-
-  }
-
-  case object ReLu extends IROperate {
-
-  }
-
-  case object Linear extends IROperate
-
-  case object Squeeze extends IROperate
-
-  case object LRN extends IROperate {
-    var size: Int = 5
-    var alpha: Double = 1.0
-    var beta: Double = 0.75
-    var k: Double = 1.0
-    var format: DataFormat = DataFormat.NCHW
-  }
-
-  case object Input extends IROperate
-
-  case object Output extends IROperate
+sealed class IROperate {
+  def name: String = this.getClass.getSimpleName
 }
 
+case class IRSpatialMaxPooling(data_format: String, strides: Seq[Int],
+                               ksize: Seq[Int], paddingType : String) extends IROperate
+
+case class IRSpatialAvePooling(data_format: String, strides: Seq[Int],
+                               ksize: Seq[Int],  paddingType : String,
+                               countIncludePad: Boolean) extends IROperate
+
+case class IRSpatialConv[T: ClassTag](data_format : String, nInputPlane: Int,
+            nOutputPlane: Int, ksize : Seq[Int], strides : Seq[Int], paddingType : String,
+            nGroup: Int, weights: Tensor[T] = null, bias: Tensor[T] = null,
+            gradWeights: Tensor[T] = null, gradBias: Tensor[T] = null,
+            propagateBack: Boolean = true, withBias: Boolean = true) extends IROperate
+
+case class IRSpatialBatchNorm[T: ClassTag](nOutput: Int, weights: Tensor[T],
+                                           bias: Tensor[T], initGradWeight: Tensor[T],
+                                           initGradBias: Tensor[T], data_format: String) extends IROperate
+
+case class IRIdentity() extends IROperate
+
+case class IRDropout(initP: Double = 0.5, inplace: Boolean = false) extends IROperate
+
+case class IRReLu() extends IROperate
+
+case class IRLinear[T: ClassTag](inputSize: Int,
+                          outputSize: Int,
+                          withBias: Boolean = true,
+                          wRegularizer: Regularizer[T] = null,
+                          bRegularizer: Regularizer[T] = null,
+                          initWeight: Tensor[T] = null,
+                          initBias: Tensor[T] = null,
+                          initGradWeight: Tensor[T] = null,
+                          initGradBias: Tensor[T] = null) extends IROperate
+
+case class IRSqueeze(dims: Array[Int], batchMode: Boolean) extends IROperate
+
+case class IRLRN(size: Int = 5,
+                alpha: Double = 1.0,
+                beta: Double = 0.75,
+                k: Double = 1.0,
+                data_format: String = "NCHW") extends IROperate
+
+case class IRInput(var data_format: String, size: Array[Int]) extends IROperate
+
+case class IROutput() extends IROperate
+
+case class IRSelectTable(dimension: Int) extends IROperate
+
+
 private[bigdl] class IRElement(
-  private val name: String,
-  private val op_type: IROperate) {
+  private var name: String,
+  private var op_type: IROperate,
+  private var formats: String = "",
+  var inputShape: Array[Int] = null,
+  var outputShape: Array[Int] = null) {
 
   private var inputs : Seq[String] = _
 
@@ -88,26 +89,9 @@ private[bigdl] class IRElement(
     this.name
   }
 
-  final def getOp() : OperateType = {
+  final def getOp() : IROperate = {
     this.op_type
   }
-
-  final def getAttrMap() : Map[String, Any] = {
-    attr_map
-  }
-
-//  final def setAttr[T](key: String, value: Any): Unit = {
-//    if (attrMap.contains(key)) {
-//    // todo: add warning
-//    } else {
-//      attrMap(key) = value
-//    }
-//  }
-
-  final def getAttr[T](key: String) : Option[T] = {
-    attr_map.get(key).map(_.asInstanceOf[T])
-  }
-
   // option methos
   final def setinput(in: Seq[String]) : Unit = {
     inputs = in
@@ -117,6 +101,13 @@ private[bigdl] class IRElement(
     inputs
   }
 
+  final def getformats() : String = {
+    formats
+  }
+
+  final def setFormats(format: String) : Unit = {
+    formats = format
+  }
 }
 
 private[bigdl] class TFElement(
@@ -133,10 +124,10 @@ private[bigdl] class TFElement(
 }
 
 object IRElement {
-  def apply(name: String, op_type: IROperate, attr_map: Map[String, Any]): IRElement =
+  def apply(name: String, op_type: IROperate): IRElement =
     new IRElement(name, op_type)
 
-  def apply(name: String, op_type: IROperate, attr_map: Map[String, Any], tf_layer: NodeDef)
+  def apply(name: String, op_type: IROperate, tf_layer: NodeDef)
   : IRElement =
     new TFElement(name, op_type, tf_layer)
 }

@@ -74,6 +74,10 @@ class SpatialConvolution(
   private var _relu = false
   private var _sum = false
 
+
+  private var padding1 = Array(padH, padW)
+  private var padding2 = Array(padH, padW)
+
   def relu: Boolean = _relu
   def setReLU(value: Boolean = true): this.type = {
     _relu = value
@@ -154,8 +158,18 @@ class SpatialConvolution(
           padH, padW, ceilMode = false)
       }
 
+    println("dnn size")
+    sizes.foreach(println(_))
+
+    val padTop = sizes(0)
+    val padBottom = sizes(1)
+    val padLeft = sizes(2)
+    val padRight = sizes(3)
     val outputHeight = sizes(4)
     val outputWidth = sizes(5)
+
+     padding1 = Array(padTop, padBottom)
+     padding2 = Array(padLeft, padRight)
 
     val inputShape = inputs(0).shape
     val outputShape = Array(inputs(0).shape(0), nOutputPlane, outputHeight, outputWidth)
@@ -171,7 +185,8 @@ class SpatialConvolution(
       wei.getMemoryDescription(),
       bis.getMemoryDescription(),
       dst.getMemoryDescription(),
-      Array(strideW, strideH), Array(padH, padW), Array(padH, padW), // TODO check the meaning
+      // Array(strideW, strideH), Array(padH, padW), Array(padH, padW), // TODO check the meaning
+      Array(strideW, strideH), padding1, padding2,
       MklDnn.PaddingKind.mkldnnPaddingZero)
 
     forwardPrimDesc = if (relu || sum) {
@@ -272,7 +287,7 @@ class SpatialConvolution(
       AlgKind.ConvolutionDirect,
       src.getMemoryDescription(),
       wei.getMemoryDescription(), // TODO check correctness of strides and padding
-      dst.getMemoryDescription(), Array(strideW, strideH), Array(padH, padW), Array(padH, padW),
+      dst.getMemoryDescription(), Array(strideW, strideH), padding1, padding2,
       MklDnn.PaddingKind.mkldnnPaddingZero)
     val backwardPrimDesc = MklDnn.PrimitiveDescCreate(desc, runtime.engine, forwardPrimDesc)
 
@@ -337,7 +352,7 @@ class SpatialConvolution(
       src.getMemoryDescription(),
       wei.getMemoryDescription(),
       bis.getMemoryDescription(),
-      grad(0).getMemoryDescription(), Array(strideW, strideH), Array(padH, padW), Array(padH, padW),
+      grad(0).getMemoryDescription(), Array(strideW, strideH), padding1, padding2,
       MklDnn.PaddingKind.mkldnnPaddingZero)
     val gradWeightPrimDesc = MklDnn.PrimitiveDescCreate(desc, runtime.engine, forwardPrimDesc)
 
