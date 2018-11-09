@@ -148,6 +148,10 @@ class SpatialConvolution(
   override private[mkldnn] def initFwdPrimitives(inputs: Array[MemoryData], phase: Phase) = {
     reorderManager.setRuntime(runtime)
 
+    if (inputs.length == 0) {
+      val tmp = 0
+    }
+    println("**** " + this.getName() + inputs(0).shape.length)
     val inputHeight = inputs(0).shape(2) // TODO only supports 4-D and nchw
     val inputWidth = inputs(0).shape(3)
 

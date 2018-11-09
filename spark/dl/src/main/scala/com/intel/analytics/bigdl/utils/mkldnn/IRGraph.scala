@@ -104,7 +104,7 @@ class IRGraph[T: ClassTag](
   }
 
   def build(): Unit = {
-    new IRConverter[T](this).toGraph()
+    graph = new IRConverter[T](this).toGraph()
   }
 }
 

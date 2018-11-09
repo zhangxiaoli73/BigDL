@@ -106,13 +106,13 @@ object Load {
 //    val input = Seq("input_node")
 //    val output = Seq("vgg_16/fc8/squeezed")
 
-    val p = "/home/zhangli/workspace/vgg/lenet.pb"
+    val p = "/home/zhangli/workspace/vgg/model.pb"
     val input = Seq("input_node")
-    val output = Seq("LeNet/pool2/MaxPool")
+    val output = Seq("vgg_16/fc8/squeezed")
 
     println("done")
 
-    val in = Tensor[Float](1, 3, 32, 32).rand() // NCHW
+    val in = Tensor[Float](1, 3, 224, 224).rand() // NCHW
     val in2 = in // NCHW
     val in1 = Tensor(in.size()).copy(in).transpose(2, 4).transpose(2, 3).contiguous() // NHWC
 
@@ -120,9 +120,20 @@ object Load {
     model.getParameters()._1.fill(0.001f)
     model.getParameters()._2.fill(0.1f)
 
+    val modelDef = TensorflowLoader.loadToIR(p, input, output)
+    modelDef.build()
+    val m2 = modelDef.graph
+
+
     val m = model.asInstanceOf[Graph[Float]].modules
 
     val out = model.forward(in1).toTensor[Float] // NHWC
+
+    // compie
+    modelDef.graph.asInstanceOf[DnnGraph].compile(Phase.InferencePhase,
+      Array(HeapData(in2.size(), Memory.Format.nchw)))
+
+    val out_d = modelDef.forward(in2)
 
     val modelNHWC = nonDnnNHWC()
     val modelNCHW = nonDnnNCHW()
@@ -217,13 +228,13 @@ object Load {
     val outDnn = dnnModel.forward(in1).toTensor[Float]
     val gradOutDnn = dnnModel.backward(in1, out).toTensor[Float]
 
-    val gradInputNHWC = modelNHWC.backward(in1, out).toTensor[Float]
+    // val gradInputNHWC = modelNHWC.backward(in1, out).toTensor[Float]
 
-    val outDnn_NCHW = Tools.toNCHW(outDnn, HeapData(Array(1, 8, 8, 64), Memory.Format.nhwc))
+    // val outDnn_NCHW = Tools.toNCHW(outDnn, HeapData(Array(1, 8, 8, 64), Memory.Format.nhwc))
 
-    val modelDef = TensorflowLoader.loadToIR(p, input, output)
-    modelDef.build()
-    val m2 = modelDef.graph
+//    val modelDef = TensorflowLoader.loadToIR(p, input, output)
+//    modelDef.build()
+//    val m2 = modelDef.graph
 
     val p1 = model.getParametersTable()
     val p2 = m2.getParametersTable()

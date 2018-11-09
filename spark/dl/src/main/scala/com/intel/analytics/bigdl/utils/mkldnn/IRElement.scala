@@ -113,8 +113,11 @@ private[bigdl] class IRElement(
 private[bigdl] class TFElement(
   private val name: String,
   private val op_type: IROperate,
-  private val tf_layer: NodeDef)
-  extends IRElement(name, op_type) {
+  private val tf_layer: NodeDef,
+  private var formats: String = "",
+  var inputShape1: Array[Int] = null,
+  var outputShape1: Array[Int] = null)
+  extends IRElement(name, op_type, formats, inputShape1, outputShape1) {
 
   private var layer : NodeDef = tf_layer
 
@@ -124,10 +127,12 @@ private[bigdl] class TFElement(
 }
 
 object IRElement {
-  def apply(name: String, op_type: IROperate): IRElement =
-    new IRElement(name, op_type)
+  def apply(name: String, op_type: IROperate, formats: String = "",
+            inputShape: Array[Int] = null, outputShape: Array[Int] = null): IRElement =
+    new IRElement(name, op_type, formats, inputShape, outputShape)
 
-  def apply(name: String, op_type: IROperate, tf_layer: NodeDef)
-  : IRElement =
-    new TFElement(name, op_type, tf_layer)
+//  def apply(name: String, op_type: IROperate, tf_layer: NodeDef, formats: String = "",
+//            inputShape: Array[Int] = null, outputShape: Array[Int] = null)
+//  : IRElement =
+//    new TFElement(name, op_type, tf_layer, formats, inputShape, outputShape)
 }

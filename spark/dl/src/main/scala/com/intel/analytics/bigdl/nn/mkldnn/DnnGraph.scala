@@ -50,14 +50,21 @@ class DnnGraph(
 
   override def updateOutput(input: Activity): Activity = {
     // compile dnn graph according to model status
-    if (!compiled) compile()
+    // if (!compiled) compile()
 
     var i = 0
     while(i < forwardExecution.length) {
       val node = forwardExecution(i)
       val nodeInput = findDnnInput(node, input)
       inputCache(i) = nodeInput
-      node.element.forward(nodeInput)
+      try {
+        node.element.forward(nodeInput)
+      } catch {
+        case e: Exception =>
+          val tmp = 0
+          throw e
+      }
+      // node.element.forward(nodeInput)
       i += 1
     }
     output = dummyOutput.element.output
@@ -272,22 +279,24 @@ class DnnGraph(
   }
 
   private def findInputFormats(node: ModuleNode[Float], inputs: Array[MemoryData])
-  : Array[MemoryData] = {
+    : Array[MemoryData] = {
     if (node.prevNodes.isEmpty) {
       inputs
     } else {
       val prevFormats = node.prevNodesAndEdges
         .filterNot(n => n._1.element.isInstanceOf[ControlDependency[Float]])
         .map(n => {
-          // output is tensor and fromIndex number is 1
-          // todo : handle none
-          if ((n._1.element.asInstanceOf[MklDnnModule].outputFormats().length == 1
-            && n._2.fromIndex.getOrElse(1) == 1) || n._2.fromIndex == None) {
-            n._1.element.asInstanceOf[MklDnnModule].outputFormats()
-          } else {
-            val index = n._2.fromIndex.get
-            val f = n._1.element.asInstanceOf[MklDnnModule].gradInputFormats()
-            Array(f(index))
+          val outputFormats = n._1.element.asInstanceOf[MklDnnModule].outputFormats()
+          // if outputFormats length is 1, output is a tensor
+          n._2.fromIndex match {
+            case Some(i) =>
+              if (n._1.element.output == null || (i == 1 && outputFormats.length == 1)) {
+                outputFormats
+              } else {
+                val index = n._2.fromIndex.get
+                Array(outputFormats(index))
+              }
+            case None => outputFormats
           }
         }).toArray
       prevFormats.flatMap(n => n.toSeq)
@@ -295,7 +304,7 @@ class DnnGraph(
   }
 
   private def findGradOutputFormats(node: ModuleNode[Float], inputs: Array[MemoryData])
-  : Array[MemoryData] = {
+    : Array[MemoryData] = {
     if (node.prevNodes.isEmpty) {
       inputs
     } else {
@@ -323,13 +332,23 @@ class DnnGraph(
     var firstRealInputFormats: Array[MemoryData] = null
     for (i <- 0 until forwardExecution.length) {
       val m = forwardExecution(i)
-      lastOutputFormats = findInputFormats(m, inputs)
-      val realInputAndOutputFormats =
-        m.element.asInstanceOf[MklDnnModule].initFwdPrimitives(lastOutputFormats, phase)
-      lastOutputFormats.zip(realInputAndOutputFormats._1).foreach {
-        case (o, i) => reorderManager.register(o, i)
+      if (m.element.getName() == "conv_2") {
+        val tmp = 0
       }
-      if (i == 0) firstRealInputFormats = realInputAndOutputFormats._1
+      lastOutputFormats = findInputFormats(m, inputs)
+      try {
+        val realInputAndOutputFormats =
+          m.element.asInstanceOf[MklDnnModule].initFwdPrimitives(lastOutputFormats, phase)
+        lastOutputFormats.zip(realInputAndOutputFormats._1).foreach {
+          case (o, i) => reorderManager.register(o, i)
+        }
+        if (i == 0) firstRealInputFormats = realInputAndOutputFormats._1
+      } catch {
+        case e: Exception =>
+          println("wrong " + m.asInstanceOf[ModuleNode[Float]].element.getName())
+          val tmp = 0
+          throw e
+      }
     }
     (firstRealInputFormats, lastOutputFormats)
   }

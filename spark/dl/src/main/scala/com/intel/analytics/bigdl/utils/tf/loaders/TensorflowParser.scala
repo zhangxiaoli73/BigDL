@@ -42,7 +42,8 @@ class tfMaxPool extends TensorflowParser {
     val strides = getIntList(attributes, "strides")
     val ksize = getIntList(attributes, "ksize")
     val padding = getString(attributes, "padding")
-    new TFElement(node.getName, IRSpatialMaxPooling(data_format, strides, ksize, padding), node)
+    new TFElement(node.getName, IRSpatialMaxPooling(data_format, strides, ksize, padding), node,
+      formats = data_format)
   }
 }
 
@@ -55,7 +56,7 @@ class tfAvePool extends TensorflowParser {
     val ksize = getIntList(attributes, "ksize")
     val padding = getString(attributes, "padding")
     new TFElement(node.getName,
-      IRSpatialAvePooling(data_format, strides, ksize, padding, false), node)
+      IRSpatialAvePooling(data_format, strides, ksize, padding, false), node, formats = data_format)
   }
 }
 
@@ -70,7 +71,7 @@ class tfLRN extends TensorflowParser {
     val data_format = getString(attributes, "data_format")
 
     new TFElement(node.getName, IRLRN(size*2 + 1, k, alpha * (size * 2) + 1, beta, data_format),
-      node)
+      node, formats = data_format)
   }
 }
 

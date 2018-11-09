@@ -743,6 +743,9 @@ object TensorflowLoader{
           return None
         }
         else {
+          if (!res(0).equals(res(1))) {
+            val tmp = 0
+          }
           return Some(res, result, inputs)
         }
       }
