@@ -106,10 +106,20 @@ object Load {
 //    val input = Seq("input_node")
 //    val output = Seq("vgg_16/fc8/squeezed")
 
+    // for vgg16
     val p = "/home/zhangli/workspace/vgg/model.pb"
     val input = Seq("input_node")
     val output = Seq("vgg_16/fc8/squeezed")
 
+    // for vgg19
+//    val p = "/home/zhangli/workspace/vgg/vgg19.pb"
+//    val input = Seq("input_node")
+//    val output = Seq("vgg_19/fc8/squeezed")
+
+    // for alexnetv2
+//    val p = "/home/zhangli/workspace/vgg/alexnet_v2.pb"
+//    val input = Seq("input_node")
+//    val output = Seq("alexnet_v2/fc8/squeezed")
     println("done")
 
     val in = Tensor[Float](1, 3, 224, 224).rand() // NCHW
@@ -117,24 +127,50 @@ object Load {
     val in1 = Tensor(in.size()).copy(in).transpose(2, 4).transpose(2, 3).contiguous() // NHWC
 
     val model = TensorflowLoader.load(p, input, output, ByteOrder.LITTLE_ENDIAN)
-    model.getParameters()._1.fill(0.001f)
-    model.getParameters()._2.fill(0.1f)
+//    model.getParameters()._1.fill(0.00001f)
+//    model.getParameters()._2.fill(0.00001f)
+    val param_model = model.getParametersTable()
 
     val modelDef = TensorflowLoader.loadToIR(p, input, output)
     modelDef.build()
     val m2 = modelDef.graph
+//    m2.getParameters()._1.fill(0.00001f)
+//    m2.getParameters()._2.fill(0.00001f)
+    val param_dnn = m2.getParametersTable()
 
-
+    // compare parameters
+    require(param_dnn.length() == param_model.length())
+//    var i = 0
+//    val k1 = param_dnn.keySet.toArray
+//    val k2 = param_model.keySet.toArray
+//    while (i < param_dnn.length()) {
+//      val v1 = param_dnn.get[Table](k1(i)).get // NCHW
+//      val v2 = param_model.get[Table](k2(i)).get //NHWC
+//
+//      val w1 = v1.get[Tensor[Float]]("weight").get
+//      val w2 = v2.get[Tensor[Float]]("weight").get
+//
+//      val w1_NHWC = Tensor(w2.size)
+//        .copy(w1).transpose(2, 5).transpose(3, 4).transpose(2, 3).contiguous()
+//
+//
+//      val tmp = 0
+//      i += 1
+//    }
     val m = model.asInstanceOf[Graph[Float]].modules
 
     val out = model.forward(in1).toTensor[Float] // NHWC
 
-    // compie
+    // compile
     modelDef.graph.asInstanceOf[DnnGraph].compile(Phase.InferencePhase,
       Array(HeapData(in2.size(), Memory.Format.nchw)))
 
-    val out_d = modelDef.forward(in2)
+    val out_d = modelDef.forward(in2).toTensor[Float]
 
+    val out_222 = Tools.toNCHW(out_d, HeapData(Array(1, 1000, 1, 1), Memory.Format.nchw))
+
+    out_222.squeeze(3)
+    out_222.squeeze(3)
     val modelNHWC = nonDnnNHWC()
     val modelNCHW = nonDnnNCHW()
 

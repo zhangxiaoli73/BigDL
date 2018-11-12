@@ -54,9 +54,9 @@ class BigDL2DnnWrapperSpec extends BigDLSpecHelper {
 
     val outputShape = shapeToNCHW(inputShape)
 
-    model1.add(ReorderMemory(inputFormat = HeapData(inputShape, Memory.Format.nhwc),
-      outputFormat = HeapData(outputShape, Memory.Format.nchw),
-      gradInputFormat = null, gradOutputFomat = null))
+//    model1.add(ReorderMemory(inputFormat = HeapData(inputShape, Memory.Format.nhwc),
+//      outputFormat = HeapData(outputShape, Memory.Format.nchw),
+//      gradInputFormat = null, gradOutputFomat = null))
 
     // conv with NCHW
     val s = nn.SpatialConvolution[Float](3, 32, 5, 5, 1, 1).
@@ -68,14 +68,13 @@ class BigDL2DnnWrapperSpec extends BigDLSpecHelper {
 //    p.get[Tensor[Float]]("weight").get.copy(initWeight)
 //    p.get[Tensor[Float]]("bias").get.copy(initBias)
 
-
     model1.add(BigDL2DnnWrapper(s, "").setName("wrapper"))
 
-//    model1.add(ReorderMemory(
-//      inputFormat = null,
-//      outputFormat = null,
-//      gradInputFormat = null,
-//      gradOutputFomat = HeapData(gradOutShape, Memory.Format.nhwc)).setName("test"))
+    model1.add(ReorderMemory(
+      inputFormat = HeapData(Array(4, 32, 3, 3), Memory.Format.nchw),
+      outputFormat = HeapData(Array(4, 3, 3, 32), Memory.Format.nhwc),
+      gradInputFormat = HeapData(Array(4, 32, 3, 3), Memory.Format.nchw),
+      gradOutputFomat = HeapData(gradOutShape, Memory.Format.nhwc)).setName("test"))
     model1
   }
 
@@ -119,7 +118,7 @@ class BigDL2DnnWrapperSpec extends BigDLSpecHelper {
     val wrapperOut = wrapperModel.forward(inNHWC)
     val out = model.forward(in) // size 4, 32, 3, 3
 
-    // wrapperOut.equals(out) should be(true)
+    wrapperOut.equals(out) should be(true)
 
     // for backward
     val wrapperGrad = wrapperModel.backward(inNHWC, gradOutputNHWC)

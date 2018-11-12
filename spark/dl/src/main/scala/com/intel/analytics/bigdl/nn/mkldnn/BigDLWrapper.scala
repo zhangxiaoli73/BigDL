@@ -32,7 +32,14 @@ class BigDL2DnnWrapper(val module: AbstractModule[Tensor[_], Tensor[_], Float], 
 
   override private[mkldnn] def initFwdPrimitives(inputs: Array[MemoryData], phase: Phase) = {
     // todo: only support tensor model and implement computeOutputShape
-    val inputShape = inputs(0).shape
+    val inputShape = if (inputs(0).layout == Memory.Format.nchw ||
+    inputs(0).layout == Memory.Format.nChw8c || inputs(0).layout == Memory.Format.nChw16c) {
+      inputs(0).shape
+    } else {
+      val s = inputs(0).shape
+      // from nhwc -> nchw
+      Array(s(0), s(3), s(1), s(2))
+    }
     val outputShape = module.computeOutputShape(Shape(inputs(0).shape)).toSingle().toArray
 
     require(inputShape.length == 2 || inputShape.length == 4,

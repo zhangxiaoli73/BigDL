@@ -409,7 +409,7 @@ class TensorflowLoaderSpec extends TensorflowSpecHelper{
   }
 
   "Tensorflow lenet" should "be load correctly" in {
-    val output = Seq("LeNet/pool2/MaxPool:0")
+    val output = Seq("Predictions/Reshape_1:0")
     val comparePairs = testModel("lenet", output, backward = true)
 
     for (i <- output.indices) {
@@ -445,7 +445,7 @@ class TensorflowLoaderSpec extends TensorflowSpecHelper{
   }
 
   "TensorFlow vgg_a" should "be load correctly" in {
-    val output = Seq("vgg_a/fc8/squeezed:0")
+    val output = Seq("vgg_a//squeezed:0")
     val comparePairs = testModel("vgga", output, backward = true)
     for (i <- output.indices) {
       val (tf, bigdl) = comparePairs(i)

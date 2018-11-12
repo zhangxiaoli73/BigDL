@@ -16,7 +16,7 @@
 package com.intel.analytics.bigdl.nn.mkldnn
 
 import com.intel.analytics.bigdl.mkl.{DataType, Memory, MklDnn}
-import com.intel.analytics.bigdl.nn.abstractnn.TensorModule
+import com.intel.analytics.bigdl.nn.abstractnn.{Activity, TensorModule}
 import com.intel.analytics.bigdl.tensor.{DnnTensor, Tensor}
 
 class ReorderMemory(inputFormat: MemoryData, outputFormat: MemoryData,
@@ -33,26 +33,37 @@ class ReorderMemory(inputFormat: MemoryData, outputFormat: MemoryData,
   override private[bigdl] def initFwdPrimitives(inputs: Array[MemoryData], phase: Phase) = {
     _inputFormats = if (inputFormat == null) inputs else Array(inputFormat)
 
-    if (_outputFormats != null) {
+    if (outputFormat != null) {
       _inputFormats = Array(HeapData(_outputFormats(0).shape, _inputFormats(0).layout))
+    } else {
+      _outputFormats = _inputFormats
     }
     require(_inputFormats.length == 1, "Only accept one tensor as input")
 
-    if (this.getName() == "testRE") {
+    if (this.getName() == "test") {
       val tmp = 0
     }
-    require(_inputFormats(0).shape.product == outputFormat.shape.product,
+    require(_inputFormats(0).shape.product == _outputFormats(0).shape.product,
       "input output memory not match")
     val fwdReorderPrimDesc = MklDnn.ReorderPrimitiveDescCreate(
       _inputFormats(0).getPrimitiveDescription(runtime),
-      outputFormat.getPrimitiveDescription(runtime))
+      _outputFormats(0).getPrimitiveDescription(runtime))
     val fwdReorderPrim = MklDnn.PrimitiveCreate2(fwdReorderPrimDesc,
       Array(_inputFormats(0).getPrimitive(runtime)), Array(0), 1,
-      Array(outputFormat.getPrimitive(runtime)), 1)
+      Array(_outputFormats(0).getPrimitive(runtime)), 1)
 
     updateOutputPrimitives = Array(fwdReorderPrim)
-    output = initTensor(outputFormat)
+    output = initTensor(_outputFormats(0))
     (_inputFormats, _outputFormats)
+  }
+
+  override def updateOutput(input: Activity): Activity = {
+    if (_inputFormats(0).layout == _outputFormats(0).layout) {
+      output = input
+    } else {
+      output = super.updateOutput(input)
+    }
+    output
   }
 
   override private[bigdl] def initBwdPrimitives(grads: Array[MemoryData], phase: Phase) = {

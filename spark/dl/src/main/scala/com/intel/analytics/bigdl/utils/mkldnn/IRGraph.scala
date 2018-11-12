@@ -86,14 +86,16 @@ class IRGraph[T: ClassTag](
     if (graph == null) {
       throw new UnsupportedOperationException("forward not supported, Please build graph first")
     }
-    graph.updateOutput(input)
+    output = graph.updateOutput(input)
+    output
   }
 
   override def updateGradInput(input: Activity, gradOutput: Activity): Activity = {
     if (graph == null) {
       throw new UnsupportedOperationException("backward not supported, Please build graph first")
     }
-    graph.updateGradInput(input, gradOutput)
+    gradInput = graph.updateGradInput(input, gradOutput)
+    gradInput
   }
 
   override def accGradParameters(input: Activity, gradOutput: Activity): Unit = {

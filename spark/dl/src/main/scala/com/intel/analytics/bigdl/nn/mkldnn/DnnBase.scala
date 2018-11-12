@@ -176,6 +176,9 @@ trait MklDnnLayer extends AbstractModule[Activity, Activity, Float] with MklDnnM
   }
 
   override def updateGradInput(input: Activity, gradOutput: Activity): Activity = {
+    if (this.getName() == "test") {
+      val tmp = 0
+    }
     if (updateGradInputMemoryPrimitives == null) {
       updateGradInputMemoryPrimitives =
         gradOutputFormats().map(_.getPrimitive(runtime)) ++

@@ -23,7 +23,7 @@ import java.util.List
 import com.google.protobuf.GeneratedMessage
 import com.intel.analytics.bigdl._
 import com.intel.analytics.bigdl.nn.Graph._
-import com.intel.analytics.bigdl.nn.abstractnn.{AbstractModule, Activity, DataFormat}
+import com.intel.analytics.bigdl.nn.abstractnn.{AbstractModule, Activity, DataFormat, TensorModule}
 import com.intel.analytics.bigdl.nn.{Module => _, _}
 import com.intel.analytics.bigdl.nn.mkldnn._
 import com.intel.analytics.bigdl.tensor.Tensor
@@ -72,7 +72,14 @@ private[mkldnn] class IRLayer2Dnn {
 
   private def fromIdentity(node: IRElement) : Module[Float] = mkldnn.Identity[Float]()
 
-  private def fromSqueeze(node: IRElement) : Module[Float] = mkldnn.Identity[Float]()
+  private def fromSqueeze(node: IRElement) : Module[Float] = {
+    // mkldnn.Identity[Float]()
+    val t = node.getOp().asInstanceOf[IRSqueeze]
+    val s = new Squeeze[Float](t.dims, t.batchMode)
+//    BigDL2DnnWrapper(s.asInstanceOf[TensorModule[Float]], "")
+
+    BigDL2DnnWrapper(s.asInstanceOf[AbstractModule[Tensor[_], Tensor[_], Float]], "")
+  }
 
   private def fromPlaceholder(node: IRElement) : Module[Float] = {
     // todo: not right

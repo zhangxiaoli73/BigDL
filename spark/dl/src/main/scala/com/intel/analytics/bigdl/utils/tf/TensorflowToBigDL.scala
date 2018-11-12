@@ -296,6 +296,7 @@ object FullConnectionTF extends TensorflowToBigDL{
     val (weight, gradWeight) = getOrSetTensor(weightNode, context, byteOrder, Some(Seq((1, 2))))
 
 
+    // todo : linear formats
     val linear = Node(IRElement(" ", IRLinear[T](weight.size(2),
               weight.size(1), initWeight = weight, initGradWeight = gradWeight,
               initBias = bias, initGradBias = gradBias)))
@@ -337,6 +338,7 @@ object FullConnectionWithoutBiasTF extends TensorflowToBigDL{
     val weightNode = tfGraph.source.prevNodes(1).prevNodes.head.element
     val (weight, gradWeight) = getOrSetTensor(weightNode, context, byteOrder, Some(Seq((1, 2))))
 
+    // todo:??? formats
     val linear = Node(IRElement(" ", IRLinear(weight.size(2),
       weight.size(1), false, initWeight = weight, initGradWeight = gradWeight)))
 
@@ -530,7 +532,8 @@ object Conv2DWithoutBias extends TensorflowToBigDL{
 
         Node(IRElement(" ", IRSpatialConv[T]("NHWC",
           nInputPlane, nOuputPlane, Seq(kernelW, kernelW), Seq(strideW, strideH),
-          padding, nGroup = 1, weights = weights, gradWeights = gradWeights, withBias = false)))
+          padding, nGroup = 1, weights = weights, gradWeights = gradWeights, withBias = false),
+          formats = "NHWC"))
 
       case "NCHW" =>
         require(strideList(1) == 1, s"not support strides on depth")
@@ -547,7 +550,7 @@ object Conv2DWithoutBias extends TensorflowToBigDL{
         Node(IRElement(" ", IRSpatialConv[T]("NHWC",
           nInputPlane, nOuputPlane, ksize = Seq(kernelW, kernelH), Seq(strideW, strideH),
           paddingType = padding, nGroup = 1,
-          weights = weights, gradWeights = gradWeights, withBias = false)))
+          weights = weights, gradWeights = gradWeights, withBias = false), formats = "NCHW"))
 
       case _ =>
         throw new IllegalArgumentException(s"not supported data format: $format")
@@ -795,7 +798,7 @@ object Conv2D2 extends TensorflowToBigDL{
 
     val conv = Node(IRElement(" ", IRSpatialConv[T]("NCHW",
                     nInputPlane, nOuputPlane, Seq(kernelW, kernelW), Seq(strideW, strideH),
-                    padding, nGroup = 1, weights, bias, gradWeights, gradBias)))
+                    padding, nGroup = 1, weights, bias, gradWeights, gradBias), formats = "NCHW"))
 
     Array(conv, conv)
   }
@@ -934,6 +937,7 @@ object BatchNormV2NCHWTF extends TensorflowToBigDL{
     val (bias, gradBias) = getOrSetTensor[T](biasNode, context, byteOrder)
 
     val select = Node(IRElement(" ", IRSelectTable(1)))
+    // todo : my mix nchw & mhwc
     val bn = Node(IRElement(" ", IRSpatialBatchNorm[T](
       weights.size(1), weights, bias, gradWeights, gradBias, data_format = "NCHW")))
 

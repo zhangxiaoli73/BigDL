@@ -49,22 +49,12 @@ class DnnGraph(
   buildBackwardGraph()
 
   override def updateOutput(input: Activity): Activity = {
-    // compile dnn graph according to model status
-    // if (!compiled) compile()
-
     var i = 0
     while(i < forwardExecution.length) {
       val node = forwardExecution(i)
       val nodeInput = findDnnInput(node, input)
       inputCache(i) = nodeInput
-      try {
-        node.element.forward(nodeInput)
-      } catch {
-        case e: Exception =>
-          val tmp = 0
-          throw e
-      }
-      // node.element.forward(nodeInput)
+      node.element.forward(nodeInput)
       i += 1
     }
     output = dummyOutput.element.output
