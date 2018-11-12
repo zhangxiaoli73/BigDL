@@ -33,16 +33,19 @@ class ReorderMemory(inputFormat: MemoryData, outputFormat: MemoryData,
   override private[bigdl] def initFwdPrimitives(inputs: Array[MemoryData], phase: Phase) = {
     _inputFormats = if (inputFormat == null) inputs else Array(inputFormat)
 
-    if (outputFormat != null) {
-      _inputFormats = Array(HeapData(_outputFormats(0).shape, _inputFormats(0).layout))
-    } else {
-      _outputFormats = _inputFormats
-    }
     require(_inputFormats.length == 1, "Only accept one tensor as input")
 
-    if (this.getName() == "test") {
-      val tmp = 0
+    if (outputFormat == null) _outputFormats = _inputFormats
+
+    // todo: if format of input MemoryData is nhwc, its shape should be output shape
+    if (_inputFormats(0).layout == Memory.Format.nhwc && outputFormat != null) {
+      _inputFormats = Array(HeapData(_outputFormats(0).shape, _inputFormats(0).layout))
     }
+    // todo: if format of output MemoryData is nhwc, its shape should be input shape
+   if (outputFormat != null && _outputFormats(0).layout == Memory.Format.nhwc) {
+      _outputFormats = Array(HeapData(_inputFormats(0).shape, _outputFormats(0).layout))
+    }
+
     require(_inputFormats(0).shape.product == _outputFormats(0).shape.product,
       "input output memory not match")
     val fwdReorderPrimDesc = MklDnn.ReorderPrimitiveDescCreate(
@@ -75,6 +78,20 @@ class ReorderMemory(inputFormat: MemoryData, outputFormat: MemoryData,
 
     _gradOutputFormats = if (gradOutputFormat == null) grads else Array(gradOutputFormat)
     _gradOutputFormatsForWeight = if (gradOutputFormat == null) grads else Array(gradOutputFormat)
+
+//    // todo: if format of gradOutput MemoryData is nhwc, its shape should be gradInput shape
+//    if (_inputFormats(0).layout == Memory.Format.nhwc && outputFormat != null) {
+//      _inputFormats = Array(HeapData(_outputFormats(0).shape, _inputFormats(0).layout))
+//    }
+//    // todo: if format of gradOutputWeight MemoryData is nhwc, its shape should be gradInput shape
+//    if (outputFormat != null && _outputFormats(0).layout == Memory.Format.nhwc) {
+//      _outputFormats = Array(HeapData(_inputFormats(0).shape, _outputFormats(0).layout))
+//    }
+//
+//    // todo: if format of gradInput MemoryData is nhwc, its shape should be gradOutput shape
+//    if (outputFormat != null && _outputFormats(0).layout == Memory.Format.nhwc) {
+//      _outputFormats = Array(HeapData(_inputFormats(0).shape, _outputFormats(0).layout))
+//    }
 
     if (_gradInputFormats != null) {
       _gradOutputFormats = Array(HeapData(_gradInputFormats(0).shape, _gradOutputFormats(0).layout))

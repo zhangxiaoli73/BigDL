@@ -118,9 +118,15 @@ class BigDL2DnnWrapperSpec extends BigDLSpecHelper {
     wrapperOut.equals(out) should be(true)
 
     // for backward
-    val wrapperGrad = wrapperModel.backward(inNHWC, gradOutputNHWC)
     val grad = model.backward(in, gradOutput)
+    val t1 = grad.clone()
+    val t2 = grad.clone()
+
+
+    val wrapperGrad = wrapperModel.backward(inNHWC, gradOutputNHWC)
     val gradNHWC = grad.transpose(2, 3).transpose(3, 4).contiguous().clone()
+
+    gradNHWC should be(wrapperGrad)
 
     println("done")
   }

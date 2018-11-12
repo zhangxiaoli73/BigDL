@@ -111,28 +111,32 @@ class Sequential extends MklDnnContainer {
     output
   }
 
+  def printlnMemory(input: MemoryData, name : String) : Unit = {
+    println(name + " " + input.shape(0) + " " +
+      input.shape(1) + " " +
+      input.shape(2) + " " +
+      input.shape(3) + " " +
+      input.layout)
+  }
   override def updateGradInput(input: Activity, gradOutput: Activity): Activity = {
     var i = modules.length - 1
-    var lastGradInput = gradOutput
+    var lastGradInput2 = gradOutput
     while (i > 0) {
       val curInput = reorderManager.infer(
         mklDnnModules(i - 1).outputFormats(),
         mklDnnModules(i).inputFormats(),
         modules(i - 1).output
       )
-      val grad = modules(i).updateGradInput(curInput, lastGradInput)
-      lastGradInput = reorderManager.infer(
+      val out = modules(i).updateGradInput(curInput, lastGradInput2)
+      lastGradInput2 = reorderManager.infer(
         mklDnnModules(i).gradInputFormats(),
         mklDnnModules(i - 1).gradOutputFormats(),
-        grad
+        out
       )
-      // test from NHWC -> nchw
-      val gradNCHW = gradOutput.toTensor[Float].transpose(2, 4).transpose(3, 4).contiguous().clone()
       i -= 1
     }
-    lastGradInput = modules(0).updateGradInput(input, lastGradInput)
 
-    this.gradInput = lastGradInput
+    this.gradInput = modules(0).updateGradInput(input, lastGradInput2)
     gradInput
   }
 

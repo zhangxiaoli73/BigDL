@@ -164,7 +164,7 @@ trait MklDnnLayer extends AbstractModule[Activity, Activity, Float] with MklDnnM
           i += 1
         }
       }
-      updateOutputTensors = buffer.toArray
+       updateOutputTensors = buffer.toArray
       cachedInput = input
     }
     MklDnnOps.streamSubmit(

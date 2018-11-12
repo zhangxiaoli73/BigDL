@@ -48,4 +48,42 @@ class ReorderMemorySpec extends BigDLSpecHelper {
     grad should be(input)
   }
 
+  "Reorder from nhwc to nchw" should "be correct" in {
+    val outputFormats = HeapData(Array(4, 3, 7, 7), Memory.Format.nchw)
+    val inputFormats = HeapData(Array(4, 7, 7, 3), Memory.Format.nhwc)
+
+    val layer = ReorderMemory(inputFormat = inputFormats, outputFormat = outputFormats,
+      gradInputFormat = null, gradOutputFomat = null)
+
+    layer.setRuntime(new MklDnnRuntime())
+    layer.initFwdPrimitives(Array(inputFormats), Phase.InferencePhase)
+
+
+    val input = Tensor[Float](4, 7, 7, 3).rand()
+    val output = layer.forward(input)
+    val outputNHWC = input.transpose(2, 4).transpose(3, 4).contiguous().clone()
+
+    outputNHWC should be(output)
+  }
+
+  "Reorder from nchw to nhwc" should "be correct" in {
+    val inputFormats = HeapData(Array(4, 3, 7, 7), Memory.Format.nchw)
+    val outputFormats = HeapData(Array(4, 7, 7, 3), Memory.Format.nhwc)
+
+    val layer = ReorderMemory(inputFormat = inputFormats, outputFormat = outputFormats,
+      gradInputFormat = null, gradOutputFomat = null)
+
+    layer.setRuntime(new MklDnnRuntime())
+    layer.initFwdPrimitives(Array(inputFormats), Phase.InferencePhase)
+
+    val input = Tensor[Float](4, 3, 7, 7).rand()
+    val output = layer.forward(input).toTensor[Float]
+
+    val outputNHWC = input.transpose(2, 3).transpose(3, 4).contiguous().clone()
+
+    output.resizeAs(outputNHWC)
+
+    outputNHWC should be(output)
+  }
+
 }
