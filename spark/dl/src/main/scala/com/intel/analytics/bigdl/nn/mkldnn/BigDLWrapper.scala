@@ -40,7 +40,7 @@ class BigDL2DnnWrapper(val module: AbstractModule[Tensor[_], Tensor[_], Float], 
       // from nhwc -> nchw
       Array(s(0), s(3), s(1), s(2))
     }
-    val outputShape = module.computeOutputShape(Shape(inputs(0).shape)).toSingle().toArray
+    val outputShape = module.computeOutputShape(Shape(inputShape)).toSingle().toArray
 
     require(inputShape.length == 2 || inputShape.length == 4,
       s"just support input shape dim is 2 or 4, but get ${inputShape.length}")

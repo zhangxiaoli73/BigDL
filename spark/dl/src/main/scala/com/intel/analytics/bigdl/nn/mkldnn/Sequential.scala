@@ -120,10 +120,11 @@ class Sequential extends MklDnnContainer {
         mklDnnModules(i).inputFormats(),
         modules(i - 1).output
       )
+      val grad = modules(i).updateGradInput(curInput, lastGradInput)
       lastGradInput = reorderManager.infer(
         mklDnnModules(i).gradInputFormats(),
         mklDnnModules(i - 1).gradOutputFormats(),
-        modules(i).updateGradInput(curInput, lastGradInput)
+        grad
       )
       // test from NHWC -> nchw
       val gradNCHW = gradOutput.toTensor[Float].transpose(2, 4).transpose(3, 4).contiguous().clone()

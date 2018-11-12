@@ -24,6 +24,8 @@ import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.utils.BigDLSpecHelper
 import com.intel.analytics.bigdl.utils.RandomGenerator._
 
+import scala.util.Random
+
 class BigDL2DnnWrapperSpec extends BigDLSpecHelper {
 
   // from nhwc -> nchw
@@ -52,12 +54,6 @@ class BigDL2DnnWrapperSpec extends BigDLSpecHelper {
 
     model1.add(mkldnn.Input(inputShape, Memory.Format.nhwc).setName("input"))
 
-    val outputShape = shapeToNCHW(inputShape)
-
-//    model1.add(ReorderMemory(inputFormat = HeapData(inputShape, Memory.Format.nhwc),
-//      outputFormat = HeapData(outputShape, Memory.Format.nchw),
-//      gradInputFormat = null, gradOutputFomat = null))
-
     // conv with NCHW
     val s = nn.SpatialConvolution[Float](3, 32, 5, 5, 1, 1).
       asInstanceOf[AbstractModule[Tensor[_], Tensor[_], Float]]
@@ -71,8 +67,8 @@ class BigDL2DnnWrapperSpec extends BigDLSpecHelper {
     model1.add(BigDL2DnnWrapper(s, "").setName("wrapper"))
 
     model1.add(ReorderMemory(
-      inputFormat = HeapData(Array(4, 32, 3, 3), Memory.Format.nchw),
-      outputFormat = HeapData(Array(4, 3, 3, 32), Memory.Format.nhwc),
+      inputFormat = null, // HeapData(Array(4, 32, 3, 3), Memory.Format.nchw),
+      outputFormat = null, // HeapData(Array(4, 3, 3, 32), Memory.Format.nhwc),
       gradInputFormat = HeapData(Array(4, 32, 3, 3), Memory.Format.nchw),
       gradOutputFomat = HeapData(gradOutShape, Memory.Format.nhwc)).setName("test"))
     model1
@@ -99,10 +95,11 @@ class BigDL2DnnWrapperSpec extends BigDLSpecHelper {
     val nOut = 32
     val kH = 5
     val kW = 5
-    val in = Tensor[Float](4, 3, 7, 7).rand()
+    RNG.setSeed(100)
+    val in = Tensor[Float](4, 3, 7, 7).apply1(_ => RNG.uniform(0.1, 1).toFloat)
     val inNHWC = in.transpose(2, 3).transpose(3, 4).contiguous().clone()
 
-    val gradOutput = Tensor[Float](4, 32, 3, 3).rand()
+    val gradOutput = Tensor[Float](4, 32, 3, 3).apply1(_ => RNG.uniform(0.1, 1).toFloat)
     val gradOutputNHWC = gradOutput.transpose(2, 3).transpose(3, 4).contiguous().clone()
 
 
@@ -113,7 +110,7 @@ class BigDL2DnnWrapperSpec extends BigDLSpecHelper {
 
     // wrapper
     val wrapperModel = wrapConv(inNHWC.size(), gradOutputNHWC.size())
-    wrapperModel.compile(Phase.InferencePhase)
+    wrapperModel.compile(Phase.TrainingPhase)
 
     val wrapperOut = wrapperModel.forward(inNHWC)
     val out = model.forward(in) // size 4, 32, 3, 3
