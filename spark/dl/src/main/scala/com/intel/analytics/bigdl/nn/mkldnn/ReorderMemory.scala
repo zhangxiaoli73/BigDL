@@ -37,13 +37,22 @@ class ReorderMemory(inputFormat: MemoryData, outputFormat: MemoryData,
 
     if (outputFormat == null) _outputFormats = _inputFormats
 
-    // todo: if format of input MemoryData is nhwc, its shape should be output shape
-    if (_inputFormats(0).layout == Memory.Format.nhwc && outputFormat != null) {
-      _inputFormats = Array(HeapData(_outputFormats(0).shape, _inputFormats(0).layout))
-    }
-    // todo: if format of output MemoryData is nhwc, its shape should be input shape
-   if (outputFormat != null && _outputFormats(0).layout == Memory.Format.nhwc) {
-      _outputFormats = Array(HeapData(_inputFormats(0).shape, _outputFormats(0).layout))
+    val inputShape = _inputFormats(0).shape
+    val outputShape = _outputFormats(0).shape
+    val inputLayout = _inputFormats(0).layout
+    val outputLayout = _outputFormats(0).layout
+
+    if (inputLayout != outputLayout) {
+      if (inputLayout == Memory.Format.nhwc) {
+        // todo: if format of input MemoryData is nhwc, its shape should be output shape
+        _inputFormats = Array(HeapData(outputShape, inputLayout))
+        // _inputFormats(0).setShape(outputShape)
+
+      } else if (outputLayout == Memory.Format.nhwc) {
+        // todo: if format of output MemoryData is nhwc, its shape should be input shape
+//        _inputFormats(0).setShape(outputShape)
+       _outputFormats = Array(HeapData(inputShape, outputLayout))
+      }
     }
 
     require(_inputFormats(0).shape.product == _outputFormats(0).shape.product,
@@ -56,6 +65,8 @@ class ReorderMemory(inputFormat: MemoryData, outputFormat: MemoryData,
       Array(_outputFormats(0).getPrimitive(runtime)), 1)
 
     updateOutputPrimitives = Array(fwdReorderPrim)
+
+    // recover to original data
     output = initTensor(_outputFormats(0))
     (_inputFormats, _outputFormats)
   }
@@ -77,26 +88,21 @@ class ReorderMemory(inputFormat: MemoryData, outputFormat: MemoryData,
     }
 
     _gradOutputFormats = if (gradOutputFormat == null) grads else Array(gradOutputFormat)
-    _gradOutputFormatsForWeight = if (gradOutputFormat == null) grads else Array(gradOutputFormat)
 
-//    // todo: if format of gradOutput MemoryData is nhwc, its shape should be gradInput shape
-//    if (_inputFormats(0).layout == Memory.Format.nhwc && outputFormat != null) {
-//      _inputFormats = Array(HeapData(_outputFormats(0).shape, _inputFormats(0).layout))
-//    }
-//    // todo: if format of gradOutputWeight MemoryData is nhwc, its shape should be gradInput shape
-//    if (outputFormat != null && _outputFormats(0).layout == Memory.Format.nhwc) {
-//      _outputFormats = Array(HeapData(_inputFormats(0).shape, _outputFormats(0).layout))
-//    }
-//
-//    // todo: if format of gradInput MemoryData is nhwc, its shape should be gradOutput shape
-//    if (outputFormat != null && _outputFormats(0).layout == Memory.Format.nhwc) {
-//      _outputFormats = Array(HeapData(_inputFormats(0).shape, _outputFormats(0).layout))
-//    }
+    if (_gradOutputFormats(0).layout != _gradInputFormats(0).layout) {
+      if (_gradOutputFormats(0).layout == Memory.Format.nhwc) {
+        // todo: if format of gradOutput MemoryData is nhwc, its shape should be gradInput shape
+        _gradOutputFormats =
+          Array(HeapData(_gradInputFormats(0).shape, _gradOutputFormats(0).layout))
+      } else if (_gradInputFormats(0).layout == Memory.Format.nhwc) {
+        // todo: if format of gradInput MemoryData is nhwc, its shape should be gradOutput shape
+        _gradInputFormats =
+          Array(HeapData(_gradOutputFormats(0).shape, _gradInputFormats(0).layout))
+      }
+    }
 
     if (_gradInputFormats != null) {
       _gradOutputFormats = Array(HeapData(_gradInputFormats(0).shape, _gradOutputFormats(0).layout))
-      _gradOutputFormatsForWeight =
-        Array(HeapData(_gradInputFormats(0).shape, _gradOutputFormatsForWeight(0).layout))
     }
 
     if (this.getName() == "test") {
