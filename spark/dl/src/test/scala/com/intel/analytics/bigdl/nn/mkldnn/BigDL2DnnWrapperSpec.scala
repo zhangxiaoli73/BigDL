@@ -25,6 +25,7 @@ import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
 import com.intel.analytics.bigdl.utils.{BigDLSpecHelper, T}
 import com.intel.analytics.bigdl.utils.RandomGenerator._
+import com.intel.analytics.bigdl.utils.mkldnn.{IRSpatialAvePooling, IRSpatialMaxPooling}
 import com.intel.analytics.bigdl.utils.serializer.ModuleSerializer._
 import com.intel.analytics.bigdl.utils.serializer.converters.DataConverter
 import org.apache.spark.ml
@@ -121,7 +122,15 @@ class BigDL2DnnWrapperSpec extends BigDLSpecHelper {
 
   "test reflection" should "be right" in {
     val cls = Class.forName("com.intel.analytics.bigdl.nn.SpatialConvolution")
-    // cls.getDeclaredFields
+    val o = IRSpatialMaxPooling(data_format = "NCHW", strides = Seq(1, 1),
+      ksize = Seq(2, 2), paddingType = "same")
+    val c = o.getClass
+    val res = c.getDeclaredField("strides")
+    res.setAccessible(true)
+    val v = res.get(o)
+    val fieldName = res.getName
+    val getter = "get" + fieldName.substring(0, 1).toUpperCase() + fieldName.substring(1)
+    val method = c.getMethod("data_format")
     val constructorMirror = getCostructorMirror(cls)
     val constructorFullParams = constructorMirror.symbol.paramss
     val args = new Array[Object](constructorFullParams.map(_.size).sum)
