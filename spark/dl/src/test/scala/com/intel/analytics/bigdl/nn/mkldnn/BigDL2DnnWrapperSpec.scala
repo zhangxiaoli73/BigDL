@@ -25,7 +25,7 @@ import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
 import com.intel.analytics.bigdl.utils.{BigDLSpecHelper, T}
 import com.intel.analytics.bigdl.utils.RandomGenerator._
-import com.intel.analytics.bigdl.utils.mkldnn.{IRSpatialAvePooling, IRSpatialMaxPooling}
+import com.intel.analytics.bigdl.utils.mkldnn.{IRElement, IRLayer2Blas, IRSpatialAvePooling, IRSpatialMaxPooling}
 import com.intel.analytics.bigdl.utils.serializer.ModuleSerializer._
 import com.intel.analytics.bigdl.utils.serializer.converters.DataConverter
 import org.apache.spark.ml
@@ -200,6 +200,17 @@ class BigDL2DnnWrapperSpec extends BigDLSpecHelper {
     val in = Tensor[Float](4, 3, 7, 7).apply1(_ => RNG.uniform(0.1, 1).toFloat)
 
     val out = conv.forward(in)
+    println("done")
+  }
+
+  "test convert" should "be right" in {
+    import com.intel.analytics.bigdl.utils.mkldnn.IRLayer2Blas
+    val op = IRSpatialMaxPooling(data_format = "NCHW", strides = Seq(1, 1),
+      ksize = Seq(2, 2), paddingType = "same")
+    val ir = new IRElement("maxpool", op)
+    val c = new IRLayer2Blas[Float]()
+    val m = c.convertIRLayer(ir)
+
     println("done")
   }
 }

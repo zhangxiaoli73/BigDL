@@ -31,7 +31,7 @@ case class IRSpatialMaxPooling(data_format: String, strides: Seq[Int],
                                ksize: Seq[Int], paddingType : String) extends IROperate
 
 case class IRSpatialAvePooling(data_format: String, strides: Seq[Int],
-                               ksize: Seq[Int],  paddingType : String,
+                               ksize: Seq[Int], paddingType : String,
                                countIncludePad: Boolean) extends IROperate
 
 case class IRSpatialConv[T: ClassTag](data_format : String, nInputPlane: Int,

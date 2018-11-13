@@ -36,7 +36,7 @@ import scala.collection.mutable.ArrayBuffer
 import scala.reflect.ClassTag
 import spire.macros.Auto.scala
 
-private[mkldnn] class IRLayer2Dnn {
+class IRLayer2Dnn {
 
   // converter function mappings
   private val IR2DnnMap = new mutable.HashMap[String, (IRElement) => Module[Float]]
