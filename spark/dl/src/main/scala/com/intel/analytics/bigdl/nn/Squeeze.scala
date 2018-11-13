@@ -18,6 +18,7 @@ package com.intel.analytics.bigdl.nn
 import com.intel.analytics.bigdl.nn.abstractnn.{AbstractModule, TensorModule}
 import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.{NumericWildcard, TensorNumeric}
+import com.intel.analytics.bigdl.utils.Shape
 
 import scala.reflect.ClassTag
 
@@ -98,6 +99,21 @@ class Squeeze[T: ClassTag](
   override def hashCode(): Int = {
     val state = Seq(super.hashCode(), dimensions, batchMode)
     state.map(_.hashCode()).foldLeft(0)((a, b) => 31 * a + b)
+  }
+
+  override def computeOutputShape(inputShape: Shape): Shape = {
+    val input = inputShape.toSingle().toArray
+    val outputShape = if (dimensions != null) {
+      var i = 0
+      while(i < dimensions.length) {
+        input(dimensions(i) - 1) = -1
+        i += 1
+      }
+      input.filter(n => n == -1)
+    } else {
+      input.filter(n => n == 1)
+    }
+    Shape(outputShape)
   }
 }
 

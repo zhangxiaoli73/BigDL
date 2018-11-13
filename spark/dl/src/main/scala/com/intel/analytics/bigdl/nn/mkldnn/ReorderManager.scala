@@ -56,7 +56,8 @@ private[mkldnn] class ReorderManager() {
   : Activity = {
     if (from.length == 1) {
       require(output.isTensor, "output activity should be a tensor")
-      inferTensor(from(0), to(0), output.asInstanceOf[Tensor[Float]])
+      val tmp = inferTensor(from(0), to(0), output.asInstanceOf[Tensor[Float]])
+      tmp
     } else {
       require(output.toTable.length() == from.length,
         "output activity length doesn't match")
