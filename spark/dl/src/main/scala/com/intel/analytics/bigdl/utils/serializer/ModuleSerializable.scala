@@ -31,7 +31,7 @@ import com.intel.analytics.bigdl.serialization.Bigdl._
 
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
-import scala.reflect.ClassTag
+import scala.reflect.{ClassTag, ManifestFactory}
 import scala.reflect.runtime.universe
 
 /**

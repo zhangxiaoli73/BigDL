@@ -19,11 +19,19 @@ package com.intel.analytics.bigdl.nn.mkldnn
 import com.intel.analytics.bigdl.{Module, nn}
 import com.intel.analytics.bigdl.mkl.Memory
 import com.intel.analytics.bigdl.nn.{Squeeze, mkldnn}
-import com.intel.analytics.bigdl.nn.abstractnn.{AbstractModule, TensorModule}
+import com.intel.analytics.bigdl.nn.abstractnn.{AbstractModule, Activity, DataFormat, TensorModule}
+import com.intel.analytics.bigdl.serialization.Bigdl.DataType
 import com.intel.analytics.bigdl.tensor.Tensor
-import com.intel.analytics.bigdl.utils.BigDLSpecHelper
+import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
+import com.intel.analytics.bigdl.utils.{BigDLSpecHelper, T}
 import com.intel.analytics.bigdl.utils.RandomGenerator._
+import com.intel.analytics.bigdl.utils.serializer.ModuleSerializer._
+import com.intel.analytics.bigdl.utils.serializer.converters.DataConverter
+import org.apache.spark.ml
+import org.apache.spark.ml.attribute
 
+import scala.reflect.{ClassTag, ManifestFactory}
+import scala.reflect.runtime._
 import scala.util.Random
 
 class BigDL2DnnWrapperSpec extends BigDLSpecHelper {
@@ -109,5 +117,51 @@ class BigDL2DnnWrapperSpec extends BigDLSpecHelper {
     val gradNHWC = grad.transpose(2, 3).transpose(3, 4).contiguous().clone()
 
     gradNHWC should be(wrapperGrad)
+  }
+
+  "test reflection" should "be right" in {
+    val cls = Class.forName("com.intel.analytics.bigdl.nn.SpatialConvolution")
+    val constructorMirror = getCostructorMirror(cls)
+    val constructorFullParams = constructorMirror.symbol.paramss
+    val args = new Array[Object](constructorFullParams.map(_.size).sum)
+    val params = T(Integer.valueOf(3),
+      Integer.valueOf(32), Integer.valueOf(5), Integer.valueOf(5),
+      Integer.valueOf(1), Integer.valueOf(1), Integer.valueOf(0),
+      Integer.valueOf(0), Integer.valueOf(1), null.asInstanceOf[AnyRef],
+      null.asInstanceOf[AnyRef], null.asInstanceOf[AnyRef], DataFormat("NCHW"))
+
+//    ml.attribute.getDataType match {
+//      case DataType.INT32 => Integer.valueOf(ml.attribute.getInt32Value)
+//      case DataType.INT64 => Long.box(ml.attribute.getInt64Value)
+//      case DataType.DOUBLE => Double.box(ml.attribute.getDoubleValue)
+//      case DataType.FLOAT => Float.box(ml.attribute.getFloatValue)
+//      case DataType.STRING => ml.attribute.getStringValue
+//      case DataType.BOOL => Boolean.box(ml.attribute.getBoolValue)
+//
+
+    var i = 1
+    constructorFullParams.foreach(map => {
+      map.foreach(param => {
+        val name = param.name.decodedName.toString
+        val ptype = param.typeSignature
+        if (ptype <:< universe.typeOf[ClassTag[_]]||
+          ptype.typeSymbol == universe.typeOf[ClassTag[_]].typeSymbol) {
+          args(i) = ManifestFactory.Float
+        } else if (ptype <:< universe.typeOf[TensorNumeric[_]]
+          || ptype.typeSymbol == universe.typeOf[TensorNumeric[_]].typeSymbol) {
+          args(i) = TensorNumeric.NumericFloat
+        } else {
+          println(s"***** ${i}")
+          val value = params.get(i).get
+          args(i) = value
+          i += 1
+        }
+        val tmp = 0
+      })
+    })
+    constructorMirror.apply(args : _*).
+      asInstanceOf[AbstractModule[Activity, Activity, Float]]
+
+    println("done")
   }
 }
