@@ -96,34 +96,33 @@ private[bigdl] class IRConverter[T: ClassTag](IRgraph: IRGraph[T])(implicit ev: 
       oldToNew.get(n).get.asInstanceOf[ModuleNode[Float]])
     val outputs = IRgraph.outputs.toArray.map(n =>
       oldToNew.get(n).get.asInstanceOf[ModuleNode[Float]])
-    // todo: check input formats, if NHWC, then add reorder layer
-
-    // todo: check outputs formats, add output reorder layer
-    val realOutputs = outputs.map(out => {
-      val m = out.element.asInstanceOf[MklDnnLayer]
-      val reorder = m._outputFormats.map(outMemData => {
-        val shape = outMemData.shape
-        val layout = outMemData.layout
-        require(shape.length == 2 || shape.length == 4, s"output shape should be 2 or 4 dims," +
-          s"but get ${shape.length}, and this IRElement name is ${m.getName()}")
-        val realOut = if (shape.length == 2) {
-          val realOutFormat = new HeapData(shape, Memory.Format.nc)
-          val layer = ReorderMemory(inputFormat = null, outputFormat = realOutFormat,
-            gradInputFormat = null, gradOutputFomat = realOutFormat)
-          layer
-        } else if (shape.length == 4) {
-          val realOutFormat = new HeapData(shape, Memory.Format.nchw)
-          val layer = ReorderMemory(inputFormat = null, outputFormat = realOutFormat,
-            gradInputFormat = null, gradOutputFomat = realOutFormat)
-          layer
-        }
-        val node = new Node[Float](realOut)
-        out.add(node)
-        node
-      })
-    })
-
-    DnnGraph(inputs, realOutputs).asInstanceOf[Graph[T]]
+//    // todo: check input formats, if NHWC, then add reorder layer
+//
+//    // todo: check outputs formats, add output reorder layer
+//    val realOutputs = outputs.map(out => {
+//      val m = out.element.asInstanceOf[MklDnnLayer]
+//      val reorder = m._outputFormats.map(outMemData => {
+//        val shape = outMemData.shape
+//        val layout = outMemData.layout
+//        require(shape.length == 2 || shape.length == 4, s"output shape should be 2 or 4 dims," +
+//          s"but get ${shape.length}, and this IRElement name is ${m.getName()}")
+//        val realOut = if (shape.length == 2) {
+//          val realOutFormat = new HeapData(shape, Memory.Format.nc)
+//          val layer = ReorderMemory(inputFormat = null, outputFormat = realOutFormat,
+//            gradInputFormat = null, gradOutputFomat = realOutFormat)
+//          layer
+//        } else if (shape.length == 4) {
+//          val realOutFormat = new HeapData(shape, Memory.Format.nchw)
+//          val layer = ReorderMemory(inputFormat = null, outputFormat = realOutFormat,
+//            gradInputFormat = null, gradOutputFomat = realOutFormat)
+//          layer
+//        }
+//        val node = new Node[Float](realOut)
+//        out.add(node)
+//        node
+//      })
+//    })
+    DnnGraph(inputs, outputs).asInstanceOf[Graph[T]]
   }
 
   private def toBlasGraph(): Graph[T] = {
@@ -141,17 +140,6 @@ private[bigdl] class IRConverter[T: ClassTag](IRgraph: IRGraph[T])(implicit ev: 
         }
       })
     })
-
-//    allNodes.foreach(node => {
-//      node.nextNodesAndEdges.foreach(nextNodeAndEdge => {
-//        if (oldToNew.contains(nextNodeAndEdge._1)) {
-//          val n = oldToNew.get(node).get
-//          // todo: use last node
-//          n(n.length - 1).add(
-//            oldToNew.get(nextNodeAndEdge._1).get(0), nextNodeAndEdge._2)
-//        }
-//      })
-//    })
 
     val inputs = IRgraph.inputs.toArray.map(n => oldToNew.get(n).asInstanceOf[ModuleNode[T]])
     val outputs = IRgraph.outputs.toArray.map(n => oldToNew.get(n).asInstanceOf[ModuleNode[T]])

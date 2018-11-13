@@ -20,8 +20,10 @@ import com.intel.analytics.bigdl.nn.abstractnn.{AbstractModule, Activity}
 import com.intel.analytics.bigdl.nn.tf.ControlDependency
 import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
+import com.intel.analytics.bigdl.utils.mkldnn.{IRElement, IRGraph}
 import com.intel.analytics.bigdl.utils.{Node, Util}
 
+import scala.collection.mutable.ArrayBuffer
 import scala.reflect.ClassTag
 
 /**
@@ -146,5 +148,24 @@ class StaticGraph[T: ClassTag](
 
     gradInput = fetchModelGradInput()
     gradInput
+  }
+
+  private def toIRlayer(inputs: Seq[Node[IRElement]],
+                       nodesBuffer: ArrayBuffer[Node[IRElement]]): Unit = {
+    if (inputs.length == 0) return
+    inputs.foreach(node => {
+      if (!nodesBuffer.contains(node)) nodesBuffer.append(node)
+      getNodes(node.nextNodes, nodesBuffer)
+    })
+  }
+
+  def toIR() : IRGraph[T] = {
+    try {
+      val cls = Class.forName("com.intel.analytics.bigdl.nn." + name.substring(2))
+      true
+    } catch {
+      case e: Throwable =>
+        false
+    }
   }
 }

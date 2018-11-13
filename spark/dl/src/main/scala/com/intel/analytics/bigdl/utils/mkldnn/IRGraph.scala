@@ -19,8 +19,10 @@ package com.intel.analytics.bigdl.utils.mkldnn
 import java.util.List
 
 import breeze.linalg.reverse
+import com.intel.analytics.bigdl.mkl.Memory
 import com.intel.analytics.bigdl.nn.{Graph, keras}
 import com.intel.analytics.bigdl.nn.abstractnn.{AbstractModule, Activity, DataFormat}
+import com.intel.analytics.bigdl.nn.mkldnn.{DnnGraph, HeapData, Phase}
 import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
 import com.intel.analytics.bigdl.utils.{Engine, MklBlas, Node, T}
@@ -40,6 +42,7 @@ class IRGraph[T: ClassTag](
 
   var allNodes = new ArrayBuffer[Node[IRElement]]
   private[bigdl] var graph: Graph[T] = null
+  @transient private var compiled: Boolean = false
 
   /* init should do:
    * 1. find all nodes and 4 dimention formats
@@ -84,6 +87,19 @@ class IRGraph[T: ClassTag](
   override def updateOutput(input: Activity): Activity = {
     if (graph == null) {
       throw new UnsupportedOperationException("forward not supported, Please build graph first")
+    }
+    if (!compiled && graph.isInstanceOf[DnnGraph]) {
+      val formats = if (inputFormats == DataFormat.NHWC) {
+        Array(HeapData(input.toTensor[T].size(), Memory.Format.nhwc))
+      } else if (inputFormats == DataFormat.NCHW) {
+        Array(HeapData(input.toTensor[T].size(), Memory.Format.nchw))
+      }
+      if (graph.train) {
+        graph.asInstanceOf[DnnGraph].compile(Phase.TrainingPhase, formats)
+      } else {
+        graph.asInstanceOf[DnnGraph].compile(Phase.InferencePhase, formats)
+      }
+      compiled = true
     }
     output = graph.updateOutput(input)
     output

@@ -237,6 +237,11 @@ class DnnGraph(
     initPrimitives(phase, Array[MemoryData]())
   }
 
+  final def compile(phase: Phase, formats: Array[MemoryData]): Unit = {
+    setRuntime(new MklDnnRuntime(), phase)
+    initPrimitives(phase, formats)
+  }
+
   private def setRuntime(runtime: MklDnnRuntime, phase: Phase): Unit = {
     reorderManager.setRuntime(runtime)
     forwardExecution.foreach(m => m.element.asInstanceOf[MklDnnModule].setRuntime(runtime))
