@@ -18,6 +18,7 @@ package com.intel.analytics.bigdl.nn.mkldnn
 import com.intel.analytics.bigdl.mkl.{DataType, Memory, MklDnn}
 import com.intel.analytics.bigdl.nn.abstractnn.{Activity, TensorModule}
 import com.intel.analytics.bigdl.tensor.{DnnTensor, Tensor}
+import org.apache.hadoop.yarn.webapp.hamlet.HamletSpec.VAR
 
 class ReorderMemory(inputFormat: MemoryData, outputFormat: MemoryData,
   gradInputFormat: MemoryData, gradOutputFormat: MemoryData
@@ -26,9 +27,8 @@ class ReorderMemory(inputFormat: MemoryData, outputFormat: MemoryData,
   _outputFormats = Array(outputFormat)
   _gradInputFormats = Array(gradInputFormat)
 
-  if (this.getName() == "test") {
-    val tmp = 0
-  }
+  private var realOutputShape : Array[Int] = null
+  private var realgradInputShape : Array[Int] = null
 
   override private[bigdl] def initFwdPrimitives(inputs: Array[MemoryData], phase: Phase) = {
     _inputFormats = if (inputFormat == null) inputs else Array(inputFormat)
@@ -41,16 +41,14 @@ class ReorderMemory(inputFormat: MemoryData, outputFormat: MemoryData,
     val outputShape = _outputFormats(0).shape
     val inputLayout = _inputFormats(0).layout
     val outputLayout = _outputFormats(0).layout
+    realOutputShape = outputShape
 
     if (inputLayout != outputLayout) {
       if (inputLayout == Memory.Format.nhwc) {
         // todo: if format of input MemoryData is nhwc, its shape should be output shape
         _inputFormats = Array(HeapData(outputShape, inputLayout))
-        // _inputFormats(0).setShape(outputShape)
-
       } else if (outputLayout == Memory.Format.nhwc) {
         // todo: if format of output MemoryData is nhwc, its shape should be input shape
-//        _inputFormats(0).setShape(outputShape)
        _outputFormats = Array(HeapData(inputShape, outputLayout))
       }
     }
@@ -76,6 +74,7 @@ class ReorderMemory(inputFormat: MemoryData, outputFormat: MemoryData,
       output = input
     } else {
       output = super.updateOutput(input)
+      output.toTensor[Float].resize(realOutputShape)
     }
     output
   }
@@ -88,27 +87,23 @@ class ReorderMemory(inputFormat: MemoryData, outputFormat: MemoryData,
     }
 
     _gradOutputFormats = if (gradOutputFormat == null) grads else Array(gradOutputFormat)
+    require(_gradOutputFormats.length == 1, "Only accept one tensor as input")
 
-    if (_gradOutputFormats(0).layout != _gradInputFormats(0).layout) {
-      if (_gradOutputFormats(0).layout == Memory.Format.nhwc) {
+    val gradInputShape = _gradInputFormats(0).shape
+    val gradOutputShape = _gradOutputFormats(0).shape
+    val gradInputLayout = _gradInputFormats(0).layout
+    val gradOutputLayout = _gradOutputFormats(0).layout
+    realgradInputShape = gradInputShape
+
+    if (gradInputLayout != gradOutputLayout) {
+      if (gradOutputLayout == Memory.Format.nhwc) {
         // todo: if format of gradOutput MemoryData is nhwc, its shape should be gradInput shape
-        _gradOutputFormats =
-          Array(HeapData(_gradInputFormats(0).shape, _gradOutputFormats(0).layout))
-      } else if (_gradInputFormats(0).layout == Memory.Format.nhwc) {
+        _gradOutputFormats = Array(HeapData(gradInputShape, gradOutputLayout))
+      } else if (gradInputLayout == Memory.Format.nhwc) {
         // todo: if format of gradInput MemoryData is nhwc, its shape should be gradOutput shape
-        _gradInputFormats =
-          Array(HeapData(_gradOutputFormats(0).shape, _gradInputFormats(0).layout))
+        _gradInputFormats = Array(HeapData(gradOutputShape, gradInputLayout))
       }
     }
-
-    if (_gradInputFormats != null) {
-      _gradOutputFormats = Array(HeapData(_gradInputFormats(0).shape, _gradOutputFormats(0).layout))
-    }
-
-    if (this.getName() == "test") {
-      val tmp = 0
-    }
-    require(_gradOutputFormats.length == 1, "Only accept one tensor as input")
 
     require(_gradOutputFormats(0).shape.product == _gradInputFormats(0).shape.product,
       "input output memory not match")
@@ -122,6 +117,16 @@ class ReorderMemory(inputFormat: MemoryData, outputFormat: MemoryData,
     updateGradInputPrimitives = Array(bwdReorderPrim)
     gradInput = initTensor(_gradInputFormats(0))
     (_gradOutputFormats, _gradInputFormats)
+  }
+
+  override def updateGradInput(input: Activity, gradOutput: Activity): Activity = {
+    if (_gradInputFormats(0).layout == _gradOutputFormats(0).layout) {
+      gradInput = gradOutput
+    } else {
+      gradInput = super.updateGradInput(input, gradOutput)
+      gradInput.toTensor[Float].resize(realgradInputShape)
+    }
+    gradInput
   }
 
   override def toString(): String = {

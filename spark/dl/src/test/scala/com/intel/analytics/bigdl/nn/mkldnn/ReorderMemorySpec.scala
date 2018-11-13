@@ -97,8 +97,7 @@ class ReorderMemorySpec extends BigDLSpecHelper {
 
     val inputNHWC = input.transpose(2, 3).transpose(3, 4).contiguous().clone()
 
-    output.resizeAs(inputNHWC)
-    grad.resizeAs(inputNHWC)
+    // grad.resizeAs(inputNHWC)
 
     inputNHWC should be(output)
     inputNHWC should be(grad)

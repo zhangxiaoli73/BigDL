@@ -33,14 +33,12 @@ class BigDL2DnnWrapperSpec extends BigDLSpecHelper {
    Array(shape(0), shape(3), shape(1), shape(2))
   }
 
-  def model(inputShape: Array[Int]) : MklDnnContainer = {
+  def wrapSqueeze(inputShape: Array[Int]) : MklDnnContainer = {
     val model1 = mkldnn.Sequential()
 
     model1.add(mkldnn.Input(inputShape, Memory.Format.nhwc))
-
     val s = Squeeze[Float](Array(2, 3), true).
       asInstanceOf[AbstractModule[Tensor[_], Tensor[_], Float]]
-
     model1.add(BigDL2DnnWrapper(s, ""))
 
     model1
@@ -51,25 +49,14 @@ class BigDL2DnnWrapperSpec extends BigDLSpecHelper {
     RNG.setSeed(100)
 
     val model1 = mkldnn.Sequential()
-
     model1.add(mkldnn.Input(inputShape, Memory.Format.nhwc).setName("input"))
 
-    // conv with NCHW
     val s = nn.SpatialConvolution[Float](3, 32, 5, 5, 1, 1).
       asInstanceOf[AbstractModule[Tensor[_], Tensor[_], Float]]
-//    s.getParameters()._1.fill(0.0001f)
-//    s.getParameters()._2.fill(0.0001f)
-
-//    val p = s.getParametersTable()
-//    p.get[Tensor[Float]]("weight").get.copy(initWeight)
-//    p.get[Tensor[Float]]("bias").get.copy(initBias)
 
     model1.add(BigDL2DnnWrapper(s, "").setName("wrapper"))
-
-    model1.add(ReorderMemory(
-      inputFormat = null, // HeapData(Array(4, 32, 3, 3), Memory.Format.nchw),
-      outputFormat = null, // HeapData(Array(4, 3, 3, 32), Memory.Format.nhwc),
-      gradInputFormat = HeapData(Array(4, 32, 3, 3), Memory.Format.nchw),
+    model1.add(ReorderMemory(inputFormat = null, outputFormat = null,
+      gradInputFormat = null,
       gradOutputFomat = HeapData(gradOutShape, Memory.Format.nhwc)).setName("test"))
     model1
   }
@@ -78,16 +65,16 @@ class BigDL2DnnWrapperSpec extends BigDLSpecHelper {
      val in = Tensor[Float](2, 1, 1, 3).rand()
      val inNHWC = in.transpose(2, 4).transpose(3, 4).contiguous().clone()
 
-     val s = Squeeze[Float](Array(2, 3), true).
+     val model = Squeeze[Float](Array(2, 3), true).
        asInstanceOf[AbstractModule[Tensor[_], Tensor[_], Float]]
 
-     val w = model(inNHWC.size()) // BigDL2DnnWrapper(s, "")
+     val wrapperModel = wrapSqueeze(inNHWC.size())
+     wrapperModel.compile(Phase.InferencePhase)
 
-     w.compile(Phase.InferencePhase)
+     val outWrapper = wrapperModel.forward(inNHWC)
+     val out = model.forward(in)
 
-     val out = w.forward(inNHWC)
-
-     val tm = 0
+     outWrapper should be(out)
    }
 
   "wrapper conv" should "be correct" in {
@@ -107,27 +94,20 @@ class BigDL2DnnWrapperSpec extends BigDLSpecHelper {
     val model = nn.SpatialConvolution[Float](3, 32, 5, 5, 1, 1).
       asInstanceOf[AbstractModule[Tensor[_], Tensor[_], Float]]
 
-
     // wrapper
     val wrapperModel = wrapConv(inNHWC.size(), gradOutputNHWC.size())
     wrapperModel.compile(Phase.TrainingPhase)
 
     val wrapperOut = wrapperModel.forward(inNHWC)
-    val out = model.forward(in) // size 4, 32, 3, 3
+    val out = model.forward(in)
 
     wrapperOut.equals(out) should be(true)
 
     // for backward
     val grad = model.backward(in, gradOutput)
-    val t1 = grad.clone()
-    val t2 = grad.clone()
-
-
     val wrapperGrad = wrapperModel.backward(inNHWC, gradOutputNHWC)
     val gradNHWC = grad.transpose(2, 3).transpose(3, 4).contiguous().clone()
 
     gradNHWC should be(wrapperGrad)
-
-    println("done")
   }
 }

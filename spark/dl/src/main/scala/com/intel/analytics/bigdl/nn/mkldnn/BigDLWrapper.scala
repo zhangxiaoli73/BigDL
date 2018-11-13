@@ -23,8 +23,9 @@ import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
 import com.intel.analytics.bigdl.utils.Shape
 import spire.syntax.module
 
-
-class BigDL2DnnWrapper(val module: AbstractModule[Tensor[_], Tensor[_], Float], formats : String)
+// only support wrap bigdl to support nchw
+class BigDL2DnnWrapper(val module: AbstractModule[Tensor[_], Tensor[_], Float],
+                       formats: String = "NCHW")
   extends MklDnnLayer {
 
   output = Tensor[Float]()
@@ -32,14 +33,14 @@ class BigDL2DnnWrapper(val module: AbstractModule[Tensor[_], Tensor[_], Float], 
 
   override private[mkldnn] def initFwdPrimitives(inputs: Array[MemoryData], phase: Phase) = {
     // todo: only support tensor model and implement computeOutputShape
-    val inputShape = if (inputs(0).layout == Memory.Format.nchw ||
-    inputs(0).layout == Memory.Format.nChw8c || inputs(0).layout == Memory.Format.nChw16c) {
-      inputs(0).shape
-    } else {
+    val inputShape = if (inputs(0).layout == Memory.Format.nhwc) {
       val s = inputs(0).shape
       // from nhwc -> nchw
       Array(s(0), s(3), s(1), s(2))
+    } else {
+      inputs(0).shape
     }
+
     val outputShape = module.computeOutputShape(Shape(inputShape)).toSingle().toArray
 
     require(inputShape.length == 2 || inputShape.length == 4,
@@ -89,6 +90,6 @@ class BigDL2DnnWrapper(val module: AbstractModule[Tensor[_], Tensor[_], Float], 
 
 
 object BigDL2DnnWrapper {
-  def apply(module: AbstractModule[Tensor[_], Tensor[_], Float], formats : String)
+  def apply(module: AbstractModule[Tensor[_], Tensor[_], Float], formats : String = "NCHW")
   : BigDL2DnnWrapper = new BigDL2DnnWrapper(module, formats)
 }
