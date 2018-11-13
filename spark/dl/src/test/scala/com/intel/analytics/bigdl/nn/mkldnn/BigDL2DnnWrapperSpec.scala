@@ -121,6 +121,7 @@ class BigDL2DnnWrapperSpec extends BigDLSpecHelper {
 
   "test reflection" should "be right" in {
     val cls = Class.forName("com.intel.analytics.bigdl.nn.SpatialConvolution")
+    // cls.getDeclaredFields
     val constructorMirror = getCostructorMirror(cls)
     val constructorFullParams = constructorMirror.symbol.paramss
     val args = new Array[Object](constructorFullParams.map(_.size).sum)
@@ -139,7 +140,8 @@ class BigDL2DnnWrapperSpec extends BigDLSpecHelper {
 //      case DataType.BOOL => Boolean.box(ml.attribute.getBoolValue)
 //
 
-    var i = 1
+    var i = 0
+    var j = 1
     constructorFullParams.foreach(map => {
       map.foreach(param => {
         val name = param.name.decodedName.toString
@@ -151,17 +153,44 @@ class BigDL2DnnWrapperSpec extends BigDLSpecHelper {
           || ptype.typeSymbol == universe.typeOf[TensorNumeric[_]].typeSymbol) {
           args(i) = TensorNumeric.NumericFloat
         } else {
-          println(s"***** ${i}")
-          val value = params.get(i).get
+          println(s"***** ${j} ${name}" )
+          val value = j match {
+            case 1 => Integer.valueOf(3)
+            case 2 => Integer.valueOf(32)
+            case 3 => Integer.valueOf(5)
+            case 4 => Integer.valueOf(5)
+            case 5 => Integer.valueOf(1)
+            case 6 => Integer.valueOf(1)
+            case 7 => Integer.valueOf(0)
+            case 8 => Integer.valueOf(0)
+            case 9 => Integer.valueOf(1)
+            case 10 => Boolean.box(true)
+            case 11 => null
+            case 12 => null
+            case 13 => null
+            case 14 => null
+            case 15 => null
+            case 16 => null
+            case 17 => Boolean.box(true)
+            case 18 => DataFormat("NCHW")
+            case _ => {
+              val tmp = 0
+              null
+            }
+          }
           args(i) = value
-          i += 1
+          j += 1
         }
         val tmp = 0
+        i += 1
       })
     })
-    constructorMirror.apply(args : _*).
+    val conv = constructorMirror.apply(args : _*).
       asInstanceOf[AbstractModule[Activity, Activity, Float]]
 
+    val in = Tensor[Float](4, 3, 7, 7).apply1(_ => RNG.uniform(0.1, 1).toFloat)
+
+    val out = conv.forward(in)
     println("done")
   }
 }
