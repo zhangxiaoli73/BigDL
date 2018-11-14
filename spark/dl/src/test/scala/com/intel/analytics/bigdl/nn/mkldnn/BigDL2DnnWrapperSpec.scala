@@ -122,8 +122,7 @@ class BigDL2DnnWrapperSpec extends BigDLSpecHelper {
 
   "test reflection" should "be right" in {
     val cls = Class.forName("com.intel.analytics.bigdl.nn.SpatialConvolution")
-    val o = IRSpatialMaxPooling(data_format = "NCHW", strides = Seq(1, 1),
-      ksize = Seq(2, 2), paddingType = "same")
+    val o = IRSpatialMaxPooling(1, 1)
     val c = o.getClass
     val res = c.getDeclaredField("strides")
     res.setAccessible(true)
@@ -207,8 +206,8 @@ class BigDL2DnnWrapperSpec extends BigDLSpecHelper {
     import com.intel.analytics.bigdl.utils.mkldnn.IRLayer2Blas
 //    val op = IRSpatialMaxPooling(data_format = "NCHW", strides = Seq(1, 1),
 //      ksize = Seq(2, 2), paddingType = "same")
-    val op = IRIdentity()
-    val ir = new IRElement("maxpool", op)
+    val op = IRIdentity[Float]()
+    val ir = new IRElement[Float]("maxpool", op)
     val c = new IRLayer2Blas[Float]()
     val m = c.convertIRLayer(ir)
 

@@ -32,15 +32,16 @@ import scala.collection.mutable.ArrayBuffer
 import scala.reflect.ClassTag
 
 class IRGraph[T: ClassTag](
-    val inputs : Seq[Node[IRElement]],
-    val outputs : Seq[Node[IRElement]],
+    val inputs : Seq[Node[IRElement[T]]],
+    val outputs : Seq[Node[IRElement[T]]],
     val variables: Option[(Array[Tensor[T]], Array[Tensor[T]])] = None,
     val generateBackward: Boolean = true,
-    val inputFormats: DataFormat = DataFormat("NCHW"))
+    val inputFormats: Int = Memory.Format.nchw,
+    val outputFormats: Int = Memory.Format.nc)
   (implicit ev: TensorNumeric[T]) extends AbstractModule[Activity, Activity, T] with Serializable {
 
 
-  var allNodes = new ArrayBuffer[Node[IRElement]]
+  var allNodes = new ArrayBuffer[Node[IRElement[T]]]
   private[bigdl] var graph: Graph[T] = null
   @transient private var compiled: Boolean = false
 
@@ -64,8 +65,8 @@ class IRGraph[T: ClassTag](
     })
   }
 
-  private def getNodes(inputs: Seq[Node[IRElement]],
-                       nodesBuffer: ArrayBuffer[Node[IRElement]]): Unit = {
+  private def getNodes(inputs: Seq[Node[IRElement[T]]],
+                       nodesBuffer: ArrayBuffer[Node[IRElement[T]]]): Unit = {
     if (inputs.length == 0) return
     inputs.foreach(node => {
       if (!nodesBuffer.contains(node)) nodesBuffer.append(node)
@@ -80,8 +81,9 @@ class IRGraph[T: ClassTag](
       val f = node.element.getFormats()
       if (f != "" && f != null) formats.append(f)
     })
-    require(formats.distinct.length == 1, "wrong format transfer")
-    formats(0)
+    // require(formats.distinct.length == 1, "wrong format transfer")
+    // formats(0)
+    "nchw"
   }
 
   override def updateOutput(input: Activity): Activity = {
@@ -89,16 +91,15 @@ class IRGraph[T: ClassTag](
       throw new UnsupportedOperationException("forward not supported, Please build graph first")
     }
     if (!compiled && graph.isInstanceOf[DnnGraph]) {
-      val formats = if (inputFormats == DataFormat.NHWC) {
-        Array(HeapData(input.toTensor[T].size(), Memory.Format.nhwc))
-      } else if (inputFormats == DataFormat.NCHW) {
-        Array(HeapData(input.toTensor[T].size(), Memory.Format.nchw))
-      }
-      if (graph.train) {
-        graph.asInstanceOf[DnnGraph].compile(Phase.TrainingPhase, formats)
-      } else {
-        graph.asInstanceOf[DnnGraph].compile(Phase.InferencePhase, formats)
-      }
+      graph.asInstanceOf[DnnGraph].compile(Phase.TrainingPhase,
+        Array(HeapData(input.toTensor[T].size(), inputFormats)))
+//      if (graph.asInstanceOf[AbstractModule].train) {
+//        graph.asInstanceOf[DnnGraph].compile(Phase.TrainingPhase,
+//          Array(HeapData(input.toTensor[T].size(), inputFormats)))
+//      } else {
+//        graph.asInstanceOf[DnnGraph].compile(Phase.InferencePhase,
+//          Array(HeapData(input.toTensor[T].size(), inputFormats)))
+//      }
       compiled = true
     }
     output = graph.updateOutput(input)
@@ -123,15 +124,21 @@ class IRGraph[T: ClassTag](
   def build(): Unit = {
     graph = new IRConverter[T](this).toGraph()
   }
+
+  override def parameters(): (Array[Tensor[T]], Array[Tensor[T]]) = {
+    graph.parameters()
+  }
 }
 
 object IRGraph {
   def apply[T: ClassTag](
-    inputs: Seq[Node[IRElement]],
-    outputs: Seq[Node[IRElement]],
+    inputs: Seq[Node[IRElement[T]]],
+    outputs: Seq[Node[IRElement[T]]],
     variables: Option[(Array[Tensor[T]], Array[Tensor[T]])] = None,
-    generateBackward: Boolean = true
+    generateBackward: Boolean = true,
+    inputFormats: Int = Memory.Format.nchw,
+    outputFormats: Int = Memory.Format.nc
   )( implicit ev: TensorNumeric[T]): IRGraph[T] = {
-    new IRGraph[T](inputs, outputs, variables, generateBackward)
+    new IRGraph[T](inputs, outputs, variables, generateBackward, inputFormats, outputFormats)
   }
 }

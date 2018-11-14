@@ -15,14 +15,16 @@
  */
 package com.intel.analytics.bigdl.nn
 
+import com.intel.analytics.bigdl.Module
 import com.intel.analytics.bigdl.nn.Graph.ModuleNode
 import com.intel.analytics.bigdl.nn.abstractnn.{AbstractModule, Activity}
 import com.intel.analytics.bigdl.nn.tf.ControlDependency
 import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
-import com.intel.analytics.bigdl.utils.mkldnn.{IRElement, IRGraph}
+import com.intel.analytics.bigdl.utils.mkldnn.{IRElement, IRGraph, IRLayer2Blas, ReflectionUtils}
 import com.intel.analytics.bigdl.utils.{Node, Util}
 
+import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 import scala.reflect.ClassTag
 
@@ -150,8 +152,8 @@ class StaticGraph[T: ClassTag](
     gradInput
   }
 
-  private def toIRlayer(inputs: Seq[Node[IRElement]],
-                       nodesBuffer: ArrayBuffer[Node[IRElement]]): Unit = {
+  private def getNodes(inputs: Seq[Node[Module[T]]],
+                       nodesBuffer: ArrayBuffer[Node[Module[T]]]): Unit = {
     if (inputs.length == 0) return
     inputs.foreach(node => {
       if (!nodesBuffer.contains(node)) nodesBuffer.append(node)
@@ -159,13 +161,39 @@ class StaticGraph[T: ClassTag](
     })
   }
 
-  def toIR() : IRGraph[T] = {
-    try {
-      val cls = Class.forName("com.intel.analytics.bigdl.nn." + name.substring(2))
-      true
-    } catch {
-      case e: Throwable =>
-        false
-    }
+  def toIRgraph() : IRGraph[T] = {
+    val allNodes = new ArrayBuffer[Node[Module[T]]]
+    getNodes(inputs, allNodes)
+    // todo: some output nodes may not be searched from inputs
+    outputs.foreach(node => {
+      if (!allNodes.contains(node)) allNodes.append(node)
+    })
+
+    val oldToNew = new mutable.HashMap[Node[Module[T]], Node[IRElement[T]]]()
+      allNodes.foreach(node => {
+//        try {
+//          val ref = ReflectionUtils.convertToIRLayer[T](node.element)
+//          oldToNew.put(node, new Node(ref))
+//        } catch {
+//          case e: Throwable =>
+//            null
+//        }
+
+        val ref = ReflectionUtils.convertToIRLayer[T](node.element)
+        oldToNew.put(node, new Node(ref))
+      })
+
+      allNodes.foreach(node => {
+        node.nextNodesAndEdges.foreach(nextNodeAndEdge => {
+          if (oldToNew.contains(nextNodeAndEdge._1)) {
+            oldToNew.get(node).get.add(oldToNew.get(nextNodeAndEdge._1).get, nextNodeAndEdge._2)
+          }
+        })
+      })
+
+      val inputsIR = inputs.toArray.map(n => oldToNew.get(n).get.asInstanceOf[Node[IRElement[T]]])
+      val outputsIR = outputs.toArray.map(n => oldToNew.get(n).get.asInstanceOf[Node[IRElement[T]]])
+
+      IRGraph(inputsIR, outputsIR, variables)
   }
 }

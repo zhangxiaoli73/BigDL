@@ -40,7 +40,7 @@ import scala.reflect.runtime.universe
 
 class IRLayer2Blas[T: ClassTag](implicit ev: TensorNumeric[T]) {
 
-  def enableConvert(layer: IRElement) : Boolean = {
+  def enableConvert(layer: IRElement[T]) : Boolean = {
     val name = layer.getOp().name
     try {
       val cls = Class.forName("com.intel.analytics.bigdl.nn." + name.substring(2))
@@ -51,25 +51,13 @@ class IRLayer2Blas[T: ClassTag](implicit ev: TensorNumeric[T]) {
     }
   }
 
-  private def getFiledNameAndValues(o: Object): mutable.HashMap[String, AnyRef] = {
-    val c = o.getClass
-    val fields = c.getDeclaredFields
-    val values = new mutable.HashMap[String, AnyRef]()
-    var i = 0
-    while (i < fields.length) {
-      val field = fields(i)
-      val name = field.getName
-      field.setAccessible(true)
-      values(name) = field.get(o)
-      i += 1
-    }
-    values
-  }
-
-  def convertIRLayer(layer : IRElement) : Module[T] = {
+  def convertIRLayer(layer : IRElement[T]) : Module[T] = {
     val name = layer.getOp().name
     val cls = Class.forName("com.intel.analytics.bigdl.nn." + name.substring(2))
-    val nameAndValues = getFiledNameAndValues(layer.getOp())
+
+    // val biasLayer = ReflectionUtils.reflection(layer, cls)
+
+    val nameAndValues = ReflectionUtils.getFiledNameAndValues(layer.getOp())
     val constructorMirror = getCostructorMirror(cls)
     val constructorFullParams = constructorMirror.symbol.paramss
     val args = new Array[Object](constructorFullParams.map(_.size).sum)
@@ -95,6 +83,12 @@ class IRLayer2Blas[T: ClassTag](implicit ev: TensorNumeric[T]) {
       })
     })
     val blasLayer = constructorMirror.apply(args : _*).asInstanceOf[Module[T]]
+    if (blasLayer.parameters() != null) {
+      val params = blasLayer.getParameters()
+      val params2 = layer.getParameters()
+      if (params2._1 != null) params.copy(params2._1)
+      if (params2._2 != null) params.copy(params2._2)
+    }
     blasLayer
   }
 }

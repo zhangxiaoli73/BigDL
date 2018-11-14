@@ -39,17 +39,17 @@ import spire.macros.Auto.scala
 class IRLayer2Dnn {
 
   // converter function mappings
-  private val IR2DnnMap = new mutable.HashMap[String, (IRElement) => Module[Float]]
+  private val IR2DnnMap = new mutable.HashMap[String, (IRElement[Float]) => Module[Float]]
 
   mapInit()
 
-  def enableConvert(layer: IRElement) : Boolean = {
+  def enableConvert(layer: IRElement[Float]) : Boolean = {
     val layerOp = layer.getOp()
     if (IR2DnnMap.contains(layerOp.name)) true
     else false
   }
 
-  def convertIRLayer(layer : IRElement) : Module[Float] = {
+  def convertIRLayer(layer : IRElement[Float]) : Module[Float] = {
     val layerType = layer.getOp()
     require(IR2DnnMap.contains(layerType.name), s"not support convert ${layerType} to dnn layer")
     IR2DnnMap(layerType.name)(layer)
@@ -68,25 +68,25 @@ class IRLayer2Dnn {
     // IR2DnnMap("IRLinear") = fromLinear
   }
 
-  private def fromRelu(node: IRElement) : Module[Float] = mkldnn.ReLU()
+  private def fromRelu(node: IRElement[Float]) : Module[Float] = mkldnn.ReLU()
 
-  private def fromDropOut(node: IRElement) : Module[Float] = mkldnn.Dropout()
+  private def fromDropOut(node: IRElement[Float]) : Module[Float] = mkldnn.Dropout()
 
-  private def fromIdentity(node: IRElement) : Module[Float] = mkldnn.Identity[Float]()
+  private def fromIdentity(node: IRElement[Float]) : Module[Float] = mkldnn.Identity[Float]()
 
-  private def fromSqueeze(node: IRElement) : Module[Float] = {
+  private def fromSqueeze(node: IRElement[Float]) : Module[Float] = {
     // mkldnn.Identity[Float]()
-    val t = node.getOp().asInstanceOf[IRSqueeze]
+    val t = node.getOp().asInstanceOf[IRSqueeze[Float]]
     val s = new Squeeze[Float](t.dims, t.batchMode)
     BigDL2DnnWrapper(s.asInstanceOf[AbstractModule[Tensor[_], Tensor[_], Float]], "")
   }
 
-  private def fromInput(node: IRElement) : Module[Float] = {
+  private def fromInput(node: IRElement[Float]) : Module[Float] = {
     // todo: not right
     mkldnn.Identity[Float]()
   }
 
-  private def fromConv(node: IRElement) : Module[Float] = {
+  private def fromConv(node: IRElement[Float]) : Module[Float] = {
     val t = node.getOp().asInstanceOf[IRSpatialConvolution[Float]]
     val nInputPlane = t.nInputPlane.asInstanceOf[Int]
     val nOutputPlane = t.nOutputPlane.asInstanceOf[Int]
@@ -119,8 +119,8 @@ class IRLayer2Dnn {
     }
   }
 
-  private def fromMaxPooling(node: IRElement) : Module[Float] = {
-    val t = node.getOp().asInstanceOf[IRSpatialMaxPooling]
+  private def fromMaxPooling(node: IRElement[Float]) : Module[Float] = {
+    val t = node.getOp().asInstanceOf[IRSpatialMaxPooling[Float]]
     val kernelW = t.kW
     val kernelH = t.kH
     val strideW = t.dW
@@ -130,8 +130,8 @@ class IRLayer2Dnn {
     mkldnn.MaxPooling(kernelW, kernelH, strideW, strideH, padW, padH)
   }
 
-  private def fromAvgPooling(node: IRElement) : Module[Float] = {
-    val t = node.getOp().asInstanceOf[IRSpatialAveragePooling]
+  private def fromAvgPooling(node: IRElement[Float]) : Module[Float] = {
+    val t = node.getOp().asInstanceOf[IRSpatialAveragePooling[Float]]
     val kernelW = t.kW
     val kernelH = t.kH
     val strideW = t.dW
@@ -141,8 +141,8 @@ class IRLayer2Dnn {
     mkldnn.AvgPooling(kernelW, kernelH, strideW, strideH, padW, padH)
   }
 
-  private def fromLRN(node: IRElement) : Module[Float] = {
-    val t = node.getOp().asInstanceOf[IRSpatialCrossMapLRN]
+  private def fromLRN(node: IRElement[Float]) : Module[Float] = {
+    val t = node.getOp().asInstanceOf[IRSpatialCrossMapLRN[Float]]
     val size = t.size
     val alpha = t.alpha
     val beta = t.beta
@@ -150,7 +150,7 @@ class IRLayer2Dnn {
     mkldnn.LRN(size, alpha, beta, k)
   }
 
-  private def fromSbn(node: IRElement) : Module[Float] = {
+  private def fromSbn(node: IRElement[Float]) : Module[Float] = {
     val t = node.getOp().asInstanceOf[IRSpatialBatchNormalization[Float]]
     val nOutput = t.nOutput
     val eps = t.eps

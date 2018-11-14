@@ -19,27 +19,28 @@ package com.intel.analytics.bigdl.utils.mkldnn
 import com.intel.analytics.bigdl.nn.abstractnn.DataFormat
 import com.intel.analytics.bigdl.optim.Regularizer
 import com.intel.analytics.bigdl.tensor.Tensor
+import com.intel.analytics.bigdl.utils.T
 import org.tensorflow.framework.NodeDef
 
 import scala.reflect.ClassTag
 
-sealed class IROperate {
+sealed class IROperate[T] {
   def name: String = this.getClass.getSimpleName
 }
 
-case class IRSpatialMaxPooling(
+case class IRSpatialMaxPooling[T: ClassTag](
             kW: Int, kH: Int,
             dW: Int = 1, dH: Int = 1,
             padW: Int = 0, padH: Int = 0,
-            format: DataFormat = DataFormat.NCHW) extends IROperate
+            format: DataFormat = DataFormat.NCHW) extends IROperate[T]
 
-case class IRSpatialAveragePooling(
+case class IRSpatialAveragePooling[T: ClassTag](
             kW: Int, kH: Int,
             dW: Int = 1, dH: Int = 1,
             padW: Int = 0, padH: Int = 0,
             globalPooling: Boolean = false,
             ceilMode: Boolean = false, countIncludePad: Boolean = true,
-            divide: Boolean = true, format: DataFormat = DataFormat.NCHW) extends IROperate
+            divide: Boolean = true, format: DataFormat = DataFormat.NCHW) extends IROperate[T]
 
 case class IRSpatialConvolution[T: ClassTag](
             nInputPlane: Int, nOutputPlane: Int,
@@ -50,7 +51,7 @@ case class IRSpatialConvolution[T: ClassTag](
             wRegularizer: Regularizer[T] = null, bRegularizer: Regularizer[T] = null,
             initWeight: Tensor[T] = null, initBias: Tensor[T] = null,
             initGradWeight: Tensor[T] = null, initGradBias: Tensor[T] = null,
-            withBias: Boolean = true, format: DataFormat = DataFormat.NCHW) extends IROperate
+            withBias: Boolean = true, format: DataFormat = DataFormat.NCHW) extends IROperate[T]
 
 
 case class IRSpatialBatchNormalization[T: ClassTag](
@@ -58,13 +59,14 @@ case class IRSpatialBatchNormalization[T: ClassTag](
             affine: Boolean = true,
             initWeight: Tensor[T] = null, initBias: Tensor[T] = null,
             initGradWeight: Tensor[T] = null, initGradBias: Tensor[T] = null,
-            dataFormat: DataFormat = DataFormat.NCHW) extends IROperate
+            dataFormat: DataFormat = DataFormat.NCHW) extends IROperate[T]
 
-case class IRIdentity() extends IROperate
+case class IRIdentity[T: ClassTag]() extends IROperate[T]
 
-case class IRDropout(initP: Double = 0.5, inplace: Boolean = false) extends IROperate
+case class IRDropout[T: ClassTag](
+            initP: Double = 0.5, inplace: Boolean = false) extends IROperate[T]
 
-case class IRReLu() extends IROperate
+case class IRReLu[T: ClassTag]() extends IROperate[T]
 
 case class IRLinear[T: ClassTag](
             inputSize: Int,
@@ -75,51 +77,61 @@ case class IRLinear[T: ClassTag](
             initWeight: Tensor[T] = null,
             initBias: Tensor[T] = null,
             initGradWeight: Tensor[T] = null,
-            initGradBias: Tensor[T] = null) extends IROperate
+            initGradBias: Tensor[T] = null) extends IROperate[T]
 
-case class IRSqueeze(dims: Array[Int], batchMode: Boolean) extends IROperate
+case class IRSqueeze[T: ClassTag](dims: Array[Int], batchMode: Boolean) extends IROperate[T]
 
-case class IRSpatialCrossMapLRN(
+case class IRSpatialCrossMapLRN[T: ClassTag](
             size: Int = 5,
             alpha: Double = 1.0,
             beta: Double = 0.75,
             k: Double = 1.0,
-            data_format: DataFormat = DataFormat.NCHW) extends IROperate
+            data_format: DataFormat = DataFormat.NCHW) extends IROperate[T]
 
-case class IRInput(var data_format: String, size: Array[Int]) extends IROperate
+case class IRInput[T: ClassTag](var data_format: String, size: Array[Int]) extends IROperate[T]
 
-case class IROutput() extends IROperate
+case class IROutput[T: ClassTag]() extends IROperate[T]
 
-case class IRSelectTable(dimension: Int) extends IROperate
+case class IRSelectTable[T: ClassTag](dimension: Int) extends IROperate[T]
 
 
-private[bigdl] class IRElement(
+private[bigdl] class IRElement[T: ClassTag](
   val name: String,
-  val op_type: IROperate,
-  private var formats: String = "",
-  private var src_layer: Any = null,
+  val op_type: IROperate[T],
+  var formats: String = "",
+  val src_layer: Any = null,
+  private var weights: Tensor[T] = null,
+  private var bias: Tensor[T] = null,
   var inputShape: Array[Int] = null,
   var outputShape: Array[Int] = null) {
 
-  private var inputs : Seq[String] = _
+  // weight and gradweight
+  def setWeights(weightsAndGradWeights: Tensor[T]) : Unit = {
+    weights = weightsAndGradWeights
+  }
+  // bias and gradbias
+  def setBias(biasAndGradBias: Tensor[T]) : Unit = {
+    bias = biasAndGradBias
+  }
+
+  def getParameters(): (Tensor[T], Tensor[T]) = (weights, bias)
 
   // Get the element name
   def getName() : String = this.name
 
-  def getOp() : IROperate = this.op_type
+  def getOp() : IROperate[T] = this.op_type
 
   final def getFormats() : String = formats
 
   final def setFormats(format: String) : Unit = {
     formats = format
   }
-
-  final def srcLayer() : Any = src_layer
 }
 
 object IRElement {
-  def apply(name: String, op_type: IROperate,
+  def apply[T: ClassTag](name: String, op_type: IROperate[T],
             formats: String = "", src_layer: Any = null,
-            inputShape: Array[Int] = null, outputShape: Array[Int] = null): IRElement =
-    new IRElement(name, op_type, formats, inputShape, outputShape)
+            weights: Tensor[T] = null, bias: Tensor[T] = null,
+            inputShape: Array[Int] = null, outputShape: Array[Int] = null): IRElement[T] =
+    new IRElement[T](name, op_type, formats, src_layer, weights, bias, inputShape, outputShape)
 }

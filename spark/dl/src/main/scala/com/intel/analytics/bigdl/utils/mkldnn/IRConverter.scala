@@ -37,7 +37,7 @@ private[bigdl] class IRConverter[T: ClassTag](IRgraph: IRGraph[T])(implicit ev: 
   private def enableToDnn(): Boolean = {
     var convert = true
     IRgraph.allNodes.foreach(node => {
-      if (!IRLayer2Dnn[T].enableConvert(node.element)) {
+      if (!IRLayer2Dnn[Float].enableConvert(node.element.asInstanceOf[IRElement[Float]])) {
         convert = false
       }
     })
@@ -72,11 +72,13 @@ private[bigdl] class IRConverter[T: ClassTag](IRgraph: IRGraph[T])(implicit ev: 
   private def toDnnGraph(): Graph[T] = {
     import com.intel.analytics.bigdl.nn.mkldnn
     val allNodes = IRgraph.allNodes
-    val oldToNew = new mutable.HashMap[Node[IRElement], Node[Module[Float]]]()
+    val oldToNew = new mutable.HashMap[Node[IRElement[T]], Node[Module[Float]]]()
 
     allNodes.foreach(node => {
-      val dnn = if (IRLayer2Dnn[Float].enableConvert(node.element)) {
-        new Node(IRLayer2Dnn[Float].convertIRLayer(node.element))
+      val dnn = if (IRLayer2Dnn[Float].enableConvert(node.element.asInstanceOf[IRElement[Float]])) {
+        val e = IRLayer2Dnn[Float].convertIRLayer(node.element.asInstanceOf[IRElement[Float]])
+          .setName(node.element.getName())
+        new Node(e)
       } else {
         // todo: may be can support non dnn layers
         throw new UnsupportedOperationException(s"can not find ${node.element.getOp()} ")
@@ -96,41 +98,17 @@ private[bigdl] class IRConverter[T: ClassTag](IRgraph: IRGraph[T])(implicit ev: 
       oldToNew.get(n).get.asInstanceOf[ModuleNode[Float]])
     val outputs = IRgraph.outputs.toArray.map(n =>
       oldToNew.get(n).get.asInstanceOf[ModuleNode[Float]])
-//    // todo: check input formats, if NHWC, then add reorder layer
-//
-//    // todo: check outputs formats, add output reorder layer
-//    val realOutputs = outputs.map(out => {
-//      val m = out.element.asInstanceOf[MklDnnLayer]
-//      val reorder = m._outputFormats.map(outMemData => {
-//        val shape = outMemData.shape
-//        val layout = outMemData.layout
-//        require(shape.length == 2 || shape.length == 4, s"output shape should be 2 or 4 dims," +
-//          s"but get ${shape.length}, and this IRElement name is ${m.getName()}")
-//        val realOut = if (shape.length == 2) {
-//          val realOutFormat = new HeapData(shape, Memory.Format.nc)
-//          val layer = ReorderMemory(inputFormat = null, outputFormat = realOutFormat,
-//            gradInputFormat = null, gradOutputFomat = realOutFormat)
-//          layer
-//        } else if (shape.length == 4) {
-//          val realOutFormat = new HeapData(shape, Memory.Format.nchw)
-//          val layer = ReorderMemory(inputFormat = null, outputFormat = realOutFormat,
-//            gradInputFormat = null, gradOutputFomat = realOutFormat)
-//          layer
-//        }
-//        val node = new Node[Float](realOut)
-//        out.add(node)
-//        node
-//      })
-//    })
+
     DnnGraph(inputs, outputs).asInstanceOf[Graph[T]]
   }
 
   private def toBlasGraph(): Graph[T] = {
     val allNodes = IRgraph.allNodes
-    val oldToNew = new mutable.HashMap[Node[IRElement], Node[Module[T]]]()
+    val oldToNew = new mutable.HashMap[Node[IRElement[T]], Node[Module[T]]]()
     allNodes.foreach(node => {
       require(IRLayer2Blas[T].enableConvert(node.element), "")
-      oldToNew.put(node, new Node(IRLayer2Blas[T].convertIRLayer(node.element)))
+      val e = IRLayer2Blas[T].convertIRLayer(node.element).setName(node.element.getName())
+      oldToNew.put(node, new Node(e))
     })
 
     allNodes.foreach(node => {
@@ -141,8 +119,8 @@ private[bigdl] class IRConverter[T: ClassTag](IRgraph: IRGraph[T])(implicit ev: 
       })
     })
 
-    val inputs = IRgraph.inputs.toArray.map(n => oldToNew.get(n).asInstanceOf[ModuleNode[T]])
-    val outputs = IRgraph.outputs.toArray.map(n => oldToNew.get(n).asInstanceOf[ModuleNode[T]])
+    val inputs = IRgraph.inputs.toArray.map(n => oldToNew.get(n).get.asInstanceOf[ModuleNode[T]])
+    val outputs = IRgraph.outputs.toArray.map(n => oldToNew.get(n).get.asInstanceOf[ModuleNode[T]])
 
     Graph.dynamic(inputs, outputs, IRgraph.variables, IRgraph.generateBackward)
   }
