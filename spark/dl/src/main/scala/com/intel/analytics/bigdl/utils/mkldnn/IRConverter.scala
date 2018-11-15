@@ -64,24 +64,31 @@ private[bigdl] class IRConverter[T: ClassTag](IRgraph: IRGraph[T])(implicit ev: 
       toBlasGraph()
     } else {
       // conver to dnn
-      require(enableToDnn(), "this IR graph can not convert to Blas layer")
+      // require(enableToDnn(), "this IR graph can not convert to Blas layer")
       toDnnGraph()
     }
   }
 
-  private def toDnnGraph(): Graph[T] = {
+  private[bigdl] def toDnnGraph(): Graph[T] = {
     import com.intel.analytics.bigdl.nn.mkldnn
     val allNodes = IRgraph.allNodes
     val oldToNew = new mutable.HashMap[Node[IRElement[T]], Node[Module[Float]]]()
 
     allNodes.foreach(node => {
-      val dnn = if (IRLayer2Dnn[Float].enableConvert(node.element.asInstanceOf[IRElement[Float]])) {
-        val e = IRLayer2Dnn[Float].convertIRLayer(node.element.asInstanceOf[IRElement[Float]])
-          .setName(node.element.getName())
-        new Node(e)
+      val op = node.element.getOp().asInstanceOf[IROperate[Float]]
+      val dnn = if (op.isInstanceOf[IRReshape[Float]] &&
+        node.nextNodes.length == 1 &&
+        node.nextNodes(0).element.getOp().asInstanceOf[IROperate[Float]]
+          .isInstanceOf[IRLinear[Float]]) {
+        new Node(mkldnn.Identity().asInstanceOf[Module[Float]])
       } else {
-        // todo: may be can support non dnn layers
-        throw new UnsupportedOperationException(s"can not find ${node.element.getOp()} ")
+        if (IRLayer2Dnn[Float].enableConvert(node.element.asInstanceOf[IRElement[Float]])) {
+          val e = IRLayer2Dnn[Float].convertIRLayer(node.element.asInstanceOf[IRElement[Float]])
+          new Node(e)
+        } else {
+          // todo: may be can support non dnn layers
+          throw new UnsupportedOperationException(s"can not find ${node.element.getOp()} ")
+        }
       }
       oldToNew.put(node, dnn)
     })
@@ -99,15 +106,23 @@ private[bigdl] class IRConverter[T: ClassTag](IRgraph: IRGraph[T])(implicit ev: 
     val outputs = IRgraph.outputs.toArray.map(n =>
       oldToNew.get(n).get.asInstanceOf[ModuleNode[Float]])
 
-    DnnGraph(inputs, outputs).asInstanceOf[Graph[T]]
+    val realOutputs = outputs.map(out => {
+      val m = out.element.asInstanceOf[MklDnnLayer]
+      val node = new Node(Output(outputLayOut = IRgraph.outputFormats,
+        gradOutputLayout = IRgraph.outputFormats).asInstanceOf[Module[Float]])
+        out.add(node)
+        node
+      })
+
+    DnnGraph(inputs, realOutputs).asInstanceOf[Graph[T]]
   }
 
-  private def toBlasGraph(): Graph[T] = {
+  private[bigdl] def toBlasGraph(): Graph[T] = {
     val allNodes = IRgraph.allNodes
     val oldToNew = new mutable.HashMap[Node[IRElement[T]], Node[Module[T]]]()
     allNodes.foreach(node => {
       require(IRLayer2Blas[T].enableConvert(node.element), "")
-      val e = IRLayer2Blas[T].convertIRLayer(node.element).setName(node.element.getName())
+      val e = IRLayer2Blas[T].convertIRLayer(node.element)
       oldToNew.put(node, new Node(e))
     })
 

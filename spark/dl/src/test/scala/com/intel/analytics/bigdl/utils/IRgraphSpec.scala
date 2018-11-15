@@ -13,11 +13,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.intel.analytics.bigdl.nn.mkldnn
+package com.intel.analytics.bigdl.utils
 
 import com.intel.analytics.bigdl.nn
-import com.intel.analytics.bigdl.nn.{Graph, Reshape, StaticGraph}
-import com.intel.analytics.bigdl.utils.{BigDLSpecHelper, Table}
+import com.intel.analytics.bigdl.nn.{Graph, StaticGraph}
 import com.intel.analytics.bigdl.numeric.NumericFloat
 import com.intel.analytics.bigdl.tensor.Tensor
 
@@ -25,7 +24,7 @@ import com.intel.analytics.bigdl.tensor.Tensor
 class IRgraphSpec extends BigDLSpecHelper {
   def model() : Graph[Float] = {
     val conv1 = nn.SpatialConvolution(1, 20, 5, 5).inputs()
-    val bn1 = nn.SpatialBatchNormalization(20).inputs(conv1)
+    val bn1 = conv1 // nn.SpatialBatchNormalization(20).inputs(conv1)
     val pool1 = nn.SpatialMaxPooling(2, 2, 2, 2).setName("pool").inputs(bn1)
     val conv2 = nn.SpatialConvolution(20, 50, 5, 5).inputs(pool1)
     val pool2 = nn.SpatialMaxPooling(2, 2, 2, 2).inputs(conv2)
@@ -76,7 +75,7 @@ class IRgraphSpec extends BigDLSpecHelper {
  }
 
   "static graph to ir graph & dnn" should "be correct" in {
-    // System.setProperty("bigdl.engineType", "mkldnn")
+    System.setProperty("bigdl.engineType", "mkldnn")
 
     val m = model().asInstanceOf[StaticGraph[Float]]
 
@@ -109,10 +108,12 @@ class IRgraphSpec extends BigDLSpecHelper {
       // t1 should be(t2)
     }
 
-    val out1 = ir.forward(input)
-    val out2 = m.forward(input)
+    val out1 = ir.forward(input).toTensor[Float]
+    val outNHWC = Tensor[Float](out1.size()).copy(out1)
 
-    out1 should be(out2)
+    val out2 = m.forward(input).toTensor[Float]
+
+    outNHWC should be(out2)
     println("done")
   }
 }

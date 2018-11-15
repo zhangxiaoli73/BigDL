@@ -17,6 +17,7 @@ package com.intel.analytics.bigdl.nn.mkldnn
 
 import com.intel.analytics.bigdl.mkl.{Memory, MklDnn}
 import com.intel.analytics.bigdl.nn.abstractnn.Activity
+import com.intel.analytics.bigdl.tensor.{DnnTensor, Tensor}
 
 class Output(outputLayOut: Int = Memory.Format.nc,
              gradOutputLayout: Int = Memory.Format.nc) extends MklDnnLayer {
@@ -50,7 +51,12 @@ class Output(outputLayOut: Int = Memory.Format.nc,
   }
 
   override def updateOutput(input: Activity): Activity = {
-    output = input
+    if (input.toTensor[Float].isInstanceOf[DnnTensor[Float]]) {
+      if (output == null) output = Tensor[Float]()
+      output.toTensor[Float].resizeAs(input.toTensor[Float]).copy(input.toTensor[Float])
+    } else {
+      output = input
+    }
     output
   }
 
@@ -80,7 +86,12 @@ class Output(outputLayOut: Int = Memory.Format.nc,
   }
 
   override def updateGradInput(input: Activity, gradOutput: Activity): Activity = {
-    gradInput = gradOutput
+    if (gradOutput.toTensor[Float].isInstanceOf[DnnTensor[Float]]) {
+      if (gradInput == null) gradInput = Tensor[Float]()
+      gradInput.toTensor[Float].resizeAs(input.toTensor[Float]).copy(input.toTensor[Float])
+    } else {
+      gradInput = gradOutput
+    }
     gradInput
   }
 

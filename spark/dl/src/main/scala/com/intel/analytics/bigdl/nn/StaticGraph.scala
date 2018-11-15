@@ -16,12 +16,13 @@
 package com.intel.analytics.bigdl.nn
 
 import com.intel.analytics.bigdl.Module
+import com.intel.analytics.bigdl.mkl.Memory
 import com.intel.analytics.bigdl.nn.Graph.ModuleNode
 import com.intel.analytics.bigdl.nn.abstractnn.{AbstractModule, Activity}
 import com.intel.analytics.bigdl.nn.tf.ControlDependency
 import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
-import com.intel.analytics.bigdl.utils.mkldnn.{IRElement, IRGraph, IRLayer2Blas, ReflectionUtils}
+import com.intel.analytics.bigdl.utils.mkldnn._
 import com.intel.analytics.bigdl.utils.{Node, Util}
 
 import scala.collection.mutable
@@ -161,7 +162,8 @@ class StaticGraph[T: ClassTag](
     })
   }
 
-  def toIRgraph() : IRGraph[T] = {
+  def toIRgraph(inputFormats: Int = Memory.Format.nchw,
+                outputFormats: Int = Memory.Format.nc) : IRGraph[T] = {
     val allNodes = new ArrayBuffer[Node[Module[T]]]
     getNodes(inputs, allNodes)
     // todo: some output nodes may not be searched from inputs
@@ -170,30 +172,32 @@ class StaticGraph[T: ClassTag](
     })
 
     val oldToNew = new mutable.HashMap[Node[Module[T]], Node[IRElement[T]]]()
-      allNodes.foreach(node => {
-//        try {
-//          val ref = ReflectionUtils.convertToIRLayer[T](node.element)
-//          oldToNew.put(node, new Node(ref))
-//        } catch {
-//          case e: Throwable =>
-//            null
-//        }
+    allNodes.foreach(node => {
+      val layer = node.element
+      val layerName = layer.getClass.getSimpleName
+      val cls = Class.forName("com.intel.analytics.bigdl.utils.mkldnn.IR" + layerName)
+      val op = ReflectionUtils.reflection(layer, cls).asInstanceOf[IROperate[T]]
 
-        val ref = ReflectionUtils.convertToIRLayer[T](node.element)
-        oldToNew.put(node, new Node(ref))
+      val weightsAndBias =
+        if (layer.parameters() != null) layer.getParameters() else (null, null)
+      val element = IRElement[T](
+        layer.getName(), op, weights = weightsAndBias._1, bias = weightsAndBias._2)
+
+      oldToNew.put(node, new Node(element))
+    })
+
+    allNodes.foreach(node => {
+      node.nextNodesAndEdges.foreach(nextNodeAndEdge => {
+        if (oldToNew.contains(nextNodeAndEdge._1)) {
+          oldToNew.get(node).get.add(oldToNew.get(nextNodeAndEdge._1).get, nextNodeAndEdge._2)
+        }
       })
+    })
 
-      allNodes.foreach(node => {
-        node.nextNodesAndEdges.foreach(nextNodeAndEdge => {
-          if (oldToNew.contains(nextNodeAndEdge._1)) {
-            oldToNew.get(node).get.add(oldToNew.get(nextNodeAndEdge._1).get, nextNodeAndEdge._2)
-          }
-        })
-      })
+    val inputsIR = inputs.toArray.map(n => oldToNew.get(n).get)
+    val outputsIR = outputs.toArray.map(n => oldToNew.get(n).get)
 
-      val inputsIR = inputs.toArray.map(n => oldToNew.get(n).get.asInstanceOf[Node[IRElement[T]]])
-      val outputsIR = outputs.toArray.map(n => oldToNew.get(n).get.asInstanceOf[Node[IRElement[T]]])
-
-      IRGraph(inputsIR, outputsIR, variables)
+    IRGraph(inputsIR, outputsIR, variables,
+      inputFormats = inputFormats, outputFormats = Memory.Format.nchw)
   }
 }

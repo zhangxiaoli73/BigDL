@@ -39,7 +39,6 @@ import scala.reflect.runtime.universe
 
 
 class IRLayer2Blas[T: ClassTag](implicit ev: TensorNumeric[T]) {
-
   def enableConvert(layer: IRElement[T]) : Boolean = {
     val name = layer.getOp().name
     try {
@@ -54,40 +53,17 @@ class IRLayer2Blas[T: ClassTag](implicit ev: TensorNumeric[T]) {
   def convertIRLayer(layer : IRElement[T]) : Module[T] = {
     val name = layer.getOp().name
     val cls = Class.forName("com.intel.analytics.bigdl.nn." + name.substring(2))
+    val blasLayer = ReflectionUtils.reflection(layer.getOp(), cls).asInstanceOf[Module[T]]
 
-    // val biasLayer = ReflectionUtils.reflection(layer, cls)
-
-    val nameAndValues = ReflectionUtils.getFiledNameAndValues(layer.getOp())
-    val constructorMirror = getCostructorMirror(cls)
-    val constructorFullParams = constructorMirror.symbol.paramss
-    val args = new Array[Object](constructorFullParams.map(_.size).sum)
-
-    var i = 0
-    constructorFullParams.foreach(map => {
-      map.foreach(param => {
-        val name = param.name.decodedName.toString
-        val ptype = param.typeSignature
-        if (ptype <:< universe.typeOf[ClassTag[_]]||
-          ptype.typeSymbol == universe.typeOf[ClassTag[_]].typeSymbol) {
-          // todo: check
-          args(i) = ManifestFactory.Float
-        } else if (ptype <:< universe.typeOf[TensorNumeric[_]]
-          || ptype.typeSymbol == universe.typeOf[TensorNumeric[_]].typeSymbol) {
-          // todo: check
-          args(i) = TensorNumeric.NumericFloat
-        } else {
-          val value = nameAndValues.get(name).getOrElse(null)
-          args(i) = value
-        }
-        i += 1
-      })
-    })
-    val blasLayer = constructorMirror.apply(args : _*).asInstanceOf[Module[T]]
     if (blasLayer.parameters() != null) {
       val params = blasLayer.getParameters()
       val params2 = layer.getParameters()
-      if (params2._1 != null) params.copy(params2._1)
-      if (params2._2 != null) params.copy(params2._2)
+      if (params2._1 != null) params._1.copy(params2._1)
+      if (params2._2 != null) params._2.copy(params2._2)
+    }
+
+    if (layer.getName() != "") {
+      blasLayer.setName(layer.getName())
     }
     blasLayer
   }

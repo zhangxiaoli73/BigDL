@@ -66,7 +66,7 @@ case class IRIdentity[T: ClassTag]() extends IROperate[T]
 case class IRDropout[T: ClassTag](
             initP: Double = 0.5, inplace: Boolean = false) extends IROperate[T]
 
-case class IRReLu[T: ClassTag]() extends IROperate[T]
+case class IRReLU[T: ClassTag](ip: Boolean = false) extends IROperate[T]
 
 case class IRLinear[T: ClassTag](
             inputSize: Int,
@@ -94,6 +94,8 @@ case class IROutput[T: ClassTag]() extends IROperate[T]
 
 case class IRSelectTable[T: ClassTag](dimension: Int) extends IROperate[T]
 
+case class IRReshape[T: ClassTag](
+            size: Array[Int], batchMode: Option[Boolean] = None) extends IROperate[T]
 
 private[bigdl] class IRElement[T: ClassTag](
   val name: String,

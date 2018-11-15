@@ -102,9 +102,16 @@ class IRLayer2Dnn {
       val initBias = t.initWeight
       val initGradWeight = t.initGradWeight
       val initGradBias = t.initGradBias
-      mkldnn.SpatialConvolution(nInputPlane, nOutputPlane, kernelW, kernelH,
+      val layer = mkldnn.SpatialConvolution(nInputPlane, nOutputPlane, kernelW, kernelH,
         strideW, strideH, padW, padH, initBias = initBias, initGradBias = initGradBias,
         initWeight = initWeight, initGradWeight = initGradWeight)
+      val params = node.getParameters()
+      val params2 = layer.getParameters()
+      if (params._1 != null) params2._1.copy(params._1)
+      if (params._2 != null) params2._2.copy(params._2)
+
+      layer
+
     } else {
       // from NHWC -> NCHW
       val initWeight = t.initWeight.
@@ -113,9 +120,16 @@ class IRLayer2Dnn {
       val initGradWeight = t.initGradWeight.
         transpose(1, 4).transpose(2, 3).transpose(3, 4).contiguous().clone()
       val initGradBias = t.initGradWeight
-      mkldnn.SpatialConvolution(nInputPlane, nOutputPlane, kernelW, kernelH,
+      val layer = mkldnn.SpatialConvolution(nInputPlane, nOutputPlane, kernelW, kernelH,
         strideW, strideH, padW, padH, initBias = initBias, initGradBias = initGradBias,
         initWeight = initWeight, initGradWeight = initGradWeight)
+
+      val params = node.getParameters()
+      val params2 = layer.getParameters()
+      if (params._1 != null) params2._1.copy(params._1)
+      if (params._2 != null) params2._2.copy(params._2)
+
+      layer
     }
   }
 
@@ -160,14 +174,23 @@ class IRLayer2Dnn {
     val initGradWeight = t.initGradWeight
     val initGradBias = t.initGradBias
 
-    new mkldnn.SpatialBatchNormalization(nOutput, eps, momentum,
+    mkldnn.SpatialBatchNormalization(nOutput, eps, momentum,
       initWeight, initBias, initGradWeight, initGradBias)
   }
 
-//  private def fromLinear(node: IRElement) : Module[Float] = {
-//    val t = node.getOp().asInstanceOf[IRLinear]
-//    mkldnn.LRN(size, alpha, beta, k)
-//  }
+  private def fromLinear(node: IRElement[Float]) : Module[Float] = {
+    val t = node.getOp().asInstanceOf[IRLinear[Float]]
+    val inputSize = t.inputSize
+    val outputSize = t.outputSize
+    val withBias: Boolean = true
+    val initWeight: Tensor[Float] = t.initWeight
+    val initBias: Tensor[Float] = t.initBias
+    val initGradWeight: Tensor[Float] = t.initGradWeight
+    val initGradBias: Tensor[Float] = t.initGradBias
+
+    mkldnn.Linear(inputSize, outputSize, withBias, initWeight,
+      initBias, initGradWeight, initGradBias)
+  }
 }
 
 object IRLayer2Dnn {

@@ -64,6 +64,7 @@ class SpatialConvolutionSpec extends FlatSpec with Matchers {
     conv.setRuntime(new MklDnnRuntime)
     conv.initFwdPrimitives(Array(HeapData(Array(1, 3, 32, 32), Memory.Format.nchw)), TrainingPhase)
 
+    // 1, 32, 28, 28
     val output = Tools.toNCHW(conv.forward(inputss).toTensor, conv.outputFormats()(0))
 
     val output22 = Tools.fromNCHW(output, HeapData(Array(1, 28, 28, 32), Memory.Format.nhwc))

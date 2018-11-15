@@ -26,8 +26,6 @@ import scala.reflect.runtime._
 
 object ReflectionUtils {
 
-  private val runtimeMirror = universe.runtimeMirror(getClass.getClassLoader)
-
   def getFiledNameAndValues(o: Object): mutable.HashMap[String, AnyRef] = {
     val c = o.getClass
     var fields = c.getDeclaredFields
@@ -44,22 +42,6 @@ object ReflectionUtils {
       i += 1
     }
     values
-  }
-
-  def getCostructorMirror[T : ClassTag](cls : Class[_]):
-  universe.MethodMirror = {
-    val lock = new Object
-    lock.synchronized {
-      val clsSymbol = runtimeMirror.classSymbol(cls)
-      val cm = runtimeMirror.reflectClass(clsSymbol)
-      // to make it compatible with both 2.11 and 2.10
-      val ctorCs = clsSymbol.toType.declaration(universe.nme.CONSTRUCTOR)
-      val primary: Option[universe.MethodSymbol] = ctorCs.asTerm.alternatives.collectFirst {
-        case cstor if cstor.asInstanceOf[universe.MethodSymbol].isPrimaryConstructor =>
-          cstor.asInstanceOf[universe.MethodSymbol]
-      }
-      cm.reflectConstructor(primary.get)
-    }
   }
 
   // create layer2 object form layer1
@@ -90,42 +72,5 @@ object ReflectionUtils {
       })
     })
     constructorMirror.apply(args : _*).asInstanceOf[Object]
-  }
-
-  def convertToIRLayer[T: ClassTag](layer : Module[T]) : IRElement[T] = {
-    val layerName = layer.getClass.getSimpleName
-    val cls = Class.forName("com.intel.analytics.bigdl.utils.mkldnn.IR" + layerName)
-    val nameAndValues = getFiledNameAndValues(layer)
-    val constructorMirror = getCostructorMirror(cls)
-    val constructorFullParams = constructorMirror.symbol.paramss
-    val args = new Array[Object](constructorFullParams.map(_.size).sum)
-
-    var i = 0
-    constructorFullParams.foreach(map => {
-      map.foreach(param => {
-        val name = param.name.decodedName.toString
-        val ptype = param.typeSignature
-        if (ptype <:< universe.typeOf[ClassTag[_]]||
-          ptype.typeSymbol == universe.typeOf[ClassTag[_]].typeSymbol) {
-          // todo: check
-          args(i) = ManifestFactory.Float
-        } else if (ptype <:< universe.typeOf[TensorNumeric[_]]
-          || ptype.typeSymbol == universe.typeOf[TensorNumeric[_]].typeSymbol) {
-          // todo: check
-          args(i) = TensorNumeric.NumericFloat
-        } else {
-          val value = nameAndValues.get(name).getOrElse(null)
-          args(i) = value
-        }
-        i += 1
-      })
-    })
-    val op = constructorMirror.apply(args : _*).asInstanceOf[IROperate[T]]
-    val weightsAndBias =
-      if (layer.parameters() != null) layer.getParameters() else (null, null)
-    val element = IRElement[T](
-      layer.getName(), op, weights = weightsAndBias._1, bias = weightsAndBias._2)
-
-    element
   }
 }
