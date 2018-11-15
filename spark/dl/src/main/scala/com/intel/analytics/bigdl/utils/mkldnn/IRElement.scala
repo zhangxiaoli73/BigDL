@@ -103,20 +103,20 @@ private[bigdl] class IRElement[T: ClassTag](
   var formats: String = "",
   val src_layer: Any = null,
   private var weights: Tensor[T] = null,
-  private var bias: Tensor[T] = null,
+  private var gradWeights: Tensor[T] = null,
   var inputShape: Array[Int] = null,
   var outputShape: Array[Int] = null) {
 
   // weight and gradweight
-  def setWeights(weightsAndGradWeights: Tensor[T]) : Unit = {
-    weights = weightsAndGradWeights
+  def setWeights(weightsAndBias: Tensor[T]) : Unit = {
+    weights = weightsAndBias
   }
   // bias and gradbias
-  def setBias(biasAndGradBias: Tensor[T]) : Unit = {
-    bias = biasAndGradBias
+  def setGradWeights(gradWeightsAndGradBias: Tensor[T]) : Unit = {
+    gradWeights = gradWeightsAndGradBias
   }
 
-  def getParameters(): (Tensor[T], Tensor[T]) = (weights, bias)
+  def getParameters(): (Tensor[T], Tensor[T]) = (weights, gradWeights)
 
   // Get the element name
   def getName() : String = this.name

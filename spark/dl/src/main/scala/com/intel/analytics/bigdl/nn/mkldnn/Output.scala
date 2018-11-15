@@ -53,7 +53,7 @@ class Output(outputLayOut: Int = Memory.Format.nc,
   override def updateOutput(input: Activity): Activity = {
     if (input.toTensor[Float].isInstanceOf[DnnTensor[Float]]) {
       if (output == null) output = Tensor[Float]()
-      output.toTensor[Float].resizeAs(input.toTensor[Float]).copy(input.toTensor[Float])
+      output.toTensor[Float].resize(input.toTensor[Float].size()).copy(input.toTensor[Float])
     } else {
       output = input
     }
@@ -88,7 +88,8 @@ class Output(outputLayOut: Int = Memory.Format.nc,
   override def updateGradInput(input: Activity, gradOutput: Activity): Activity = {
     if (gradOutput.toTensor[Float].isInstanceOf[DnnTensor[Float]]) {
       if (gradInput == null) gradInput = Tensor[Float]()
-      gradInput.toTensor[Float].resizeAs(input.toTensor[Float]).copy(input.toTensor[Float])
+      gradInput.toTensor[Float].resize(gradOutput.toTensor[Float].size())
+        .copy(gradOutput.toTensor[Float])
     } else {
       gradInput = gradOutput
     }

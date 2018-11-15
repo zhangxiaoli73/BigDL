@@ -57,7 +57,7 @@ class IRLayer2Dnn {
 
   private def mapInit(): Unit = {
     IR2DnnMap("IRInput") = fromInput
-    IR2DnnMap("IRReLu") = fromRelu
+    IR2DnnMap("IRReLU") = fromRelu
     IR2DnnMap("IRDropout") = fromDropOut
     IR2DnnMap("IRIdentity") = fromIdentity
     IR2DnnMap("IRSpatialConvolution") = fromConv
@@ -65,7 +65,7 @@ class IRLayer2Dnn {
     IR2DnnMap("IRSpatialAveragePooling") = fromAvgPooling
     IR2DnnMap("IRSpatialBatchNormalization") = fromSbn
     IR2DnnMap("IRSqueeze") = fromSqueeze
-    // IR2DnnMap("IRLinear") = fromLinear
+    IR2DnnMap("IRLinear") = fromLinear
   }
 
   private def fromRelu(node: IRElement[Float]) : Module[Float] = mkldnn.ReLU()
@@ -114,16 +114,19 @@ class IRLayer2Dnn {
 
     } else {
       // from NHWC -> NCHW
-      val initWeight = t.initWeight.
-        transpose(1, 4).transpose(2, 3).transpose(3, 4).contiguous().clone()
+      val initWeight = if (t.initWeight != null) {
+        t.initWeight.transpose(1, 4).transpose(2, 3).transpose(3, 4).contiguous().clone()
+      } else null
       val initBias = t.initBias
-      val initGradWeight = t.initGradWeight.
-        transpose(1, 4).transpose(2, 3).transpose(3, 4).contiguous().clone()
+      val initGradWeight = if (t.initGradWeight != null) {
+        t.initGradWeight.transpose(1, 4).transpose(2, 3).transpose(3, 4).contiguous().clone()
+      } else null
       val initGradBias = t.initGradWeight
       val layer = mkldnn.SpatialConvolution(nInputPlane, nOutputPlane, kernelW, kernelH,
         strideW, strideH, padW, padH, initBias = initBias, initGradBias = initGradBias,
         initWeight = initWeight, initGradWeight = initGradWeight)
 
+      // todo: handle NHWC
       val params = node.getParameters()
       val params2 = layer.getParameters()
       if (params._1 != null) params2._1.copy(params._1)
@@ -164,6 +167,7 @@ class IRLayer2Dnn {
     mkldnn.LRN(size, alpha, beta, k)
   }
 
+  // todo :not corret
   private def fromSbn(node: IRElement[Float]) : Module[Float] = {
     val t = node.getOp().asInstanceOf[IRSpatialBatchNormalization[Float]]
     val nOutput = t.nOutput
@@ -174,8 +178,13 @@ class IRLayer2Dnn {
     val initGradWeight = t.initGradWeight
     val initGradBias = t.initGradBias
 
-    mkldnn.SpatialBatchNormalization(nOutput, eps, momentum,
-      initWeight, initBias, initGradWeight, initGradBias)
+    val layer = mkldnn.SpatialBatchNormalization(nOutput, eps, momentum,
+      true, initWeight, initBias, initGradWeight, initGradBias)
+
+    val params = node.getParameters()
+    if (params._1 != null) layer.weightAndBias.copy(params._1)
+    if (params._2 != null) layer.gradWeightAndBias.copy(params._2)
+    layer
   }
 
   private def fromLinear(node: IRElement[Float]) : Module[Float] = {
@@ -188,8 +197,16 @@ class IRLayer2Dnn {
     val initGradWeight: Tensor[Float] = t.initGradWeight
     val initGradBias: Tensor[Float] = t.initGradBias
 
-    mkldnn.Linear(inputSize, outputSize, withBias, initWeight,
+
+    val layer = mkldnn.Linear(inputSize, outputSize, withBias, initWeight,
       initBias, initGradWeight, initGradBias)
+
+    val params = node.getParameters()
+    val params2 = layer.getParameters()
+    if (params._1 != null) params2._1.copy(params._1)
+    if (params._2 != null) params2._2.copy(params._2)
+
+    layer
   }
 }
 

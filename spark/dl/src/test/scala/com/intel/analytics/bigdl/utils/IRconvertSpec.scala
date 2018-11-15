@@ -18,7 +18,7 @@ package com.intel.analytics.bigdl.utils
 
 import com.intel.analytics.bigdl.mkl.Memory
 import com.intel.analytics.bigdl.nn.abstractnn.DataFormat
-import com.intel.analytics.bigdl.{Module, nn}
+import com.intel.analytics.bigdl.{Module, nn, utils}
 import com.intel.analytics.bigdl.nn.{Graph, Reshape, StaticGraph}
 import com.intel.analytics.bigdl.nn.mkldnn.DnnGraph
 import com.intel.analytics.bigdl.utils.mkldnn._
@@ -30,12 +30,15 @@ class IRconvertSpec extends BigDLSpecHelper {
   def modelIR(inputFormats: Int = Memory.Format.nchw,
               outputFormats: Int = Memory.Format.nchw): IRGraph[Float] = {
     val conv1 = Node(IRElement[Float]("", IRSpatialConvolution[Float](1, 20, 5, 5)))
-    val bn1 = Node(IRElement[Float]("", IRSpatialBatchNormalization[Float](20)))
+//    val bn1 = Node(IRElement[Float]("", IRSpatialBatchNormalization[Float](20)))
+//    val weightsAndBias = Tensor[Float](2 * 20).rand()
+//    bn1.element.setWeights(weightsAndBias)
+
     val pool1 = Node(IRElement[Float]("", IRSpatialMaxPooling[Float](2, 2, 2, 2)))
     val conv2 = Node(IRElement[Float]("", IRSpatialConvolution[Float](20, 50, 5, 5)))
     val pool2 = Node(IRElement[Float]("", IRSpatialMaxPooling[Float](2, 2, 2, 2)))
 
-    conv1 -> bn1 -> pool1 -> conv2 -> pool2
+    conv1 -> pool1 -> conv2 -> pool2
     val output = pool2
     IRGraph(Array(conv1), Array(output), inputFormats = inputFormats, outputFormats = outputFormats)
   }
@@ -67,7 +70,8 @@ class IRconvertSpec extends BigDLSpecHelper {
     val fc = nn.Linear(50 * 4 * 4, 500).inputs(reshape)
     val relu = nn.ReLU().setName("relu1").inputs(fc)
     val fc2 = nn.Linear(500, 10).setName("ip2").inputs(relu)
-    Graph(conv1, fc2)
+    val output = fc2
+    Graph(conv1, output)
   }
 
   "Convert Blas with NHWC to Dnn" should "be correct" in {
@@ -78,12 +82,12 @@ class IRconvertSpec extends BigDLSpecHelper {
     val blas = modelBlas(DataFormat("NHWC")).asInstanceOf[StaticGraph[Float]]
     val irBlas = blas.toIRgraph(inputFormats = Memory.Format.nhwc)
 
-    System.setProperty("bigdl.engineType", "mklblas")
+    utils.Engine.setEngineType(MklBlas)
     irBlas.build()
     val outBlas = irBlas.forward(inpuNHWC)
     val gradInputBlas = irBlas.backward(inpuNHWC, gradOutput)
 
-    System.setProperty("bigdl.engineType", "mkldnn")
+    utils.Engine.setEngineType(MklDnn)
     irBlas.build()
     val outDnn = irBlas.forward(input)
     val gradInputDnn = irBlas.backward(input, gradOutput)
@@ -102,25 +106,18 @@ class IRconvertSpec extends BigDLSpecHelper {
     val gradOutput = Tensor[Float](2, 10).rand()
 
     val blas = modelBlas().asInstanceOf[StaticGraph[Float]]
-    val irBlas = blas.toIRgraph()
+    val irBlas = blas.toIRgraph(inputFormats = 5, outputFormats = Memory.Format.nc)
 
-    val convert = new IRConverter[Float](irBlas)
-    irBlas.graph = convert.toBlasGraph()
-    val outBlas = irBlas.forward(input)
-    val gradInputBlas = irBlas.backward(input, gradOutput)
+    val outBlas = blas.forward(input)
+    val gradInputBlas = blas.backward(input, gradOutput)
 
-    System.setProperty("bigdl.engineType", "mkldnn")
     irBlas.build()
-    irBlas.graph = convert.toBlasGraph()
     val outDnn = irBlas.forward(input)
-    val gradInputDnn = irBlas.backward(input, gradOutput)
-
-    val outBlas1 = blas.forward(input)
-    val gradInputBlas1 = blas.backward(input, gradOutput)
+    val gradInputDnn = irBlas.backward(input, gradOutput).toTensor[Float]
+    val gradInputTensor = Tensor[Float]().resize(gradInputDnn.size()).copy(gradInputDnn)
 
     outDnn should be(outBlas)
-    gradInputBlas should be(gradInputDnn)
-
+    gradInputTensor should be(gradInputBlas)
   }
 
   "Convert IRgraph to Dnn or Blas Graph" should "be correct" in {
@@ -128,21 +125,22 @@ class IRconvertSpec extends BigDLSpecHelper {
     val gradOutput = Tensor[Float](2, 50, 4, 4).rand()
 
     RandomGenerator.RNG.setSeed(1000)
-    System.setProperty("bigdl.engineType", "mklblas")
+    utils.Engine.setEngineType(MklBlas)
     val irBlas = modelIR()
     irBlas.build()
     val outBlas = irBlas.forward(input)
     val gradInputBlas = irBlas.backward(input, gradOutput)
 
     RandomGenerator.RNG.setSeed(1000)
-    System.setProperty("bigdl.engineType", "mkldnn")
+    utils.Engine.setEngineType(MklDnn)
     val irDnn = modelIR()
     irDnn.build()
     val outDnn = irDnn.forward(input)
-    val gradInputDnn = irDnn.backward(input, gradOutput)
+    val gradInputDnn = irDnn.backward(input, gradOutput).toTensor[Float]
+    val gradInputTensor = Tensor[Float]().resize(gradInputDnn.size()).copy(gradInputDnn)
 
     outDnn should be(outBlas)
-    gradInputBlas should be(gradInputDnn)
+    gradInputTensor should be(gradInputBlas)
   }
 
   "Convert IRgraph to Dnn or Blas Graph with 2 dimentions output" should "be correct" in {
@@ -150,20 +148,21 @@ class IRconvertSpec extends BigDLSpecHelper {
     val gradOutput = Tensor[Float](2, 10).rand()
 
     RandomGenerator.RNG.setSeed(1000)
-    System.setProperty("bigdl.engineType", "mklblas")
+    utils.Engine.setEngineType(MklBlas)
     val irBlas = modelIR2()
     irBlas.build()
     val outBlas = irBlas.forward(input)
     val gradInputBlas = irBlas.backward(input, gradOutput)
 
     RandomGenerator.RNG.setSeed(1000)
-    System.setProperty("bigdl.engineType", "mkldnn")
+    utils.Engine.setEngineType(MklDnn)
     val irDnn = modelIR2()
     irDnn.build()
     val outDnn = irDnn.forward(input)
-    val gradInputDnn = irDnn.backward(input, gradOutput)
+    val gradInputDnn = irDnn.backward(input, gradOutput).toTensor[Float]
+    val gradInputTensor = Tensor[Float]().resize(gradInputDnn.size()).copy(gradInputDnn)
 
     outDnn should be(outBlas)
-    gradInputBlas should be(gradInputDnn)
+    gradInputTensor should be(gradInputBlas)
   }
 }

@@ -106,6 +106,13 @@ private[bigdl] class IRConverter[T: ClassTag](IRgraph: IRGraph[T])(implicit ev: 
     val outputs = IRgraph.outputs.toArray.map(n =>
       oldToNew.get(n).get.asInstanceOf[ModuleNode[Float]])
 
+    val realInputs = inputs.map(out => {
+      val m = out.element.asInstanceOf[MklDnnLayer]
+      val node = new Node(new InputWrapper().asInstanceOf[Module[Float]])
+      out.from(node)
+      node
+    })
+
     val realOutputs = outputs.map(out => {
       val m = out.element.asInstanceOf[MklDnnLayer]
       val node = new Node(Output(outputLayOut = IRgraph.outputFormats,
@@ -114,7 +121,7 @@ private[bigdl] class IRConverter[T: ClassTag](IRgraph: IRGraph[T])(implicit ev: 
         node
       })
 
-    DnnGraph(inputs, realOutputs).asInstanceOf[Graph[T]]
+    DnnGraph(realInputs, realOutputs).asInstanceOf[Graph[T]]
   }
 
   private[bigdl] def toBlasGraph(): Graph[T] = {

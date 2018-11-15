@@ -198,6 +198,6 @@ class StaticGraph[T: ClassTag](
     val outputsIR = outputs.toArray.map(n => oldToNew.get(n).get)
 
     IRGraph(inputsIR, outputsIR, variables,
-      inputFormats = inputFormats, outputFormats = Memory.Format.nchw)
+      inputFormats = inputFormats, outputFormats = outputFormats)
   }
 }
