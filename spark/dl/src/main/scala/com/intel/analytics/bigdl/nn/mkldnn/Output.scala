@@ -82,6 +82,7 @@ class Output(outputLayOut: Int = Memory.Format.nc,
       _gradInputFormats = grads
       _gradOutputFormats = grads
     }
+    _gradOutputFormatsForWeight = _gradOutputFormats
     (_gradInputFormats, _gradOutputFormats)
   }
 

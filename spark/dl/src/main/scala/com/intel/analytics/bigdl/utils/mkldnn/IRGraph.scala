@@ -22,7 +22,7 @@ import breeze.linalg.reverse
 import com.intel.analytics.bigdl.mkl.Memory
 import com.intel.analytics.bigdl.nn.{Graph, keras}
 import com.intel.analytics.bigdl.nn.abstractnn.{AbstractModule, Activity, DataFormat}
-import com.intel.analytics.bigdl.nn.mkldnn.{DnnGraph, HeapData, Phase}
+import com.intel.analytics.bigdl.nn.mkldnn.{DnnGraph, HeapData, MklDnnRuntime, Phase}
 import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
 import com.intel.analytics.bigdl.utils.{Engine, MklBlas, Node, T}
@@ -87,6 +87,7 @@ class IRGraph[T: ClassTag](
       throw new UnsupportedOperationException("forward not supported, Please build graph first")
     }
     if (!initFwd && graph.isInstanceOf[DnnGraph]) {
+      graph.asInstanceOf[DnnGraph].setRuntime(new MklDnnRuntime())
       graph.asInstanceOf[DnnGraph].initFwdPrimitives(
         Array(HeapData(input.toTensor[T].size(), inputFormats)), Phase.TrainingPhase)
       initFwd = true
@@ -113,7 +114,7 @@ class IRGraph[T: ClassTag](
       throw new UnsupportedOperationException("backward not supported, Please build graph first")
     }
     if (!initAcc && graph.isInstanceOf[DnnGraph]) {
-      graph.asInstanceOf[DnnGraph].initBwdPrimitives(
+      graph.asInstanceOf[DnnGraph].initGradWPrimitives(
         graph.asInstanceOf[DnnGraph].outputFormats(), Phase.TrainingPhase)
       initAcc = true
     }

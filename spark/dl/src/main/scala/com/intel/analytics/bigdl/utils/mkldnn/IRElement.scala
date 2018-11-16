@@ -63,8 +63,8 @@ case class IRSpatialBatchNormalization[T: ClassTag](
 
 case class IRIdentity[T: ClassTag]() extends IROperate[T]
 
-case class IRDropout[T: ClassTag](
-            initP: Double = 0.5, inplace: Boolean = false) extends IROperate[T]
+case class IRDropout[T: ClassTag](initP: Double = 0.5, inplace: Boolean = false,
+                                  scale: Boolean = true) extends IROperate[T]
 
 case class IRReLU[T: ClassTag](ip: Boolean = false) extends IROperate[T]
 
@@ -90,12 +90,17 @@ case class IRSpatialCrossMapLRN[T: ClassTag](
 
 case class IRInput[T: ClassTag](var data_format: String, size: Array[Int]) extends IROperate[T]
 
-case class IROutput[T: ClassTag]() extends IROperate[T]
-
 case class IRSelectTable[T: ClassTag](dimension: Int) extends IROperate[T]
 
 case class IRReshape[T: ClassTag](
             size: Array[Int], batchMode: Option[Boolean] = None) extends IROperate[T]
+
+case class IRView[T: ClassTag]() extends IROperate[T]
+
+case class IRThreshold[T](th: Double = 1e-6, v: Double = 0.0,
+                          ip: Boolean = false) extends IROperate[T]
+
+case class IRLogSoftMax[T: ClassTag]() extends IROperate[T]
 
 private[bigdl] class IRElement[T: ClassTag](
   val name: String,

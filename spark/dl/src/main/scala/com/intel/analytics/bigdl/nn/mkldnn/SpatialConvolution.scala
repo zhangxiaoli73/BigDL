@@ -350,8 +350,8 @@ class SpatialConvolution(
     gradWeight.setMemoryData(realWei)
     gradBias.setMemoryData(bis)
 
-    require(weight.memoryData().layout == gradWeight.memoryData().layout,
-      s"layout should be the same")
+//    require(weight.memoryData().layout == gradWeight.memoryData().layout,
+//      s"layout should be the same, but get ${weight.memoryData().layout} ${gradWeight.memoryData().layout}")
 
     val srcs = Array(realSrc.getPrimitive(runtime), realDiffDst.getPrimitive(runtime))
     val indexes = Array.fill(srcs.length)(0)

@@ -17,7 +17,7 @@ package com.intel.analytics.bigdl.nn.mkldnn
 
 import com.intel.analytics.bigdl.mkl.{AlgKind, MklDnn, PropKind, Query}
 
-class ReLU(value: Float = 0.0f) extends MklDnnLayer {
+class ReLU(value: Float = 0.0f, beta: Float = 0.0f) extends MklDnnLayer {
   private val UNDEFINED: Long = 0
 
   @transient private var fwdPrimDesc: Long = UNDEFINED
@@ -25,7 +25,7 @@ class ReLU(value: Float = 0.0f) extends MklDnnLayer {
   override private[mkldnn] def initFwdPrimitives(inputs: Array[MemoryData], phase: Phase) = {
     _inputFormats = singleNativeData(inputs)
     val description = MklDnn.EltwiseForwardDescInit(
-      PropKind.Forward, AlgKind.EltwiseRelu, _inputFormats(0).getMemoryDescription(), value, 0)
+      PropKind.Forward, AlgKind.EltwiseRelu, _inputFormats(0).getMemoryDescription(), value, beta)
     fwdPrimDesc = MklDnn.PrimitiveDescCreate(description, runtime.engine, 0L)
     _outputFormats = Array(MemoryData.primitiveOutput(fwdPrimDesc))
     updateOutputPrimitives = Array(
@@ -42,7 +42,7 @@ class ReLU(value: Float = 0.0f) extends MklDnnLayer {
     _gradOutputFormatsForWeight = _gradOutputFormats
     val description = MklDnn.EltwiseBackwardDescInit(AlgKind.EltwiseRelu,
       _gradOutputFormats(0).getMemoryDescription(), _inputFormats(0).getMemoryDescription(),
-      value, 0)
+      value, beta)
     require(fwdPrimDesc != UNDEFINED, "You should call initFwdPrimitives first")
     val primDesc = MklDnn.PrimitiveDescCreate(description, runtime.engine, fwdPrimDesc)
     _gradInputFormats = Array(MemoryData.primitiveGradInput(primDesc))
@@ -56,5 +56,5 @@ class ReLU(value: Float = 0.0f) extends MklDnnLayer {
 }
 
 object ReLU {
-  def apply(value: Float = 0.0f): ReLU = new ReLU(value)
+  def apply(value: Float = 0.0f, beta: Float = 0.0f): ReLU = new ReLU(value, beta)
 }

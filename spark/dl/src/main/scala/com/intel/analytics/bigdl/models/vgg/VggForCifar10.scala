@@ -182,52 +182,53 @@ object Vgg_16 {
 
   def graph(classNum: Int, hasDropout: Boolean = true)
   : Module[Float] = {
-    val conv1 = SpatialConvolution(3, 64, 3, 3, 1, 1, 1, 1).inputs()
+    val conv1 = SpatialConvolution(3, 64, 3, 3, 1, 1, 1, 1).setName("conv1").inputs()
     val relu1 = ReLU(true).inputs(conv1)
-    val conv2 = SpatialConvolution(64, 64, 3, 3, 1, 1, 1, 1).inputs(relu1)
+    val conv2 = SpatialConvolution(64, 64, 3, 3, 1, 1, 1, 1).setName("conv2").inputs(relu1)
     val relu2 = ReLU(true).inputs(conv2)
     val pool1 = SpatialMaxPooling(2, 2, 2, 2).inputs(relu2)
 
-    val conv3 = SpatialConvolution(64, 128, 3, 3, 1, 1, 1, 1).inputs(pool1)
+    val conv3 = SpatialConvolution(64, 128, 3, 3, 1, 1, 1, 1).setName("conv3").inputs(pool1)
     val relu3 = ReLU(true).inputs(conv3)
-    val conv4 = SpatialConvolution(128, 128, 3, 3, 1, 1, 1, 1).inputs(relu3)
+    val conv4 = SpatialConvolution(128, 128, 3, 3, 1, 1, 1, 1).setName("conv4").inputs(relu3)
     val relu4 = ReLU(true).inputs(conv4)
     val pool2 = SpatialMaxPooling(2, 2, 2, 2).inputs(relu4)
 
-    val conv5 = SpatialConvolution(128, 256, 3, 3, 1, 1, 1, 1).inputs(pool2)
+    val conv5 = SpatialConvolution(128, 256, 3, 3, 1, 1, 1, 1).setName("conv5").inputs(pool2)
     val relu5 = ReLU(true).inputs(conv5)
-    val conv6 = SpatialConvolution(256, 256, 3, 3, 1, 1, 1, 1).inputs(relu5)
+    val conv6 = SpatialConvolution(256, 256, 3, 3, 1, 1, 1, 1).setName("conv6").inputs(relu5)
     val relu6 = ReLU(true).inputs(conv6)
-    val conv7 = SpatialConvolution(256, 256, 3, 3, 1, 1, 1, 1).inputs(relu6)
+    val conv7 = SpatialConvolution(256, 256, 3, 3, 1, 1, 1, 1).setName("conv7").inputs(relu6)
     val relu7 = ReLU(true).inputs(conv7)
     val pool3 = SpatialMaxPooling(2, 2, 2, 2).inputs(relu7)
 
-    val conv8 = SpatialConvolution(256, 512, 3, 3, 1, 1, 1, 1).inputs(pool3)
+    val conv8 = SpatialConvolution(256, 512, 3, 3, 1, 1, 1, 1).setName("conv8").inputs(pool3)
     val relu8 = ReLU(true).inputs(conv8)
-    val conv9 = SpatialConvolution(512, 512, 3, 3, 1, 1, 1, 1).inputs(relu8)
+    val conv9 = SpatialConvolution(512, 512, 3, 3, 1, 1, 1, 1).setName("conv9").inputs(relu8)
     val relu9 = ReLU(true).inputs(conv9)
-    val conv10 = SpatialConvolution(512, 512, 3, 3, 1, 1, 1, 1).inputs(relu9)
+    val conv10 = SpatialConvolution(512, 512, 3, 3, 1, 1, 1, 1).setName("conv10").inputs(relu9)
     val relu10 = ReLU(true).inputs(conv10)
     val pool4 = SpatialMaxPooling(2, 2, 2, 2).inputs(relu10)
 
-    val conv11 = SpatialConvolution(512, 512, 3, 3, 1, 1, 1, 1).inputs(pool4)
+    val conv11 = SpatialConvolution(512, 512, 3, 3, 1, 1, 1, 1).setName("conv11").inputs(pool4)
     val relu11 = ReLU(true).inputs(conv11)
-    val conv12 = SpatialConvolution(512, 512, 3, 3, 1, 1, 1, 1).inputs(relu11)
+    val conv12 = SpatialConvolution(512, 512, 3, 3, 1, 1, 1, 1).setName("conv12").inputs(relu11)
     val relu12 = ReLU(true).inputs(conv12)
-    val conv13 = SpatialConvolution(512, 512, 3, 3, 1, 1, 1, 1).inputs(relu12)
+    val conv13 = SpatialConvolution(512, 512, 3, 3, 1, 1, 1, 1).setName("conv13").inputs(relu12)
     val relu13 = ReLU(true).inputs(conv13)
     val pool5 = SpatialMaxPooling(2, 2, 2, 2).inputs(relu13)
 
-    val view1 = View(512 * 7 * 7).inputs(pool5)
-    val linear1 = Linear(512 * 7 * 7, 4096).inputs(view1)
-    val th1 = Threshold(0, 1e-6).inputs(linear1)
-    val drop1 = if (hasDropout) Dropout(0.5).inputs(th1) else th1
-    val linear2 = Linear(4096, 4096).inputs(drop1)
-    val th2 = Threshold(0, 1e-6).inputs(linear2)
-    val drop2 = if (hasDropout) Dropout(0.5).inputs(th2) else th2
-    val linear3 = Linear(4096, classNum).inputs(drop2)
-    val output = LogSoftMax().inputs(linear3)
+//    val view1 = View(512 * 7 * 7).inputs(pool5)
+//    val linear1 = Linear(512 * 7 * 7, 4096).setName("fc1").inputs(view1)
+//    val th1 = Threshold(0, 1e-6).inputs(linear1)
+//    val drop1 = if (hasDropout) Dropout(0.5).inputs(th1) else th1
+//    val linear2 = Linear(4096, 4096).setName("fc2").inputs(drop1)
+//    val th2 = Threshold(0, 1e-6).inputs(linear2)
+//    val drop2 = if (hasDropout) Dropout(0.5).inputs(th2) else th2
+//    val linear3 = Linear(4096, classNum).setName("fc3").inputs(drop2)
+//    val output = LogSoftMax().inputs(linear3)
 
+    val output = conv1
     Graph(conv1, output)
   }
 }

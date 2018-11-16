@@ -75,6 +75,10 @@ class DnnGraph(
     var i = 0
     while (i < backwardExecution.length - 1) { // do not execute the dummy backward end
       val curNode = backwardExecution(i)
+      println(curNode.element.getClass.getSimpleName)
+      if (curNode.element.getClass.getSimpleName == "InputWrapper") {
+        val tmp = 0
+      }
       val curGradOutput = findDnnGradOutput(curNode, gradOutput)
       // use input from forward
       val curInput = inputCache(backId2ForwardId(i))
@@ -92,6 +96,10 @@ class DnnGraph(
     while (i < backwardExecution.length - 1) {
       val curNode = backwardExecution(i)
       // use input from forward
+      println(curNode.element.getClass.getSimpleName)
+      if (curNode.element.getClass.getSimpleName == "SpatialConvolution") {
+        val tmp = 0
+      }
       val curInput = inputCache(backId2ForwardId(i))
       val curGradOutput = findDnnGradOutput(curNode, gradOutput, true)
       curNode.element.accGradParameters(curInput, curGradOutput)
@@ -234,12 +242,12 @@ class DnnGraph(
   }
 
   final def compile(phase: Phase) : Unit = {
-    runtime = new MklDnnRuntime()
-    setRuntime(runtime, phase)
+    setRuntime(new MklDnnRuntime())
     initPrimitives(phase, Array[MemoryData]())
   }
 
-  private def setRuntime(runtime: MklDnnRuntime, phase: Phase): Unit = {
+  override def setRuntime(runtime: MklDnnRuntime): Unit = {
+    this.runtime = runtime
     reorderManager.setRuntime(runtime)
     forwardExecution.foreach(m => m.element.asInstanceOf[MklDnnModule].setRuntime(runtime))
   }
@@ -315,6 +323,8 @@ class DnnGraph(
       }
       if (i == 0) firstRealInputFormats = realInputAndOutputFormats._1
     }
+    _inputFormats = inputs
+    _outputFormats = lastOutputFormats
     (firstRealInputFormats, lastOutputFormats)
   }
 

@@ -19,6 +19,7 @@ package com.intel.analytics.bigdl.utils.mkldnn
 import com.intel.analytics.bigdl._
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
 import com.intel.analytics.bigdl.utils.serializer.ModuleSerializer._
+import org.apache.commons.lang3.SerializationException
 
 import scala.collection.mutable
 import scala.reflect.{ClassTag, ManifestFactory}
@@ -71,6 +72,7 @@ object ReflectionUtils {
         i += 1
       })
     })
+    println(layer1)
     constructorMirror.apply(args : _*).asInstanceOf[Object]
   }
 
@@ -98,5 +100,14 @@ object ReflectionUtils {
     val element = IRElement[T](
       layer.getName(), op, weights = weightsAndBias._1, bias = weightsAndBias._2)
     element
+  }
+
+  def classFound(name: String): Class[_] = {
+    try {
+      Class.forName(name)
+    } catch {
+      case ex: ClassNotFoundException => null
+      case e: Throwable => throw e
+    }
   }
 }
