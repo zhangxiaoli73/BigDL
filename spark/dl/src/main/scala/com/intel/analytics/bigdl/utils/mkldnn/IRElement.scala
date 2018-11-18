@@ -16,7 +16,7 @@
 
 package com.intel.analytics.bigdl.utils.mkldnn
 
-import com.intel.analytics.bigdl.nn.abstractnn.DataFormat
+import com.intel.analytics.bigdl.nn.abstractnn.{Activity, DataFormat}
 import com.intel.analytics.bigdl.optim.Regularizer
 import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.utils.T
@@ -53,13 +53,26 @@ case class IRSpatialConvolution[T: ClassTag](
             initGradWeight: Tensor[T] = null, initGradBias: Tensor[T] = null,
             withBias: Boolean = true, format: DataFormat = DataFormat.NCHW) extends IROperate[T]
 
+case class IRSpatialShareConvolution[T: ClassTag](
+            nInputPlane: Int, nOutputPlane: Int,
+            kernelW: Int, kernelH: Int,
+            strideW: Int = 1, strideH: Int = 1,
+            padW: Int = 0, padH: Int = 0,
+            nGroup: Int = 1, propagateBack: Boolean = true,
+            wRegularizer: Regularizer[T] = null, bRegularizer: Regularizer[T] = null,
+            initWeight: Tensor[T] = null, initBias: Tensor[T] = null,
+            initGradWeight: Tensor[T] = null, initGradBias: Tensor[T] = null,
+            withBias: Boolean = true) extends IROperate[T]
 
 case class IRSpatialBatchNormalization[T: ClassTag](
             nOutput: Int, eps: Double = 1e-5, momentum: Double = 0.1,
             affine: Boolean = true,
             initWeight: Tensor[T] = null, initBias: Tensor[T] = null,
             initGradWeight: Tensor[T] = null, initGradBias: Tensor[T] = null,
-            dataFormat: DataFormat = DataFormat.NCHW) extends IROperate[T]
+            dataFormat: DataFormat = DataFormat.NCHW) extends IROperate[T] {
+  var runningMean : Activity = null
+  var runningVar : Activity = null
+}
 
 case class IRIdentity[T: ClassTag]() extends IROperate[T]
 
@@ -88,8 +101,6 @@ case class IRSpatialCrossMapLRN[T: ClassTag](
             k: Double = 1.0,
             data_format: DataFormat = DataFormat.NCHW) extends IROperate[T]
 
-case class IRInput[T: ClassTag](var data_format: String, size: Array[Int]) extends IROperate[T]
-
 case class IRSelectTable[T: ClassTag](dimension: Int) extends IROperate[T]
 
 case class IRReshape[T: ClassTag](
@@ -101,6 +112,9 @@ case class IRThreshold[T](th: Double = 1e-6, v: Double = 0.0,
                           ip: Boolean = false) extends IROperate[T]
 
 case class IRLogSoftMax[T: ClassTag]() extends IROperate[T]
+
+case class IRCAddTable[T: ClassTag, D: ClassTag](inplace: Boolean = false) extends IROperate[T]
+
 
 private[bigdl] class IRElement[T: ClassTag](
   val name: String,

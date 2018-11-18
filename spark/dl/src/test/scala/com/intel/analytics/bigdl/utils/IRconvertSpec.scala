@@ -17,11 +17,13 @@
 package com.intel.analytics.bigdl.utils
 
 import com.intel.analytics.bigdl.mkl.Memory
+import com.intel.analytics.bigdl.models.resnet.ResNet
+import com.intel.analytics.bigdl.models.resnet.ResNet.{DatasetType, ShortcutType}
 import com.intel.analytics.bigdl.models.vgg.Vgg_16
 import com.intel.analytics.bigdl.nn.abstractnn.DataFormat
 import com.intel.analytics.bigdl.{Module, nn, utils}
-import com.intel.analytics.bigdl.nn.{Graph, Reshape, StaticGraph}
-import com.intel.analytics.bigdl.nn.mkldnn.DnnGraph
+import com.intel.analytics.bigdl.nn._
+import com.intel.analytics.bigdl.nn.mkldnn.{DnnGraph, Equivalent}
 import com.intel.analytics.bigdl.utils.mkldnn._
 import com.intel.analytics.bigdl.numeric.NumericFloat
 import com.intel.analytics.bigdl.tensor.Tensor
@@ -31,9 +33,9 @@ class IRconvertSpec extends BigDLSpecHelper {
   def modelIR(inputFormats: Int = Memory.Format.nchw,
               outputFormats: Int = Memory.Format.nchw): IRGraph[Float] = {
     val conv1 = Node(IRElement[Float]("", IRSpatialConvolution[Float](1, 20, 5, 5)))
-//    val bn1 = Node(IRElement[Float]("", IRSpatialBatchNormalization[Float](20)))
-//    val weightsAndBias = Tensor[Float](2 * 20).rand()
-//    bn1.element.setWeights(weightsAndBias)
+    val bn1 = Node(IRElement[Float]("", IRSpatialBatchNormalization[Float](20)))
+    val weightsAndBias = Tensor[Float](2 * 20).rand()
+    bn1.element.setWeights(weightsAndBias)
 
     val pool1 = Node(IRElement[Float]("", IRSpatialMaxPooling[Float](2, 2, 2, 2)))
     val conv2 = Node(IRElement[Float]("", IRSpatialConvolution[Float](20, 50, 5, 5)))
@@ -75,31 +77,62 @@ class IRconvertSpec extends BigDLSpecHelper {
     Graph(conv1, output)
   }
 
+  "Convert Blas resnet50 to Dnn" should "be correct" in {
+    System.setProperty("bigdl.engineType", "mkldnn")
+    val batchSize = 2
+    val classNum = 1000
+    RandomGenerator.RNG.setSeed(1000)
+    val input = Tensor[Float](Array(batchSize, 3, 224, 224)).apply1(_ =>
+      RandomGenerator.RNG.uniform(0.1, 1.0).toFloat)
+    var gradOutput = Tensor[Float](batchSize, classNum).apply1(_ =>
+      RandomGenerator.RNG.uniform(1.0, 1000.0).toFloat)
+
+    val blas = ResNet.graph(classNum,
+      T("shortcutType" -> ShortcutType.B, "depth" -> 50,
+      "optnet" -> false, "dataset" -> DatasetType.ImageNet)).asInstanceOf[StaticGraph[Float]]
+    val irBlas = blas.toIRgraph(inputFormats = 5, outputFormats = Memory.Format.nc)
+
+    irBlas.build()
+    val outBlas = blas.forward(input).toTensor[Float]
+    val outDnn = irBlas.forward(input).toTensor[Float]
+
+
+     gradOutput.resizeAs(outBlas).apply1(_ =>
+      RandomGenerator.RNG.uniform(1.0, 1000.0).toFloat)
+
+    val gradInputBlas = blas.backward(input, gradOutput).toTensor[Float]
+
+    val gradInputDnn = irBlas.backward(input, gradOutput).toTensor[Float]
+    val gradInputTensor = Tensor[Float]().resize(gradInputDnn.size()).copy(gradInputDnn)
+
+    Equivalent.nearequals(outDnn, outBlas, 1e-4) should be(true)
+    Equivalent.nearequals(gradInputTensor, gradInputBlas, 1e-4) should be(true)
+  }
+
   "Convert Blas vgg to Dnn" should "be correct" in {
     System.setProperty("bigdl.engineType", "mkldnn")
     val batchSize = 2
     val classNum = 1000
-    val input = Tensor[Float](Array(batchSize, 3, 224, 224)).rand()
-    var gradOutput = Tensor[Float](batchSize, classNum).rand()
+    RandomGenerator.RNG.setSeed(1000)
+    val input = Tensor[Float](Array(batchSize, 3, 224, 224)).apply1(_ =>
+      RandomGenerator.RNG.uniform(0.1, 1.0).toFloat)
+    val gradOutput = Tensor[Float](batchSize, classNum).apply1(_ =>
+      RandomGenerator.RNG.uniform(1.0, 1000.0).toFloat)
 
     val blas = Vgg_16.graph(classNum, false).asInstanceOf[StaticGraph[Float]]
-    val irBlas = blas.toIRgraph(inputFormats = 5, outputFormats = Memory.Format.nchw)
+    val irBlas = blas.toIRgraph(inputFormats = 5, outputFormats = Memory.Format.nc)
 
     val outBlas = blas.forward(input).toTensor[Float]
-
-    gradOutput.resizeAs(outBlas).rand()
-
-    val gradInputBlas = blas.backward(input, gradOutput)
+    val gradInputBlas = blas.backward(input, gradOutput).toTensor[Float]
 
     irBlas.build()
-    val outDnn = irBlas.forward(input)
+    val outDnn = irBlas.forward(input).toTensor[Float]
     val gradInputDnn = irBlas.backward(input, gradOutput).toTensor[Float]
     val gradInputTensor = Tensor[Float]().resize(gradInputDnn.size()).copy(gradInputDnn)
 
-    outDnn should be(outBlas)
-    gradInputTensor should be(gradInputBlas)
+    Equivalent.nearequals(outDnn, outBlas, 1e-6) should be(true)
+    Equivalent.nearequals(gradInputTensor, gradInputBlas, 1e-4) should be(true)
   }
-
 
   "Convert Blas with NCHW to Dnn" should "be correct" in {
     System.setProperty("bigdl.engineType", "mkldnn")
@@ -164,5 +197,18 @@ class IRconvertSpec extends BigDLSpecHelper {
 
     outDnn should be(outBlas)
     gradInputTensor should be(gradInputBlas)
+  }
+
+  "test convert bn" should "be right" in {
+    import com.intel.analytics.bigdl.utils.mkldnn.IRLayer2Blas
+
+    val op = IRSpatialMaxPooling(data_format = "NCHW", strides = Seq(1, 1),
+         ksize = Seq(2, 2), paddingType = "same")
+    val op = IRIdentity[Float]()
+    val ir = new IRElement[Float]("maxpool", op)
+    val c = new IRLayer2Blas[Float]()
+    val m = c.convertIRLayer(ir)
+
+    println("done")
   }
 }

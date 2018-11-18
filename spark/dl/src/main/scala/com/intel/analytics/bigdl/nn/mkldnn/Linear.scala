@@ -72,10 +72,6 @@ class Linear(
   }
 
   override private[mkldnn] def initFwdPrimitives(inputs: Array[MemoryData], phase: Phase) = {
-    if (this.getName() == "fc1") {
-      val tmp = 0
-    }
-    val wClone = weight.dense.clone()
     val weightShape = inputs(0).shape.length match {
       case 4 => Array(weight.size(1)) ++ inputs(0).shape.slice(1, 4)
       case _ => weight.size()
@@ -126,9 +122,6 @@ class Linear(
 
     _inputFormats = Array(realSrc)
     _outputFormats = Array(realDst)
-    // check storage
-    val w1 = weight.dense.storage().array()
-    val w2 = wClone.storage().array()
     (_inputFormats, _outputFormats)
   }
 

@@ -375,21 +375,20 @@ object ResNet {
       iChannels = 64
       logger.info(" | ResNet-" + depth + " ImageNet")
 
-      val input = Input()
       val conv1 = Convolution(3, 64, 7, 7, 2, 2, 3, 3,
-        optnet = optnet, propagateBack = false).inputs(input)
+        optnet = optnet, propagateBack = false).inputs()
       val bn = Sbn(64).inputs(conv1)
       val relu = ReLU(true).inputs(bn)
-      val pool = SpatialMaxPooling(3, 3, 2, 2, 1, 1).inputs(relu)
+      val pool = SpatialMaxPooling(3, 3, 2, 2).inputs(relu)
       val layer1 = layer(block, 64, loopConfig._1)(pool)
       val layer2 = layer(block, 128, loopConfig._2, 2)(layer1)
       val layer3 = layer(block, 256, loopConfig._3, 2)(layer2)
       val layer4 = layer(block, 512, loopConfig._4, 2)(layer3)
-      val pool2 = SpatialAveragePooling(7, 7, 1, 1).inputs(layer4)
+      val pool2 = SpatialAveragePooling(7, 7, 1, 1).setName("pool").inputs(layer4)
       val view = View(nFeatures).setNumInputDims(3).inputs(pool2)
       val output = Linear(nFeatures, classNum, true, L2Regularizer(1e-4), L2Regularizer(1e-4))
-               .setInitMethod(RandomNormal(0.0, 0.01), Zeros).inputs(view)
-      Graph(input, output)
+               .setInitMethod(RandomNormal(0.0, 0.01), Zeros).setName("linear").inputs(view)
+      Graph(conv1, output)
     } else if (dataset == DatasetType.CIFAR10) {
       require((depth - 2)%6 == 0,
         "depth should be one of 20, 32, 44, 56, 110, 1202")

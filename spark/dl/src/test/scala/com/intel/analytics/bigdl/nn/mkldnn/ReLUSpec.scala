@@ -74,6 +74,27 @@ class ReLUSpec extends FlatSpec with Matchers {
     Equivalent.nearequals(gradInput, Tools.dense(gradInputdnn).toTensor) should be(true)
   }
 
+  "Relu dnn should be same with bigdl Threshold" should "work correctly" in {
+    val input = Tensor(4, 96, 55, 55).rand(-1, 1)
+    val gradOutput = Tensor(4, 96, 55, 55).rand(-1, 1)
+
+    val relu = nn.Threshold(0.1, 0.2, ip = false)
+    val reludnn = ReLU(0.1f, 0.2f)
+    val defaultFormat = HeapData(input.size(), Memory.Format.nchw)
+    reludnn.setRuntime(new MklDnnRuntime)
+    reludnn.initFwdPrimitives(Array(defaultFormat), TrainingPhase)
+    reludnn.initBwdPrimitives(Array(defaultFormat), TrainingPhase)
+
+    val output = relu.forward(input)
+    val gradInput = relu.backward(input, gradOutput)
+
+    val outputdnn = reludnn.forward(input)
+    val gradInputdnn = reludnn.backward(input, gradOutput)
+
+    Equivalent.nearequals(output, Tools.dense(outputdnn).toTensor) should be(true)
+    Equivalent.nearequals(gradInput, Tools.dense(gradInputdnn).toTensor) should be(true)
+  }
+
   "relu with java serialization" should "work correctly" in {
     val shape = Array(4, 96, 55, 55)
     val input = Tensor(shape).rand(-1, 1)

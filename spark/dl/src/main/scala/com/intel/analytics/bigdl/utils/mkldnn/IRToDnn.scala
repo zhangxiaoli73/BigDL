@@ -51,6 +51,7 @@ class IRToDnn extends ConvertBase[IRElement[Float], Module[Float]] {
     IR2DnnMap("IRReLU") = fromReLU
     IR2DnnMap("IRThreshold") = fromThreshold
     IR2DnnMap("IRLogSoftMax") = fromLogSoftMax
+    IR2DnnMap("IRSpatialShareConvolution") = fromConv
   }
 
   override def enableConvertLayer(layer: IRElement[Float]): Boolean = {
@@ -223,6 +224,11 @@ class IRToDnn extends ConvertBase[IRElement[Float], Module[Float]] {
     val params = node.getParameters()
     if (params._1 != null) layer.weightAndBias.copy(params._1)
     if (params._2 != null) layer.gradWeightAndBias.copy(params._2)
+
+    val extraParams = layer.getExtraParameter()
+    if (t.runningMean != null) extraParams(0).copy(t.runningMean.toTensor[Float])
+    if (t.runningVar != null) extraParams(1).copy(t.runningVar.toTensor[Float])
+
     layer
   }
 

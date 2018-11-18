@@ -218,17 +218,16 @@ object Vgg_16 {
     val relu13 = ReLU(true).inputs(conv13)
     val pool5 = SpatialMaxPooling(2, 2, 2, 2).inputs(relu13)
 
-//    val view1 = View(512 * 7 * 7).inputs(pool5)
-//    val linear1 = Linear(512 * 7 * 7, 4096).setName("fc1").inputs(view1)
-//    val th1 = Threshold(0, 1e-6).inputs(linear1)
-//    val drop1 = if (hasDropout) Dropout(0.5).inputs(th1) else th1
-//    val linear2 = Linear(4096, 4096).setName("fc2").inputs(drop1)
-//    val th2 = Threshold(0, 1e-6).inputs(linear2)
-//    val drop2 = if (hasDropout) Dropout(0.5).inputs(th2) else th2
-//    val linear3 = Linear(4096, classNum).setName("fc3").inputs(drop2)
-//    val output = LogSoftMax().inputs(linear3)
+    val view1 = View(512 * 7 * 7).inputs(pool5)
+    val linear1 = Linear(512 * 7 * 7, 4096).setName("fc1").inputs(view1)
+    val th1 = Threshold(0, 1e-6).inputs(linear1)
+    val drop1 = if (hasDropout) Dropout(0.5).inputs(th1) else th1
+    val linear2 = Linear(4096, 4096).setName("fc2").inputs(drop1)
+    val th2 = Threshold(0, 1e-6).inputs(linear2)
+    val drop2 = if (hasDropout) Dropout(0.5).inputs(th2) else th2
+    val linear3 = Linear(4096, classNum).setName("fc3").inputs(drop2)
+    val output = LogSoftMax().inputs(linear3)
 
-    val output = conv1
     Graph(conv1, output)
   }
 }

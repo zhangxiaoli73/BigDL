@@ -315,6 +315,9 @@ class DnnGraph(
     var firstRealInputFormats: Array[MemoryData] = null
     for (i <- 0 until forwardExecution.length) {
       val m = forwardExecution(i)
+      if (m.element.getName() == "pool") {
+        val tmp = 0
+      }
       lastOutputFormats = findInputFormats(m, inputs)
       val realInputAndOutputFormats =
         m.element.asInstanceOf[MklDnnModule].initFwdPrimitives(lastOutputFormats, phase)

@@ -58,6 +58,9 @@ class StaticGraph[T: ClassTag](
     var i = 0
     while(i < forwardExecution.length) {
       val node = forwardExecution(i)
+      if (node.element.getName() == "pool") {
+        val tmp = 0
+      }
       val nodeInput = findInput(node, input)
       inputCache(i) = nodeInput
       node.element.forward(nodeInput)
