@@ -69,10 +69,8 @@ case class IRSpatialBatchNormalization[T: ClassTag](
             affine: Boolean = true,
             initWeight: Tensor[T] = null, initBias: Tensor[T] = null,
             initGradWeight: Tensor[T] = null, initGradBias: Tensor[T] = null,
-            dataFormat: DataFormat = DataFormat.NCHW) extends IROperate[T] {
-  var runningMean : Activity = null
-  var runningVar : Activity = null
-}
+            dataFormat: DataFormat = DataFormat.NCHW,
+            runningMean: Tensor[T] = null, runningVar: Tensor[T] = null) extends IROperate[T]
 
 case class IRIdentity[T: ClassTag]() extends IROperate[T]
 

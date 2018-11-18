@@ -64,7 +64,7 @@ class IRToBlas[T: ClassTag] extends ConvertBase[IRElement[T], Module[T]]{
   override def enableConvertLayer(layer: IRElement[T]): Boolean = {
     val name = layer.getOp().name
     val className = "com.intel.analytics.bigdl.nn." + name.substring(2)
-    val cls = ReflectionUtils.classFound(className)
+    val cls = ReflectUtils.classFound(className)
     if ( cls != null) true
     else false
   }
@@ -72,7 +72,7 @@ class IRToBlas[T: ClassTag] extends ConvertBase[IRElement[T], Module[T]]{
   override def convertLayer(layer : IRElement[T]) : Module[T] = {
     val name = layer.getOp().name
     val cls = Class.forName("com.intel.analytics.bigdl.nn." + name.substring(2))
-    ReflectionUtils.reflectFromIR(layer, cls)
+    ReflectUtils.reflectFromIR(layer, cls)
   }
 }
 
@@ -85,7 +85,7 @@ class BlasToIR[T: ClassTag] extends ConvertBase[Module[T], IRElement[T]]{
   override def enableConvertLayer(layer: Module[T]): Boolean = {
     val layerName = layer.getClass.getSimpleName
     val className = "com.intel.analytics.bigdl.utils.mkldnn.IR" + layerName
-    val cls = ReflectionUtils.classFound(className)
+    val cls = ReflectUtils.classFound(className)
     if ( cls != null) true
     else false
   }
@@ -93,7 +93,7 @@ class BlasToIR[T: ClassTag] extends ConvertBase[Module[T], IRElement[T]]{
   override def convertLayer(layer : Module[T]) : IRElement[T] = {
     val layerName = layer.getClass.getSimpleName
     val cls = Class.forName("com.intel.analytics.bigdl.utils.mkldnn.IR" + layerName)
-    ReflectionUtils.reflectToIR(layer, cls)
+    ReflectUtils.reflectToIR(layer, cls)
   }
 }
 

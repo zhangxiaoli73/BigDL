@@ -49,7 +49,6 @@ class IRToDnn extends ConvertBase[IRElement[Float], Module[Float]] {
     IR2DnnMap("IRSpatialBatchNormalization") = fromSbn
     IR2DnnMap("IRLinear") = fromLinear
     IR2DnnMap("IRReLU") = fromReLU
-    IR2DnnMap("IRThreshold") = fromThreshold
     IR2DnnMap("IRLogSoftMax") = fromLogSoftMax
     IR2DnnMap("IRSpatialShareConvolution") = fromConv
   }
@@ -58,7 +57,7 @@ class IRToDnn extends ConvertBase[IRElement[Float], Module[Float]] {
     val name = layer.getOp().name
     if (IR2DnnMap.contains(name)) return true
     val className = "com.intel.analytics.bigdl.nn.mkldnn." + name.substring(2)
-    val cls = ReflectionUtils.classFound(className)
+    val cls = ReflectUtils.classFound(className)
     if ( cls != null) true
     else false
   }
@@ -77,7 +76,7 @@ class IRToDnn extends ConvertBase[IRElement[Float], Module[Float]] {
       dnn
     } else {
       val cls = Class.forName("com.intel.analytics.bigdl.nn.mkldnn." + name.substring(2))
-      ReflectionUtils.reflectFromIR(layer, cls)
+      ReflectUtils.reflectFromIR(layer, cls)
     }
   }
 
@@ -125,11 +124,6 @@ class IRToDnn extends ConvertBase[IRElement[Float], Module[Float]] {
   }
 
   private def fromReLU(node: IRElement[Float]) : Module[Float] = mkldnn.ReLU()
-
-  private def fromThreshold(node: IRElement[Float]) : Module[Float] = {
-    val t = node.getOp().asInstanceOf[IRThreshold[Float]]
-    mkldnn.ReLU(t.th.toFloat, t.v.toFloat)
-  }
 
   private def fromLogSoftMax(node: IRElement[Float]) : Module[Float] = {
     BigDL2DnnWrapper(nn.LogSoftMax[Float]())
@@ -207,7 +201,6 @@ class IRToDnn extends ConvertBase[IRElement[Float], Module[Float]] {
     mkldnn.AvgPooling(kernelW, kernelH, strideW, strideH, padW, padH)
   }
 
-  // todo :not corret
   private def fromSbn(node: IRElement[Float]) : Module[Float] = {
     val t = node.getOp().asInstanceOf[IRSpatialBatchNormalization[Float]]
     val nOutput = t.nOutput

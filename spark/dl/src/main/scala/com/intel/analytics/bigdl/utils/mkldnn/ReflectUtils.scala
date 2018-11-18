@@ -25,7 +25,7 @@ import scala.collection.mutable
 import scala.reflect.{ClassTag, ManifestFactory}
 import scala.reflect.runtime._
 
-object ReflectionUtils {
+object ReflectUtils {
 
   private def getFiledNameAndValues(o: Object): mutable.HashMap[String, AnyRef] = {
     val c = o.getClass
@@ -78,7 +78,7 @@ object ReflectionUtils {
 
   // create Module form IRElement
   def reflectFromIR[T : ClassTag](layer: IRElement[T], cls: Class[_]) : Module[T] = {
-    val blasLayer = ReflectionUtils.reflection(layer.getOp(), cls).asInstanceOf[Module[T]]
+    val blasLayer = ReflectUtils.reflection(layer.getOp(), cls).asInstanceOf[Module[T]]
 
     if (blasLayer.parameters() != null) {
       val params = blasLayer.getParameters()
@@ -94,7 +94,7 @@ object ReflectionUtils {
 
   // create IRElement form Module
   def reflectToIR[T: ClassTag](layer: Module[T], cls: Class[_]) : IRElement[T] = {
-    val op = ReflectionUtils.reflection(layer, cls).asInstanceOf[IROperate[T]]
+    val op = ReflectUtils.reflection(layer, cls).asInstanceOf[IROperate[T]]
     val weightsAndBias =
       if (layer.parameters() != null) layer.getParameters() else (null, null)
     val element = IRElement[T](

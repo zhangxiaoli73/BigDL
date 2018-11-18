@@ -198,17 +198,4 @@ class IRconvertSpec extends BigDLSpecHelper {
     outDnn should be(outBlas)
     gradInputTensor should be(gradInputBlas)
   }
-
-  "test convert bn" should "be right" in {
-    import com.intel.analytics.bigdl.utils.mkldnn.IRLayer2Blas
-
-    val op = IRSpatialMaxPooling(data_format = "NCHW", strides = Seq(1, 1),
-         ksize = Seq(2, 2), paddingType = "same")
-    val op = IRIdentity[Float]()
-    val ir = new IRElement[Float]("maxpool", op)
-    val c = new IRLayer2Blas[Float]()
-    val m = c.convertIRLayer(ir)
-
-    println("done")
-  }
 }
