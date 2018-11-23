@@ -36,6 +36,26 @@ class MaxPooling(
   @transient private var paddingBR: Array[Int] = _
   @transient private var fwdPD: Long = _
 
+  var ceilMode = false
+
+  /**
+    * set ceil mode
+    * @return this
+    */
+  def ceil(): MaxPooling = {
+    ceilMode = true
+    this
+  }
+
+  /**
+    * set floor mode
+    * @return this
+    */
+  def floor(): MaxPooling = {
+    ceilMode = false
+    this
+  }
+
   override private[mkldnn] def initFwdPrimitives(inputs: Array[MemoryData], phase: Phase) = {
     _inputFormats = singleNativeData(inputs)
     val strides = Array(dW, dH)
@@ -49,7 +69,7 @@ class MaxPooling(
       val sizes = Utils.getSAMEOutSizeAndPadding(h, w, dH, dW, kH, kW)
       (sizes(0), sizes(1), sizes(2), sizes(3), sizes(4), sizes(5))
     } else {
-      Utils.getPaddingAndOutputSize(h, w, dH, dW, kH, kW, padH, padW)
+      Utils.getPaddingAndOutputSize(h, w, dH, dW, kH, kW, padH, padW, ceilMode)
     }
     paddingTL = Array(pt, pl)
     paddingBR = Array(pb, pr)

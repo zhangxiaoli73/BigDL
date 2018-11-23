@@ -17,6 +17,7 @@
 package com.intel.analytics.bigdl.utils.mkldnn
 
 import com.intel.analytics.bigdl._
+import com.intel.analytics.bigdl.nn.abstractnn.TensorModule
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
 import com.intel.analytics.bigdl.utils.{Node, T}
 
@@ -46,7 +47,9 @@ abstract class ConvertBase[T, D] {
   def enableConvert(allNodes: Array[Node[T]]) : Boolean = {
     var convert = true
     allNodes.foreach(node => {
-      if (!enableConvertLayer(node.element)) convert = false
+      if (!enableConvertLayer(node.element)) {
+        convert = false
+      }
     })
     // TODO : log false element name
     convert
@@ -85,18 +88,28 @@ object IRToBlas {
 
 class BlasToIR[T: ClassTag] extends ConvertBase[Module[T], IRElement[T]]{
 
+  // todo: some undefined IR operations can be presented by IRBlasModule
   override def enableConvertLayer(layer: Module[T]): Boolean = {
     val layerName = layer.getClass.getSimpleName
     val className = "com.intel.analytics.bigdl.utils.mkldnn.IR" + layerName
     val cls = ReflectUtils.classFound(className)
-    if ( cls != null) true
+    if ( cls != null) return true
+    if (layer.isInstanceOf[TensorModule[T]]) true
     else false
   }
 
   override def convertLayer(layer : Module[T]) : IRElement[T] = {
     val layerName = layer.getClass.getSimpleName
-    val cls = Class.forName("com.intel.analytics.bigdl.utils.mkldnn.IR" + layerName)
-    ReflectUtils.reflectToIR(layer, cls)
+    val className = "com.intel.analytics.bigdl.utils.mkldnn.IR" + layerName
+    val cls = ReflectUtils.classFound(className)
+    if ( cls != null) {
+      ReflectUtils.reflectToIR(layer, cls)
+    } else if (layer.isInstanceOf[TensorModule[T]]) {
+      val op = IRBlasModule[T](layer.asInstanceOf[TensorModule[T]])
+      IRElement(layer.getName(), op)
+    } else {
+      throw new UnsupportedOperationException(s"can not convert $layer to IRelement ")
+    }
   }
 }
 

@@ -299,6 +299,15 @@ class DnnGraph(
       prevFormats(0)
     }
   }
+  def test(a: Array[Int]): Unit = {
+    var name = ""
+    var i = 0
+    while (i < a.length) {
+      name = name + "," + a(i)
+      i += 1
+    }
+    println(name)
+  }
 
   // init forward primitives
   override def initFwdPrimitives(inputs: Array[MemoryData], phase: Phase)
@@ -310,6 +319,9 @@ class DnnGraph(
       lastOutputFormats = findInputFormats(m, inputs)
       val realInputAndOutputFormats =
         m.element.asInstanceOf[MklDnnModule].initFwdPrimitives(lastOutputFormats, phase)
+      println(m.element)
+      test(realInputAndOutputFormats._1(0).shape)
+      test(realInputAndOutputFormats._2(0).shape)
       lastOutputFormats.zip(realInputAndOutputFormats._1).foreach {
         case (o, i) => reorderManager.register(o, i)
       }
