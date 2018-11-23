@@ -53,6 +53,7 @@ class IRToDnn extends ConvertBase[IRElement[Float], Module[Float]] {
     IR2DnnMap("IRReLU") = fromReLU
     IR2DnnMap("IRJoinTable") = fromJoinTable
     IR2DnnMap("IRBlasModule") = fromBlasModule
+    IR2DnnMap("IRInput") = fromInput
   }
 
   override def enableConvertLayer(layer: IRElement[Float]): Boolean = {
@@ -193,6 +194,10 @@ class IRToDnn extends ConvertBase[IRElement[Float], Module[Float]] {
   private def fromBlasModule(node: IRElement[Float]) : Module[Float] = {
     val t = node.getOp().asInstanceOf[IRBlasModule[Float]]
     BlasWrapper(t.model)
+  }
+
+  private def fromInput(node: IRElement[Float]) : Module[Float] = {
+    mkldnn.Identity[Float]()
   }
 }
 

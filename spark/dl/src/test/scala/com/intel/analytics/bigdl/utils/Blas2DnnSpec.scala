@@ -18,14 +18,16 @@ package com.intel.analytics.bigdl.utils
 
 import com.intel.analytics.bigdl.example.loadmodel.AlexNet
 import com.intel.analytics.bigdl.mkl.Memory
-import com.intel.analytics.bigdl.models.inception.Inception_v1_NoAuxClassifier
+import com.intel.analytics.bigdl.models.inception.{Inception_Layer_v1, Inception_v1_NoAuxClassifier}
 import com.intel.analytics.bigdl.models.lenet.LeNet5
 import com.intel.analytics.bigdl.models.resnet.ResNet
 import com.intel.analytics.bigdl.models.resnet.ResNet.{DatasetType, ShortcutType}
 import com.intel.analytics.bigdl.models.vgg.Vgg_16
 import com.intel.analytics.bigdl.nn.StaticGraph
+import com.intel.analytics.bigdl.nn
 import com.intel.analytics.bigdl.nn.mkldnn.Equivalent
 import com.intel.analytics.bigdl.tensor.Tensor
+import com.intel.analytics.bigdl.numeric.NumericFloat
 
 import scala.util.Random
 
@@ -55,6 +57,40 @@ class Blas2DnnSpec extends BigDLSpecHelper {
     Equivalent.nearequals(gradInputTensor, gradInputBlas, 1e-4) should be(true)
   }
 
+  "Inception_Layer_v1 blas to dnn 1111" should "work properly" in {
+    System.setProperty("bigdl.engineType", "mkldnn")
+    val batchSize = 2
+    val classNum = 1000
+    RandomGenerator.RNG.setSeed(1000)
+    val input = Tensor[Float](Array(batchSize, 192, 28, 28)).apply1(_ =>
+      RandomGenerator.RNG.uniform(0.1, 1.0).toFloat)
+    var gradOutput = Tensor[Float](batchSize, classNum).apply1(_ =>
+      RandomGenerator.RNG.uniform(1.0, 1000.0).toFloat)
+
+    RandomGenerator.RNG.setSeed(1000)
+    val in = nn.Input()
+    val outNode = Inception_Layer_v1(in, 192,
+      T(T(64), T(96, 128), T(16, 32), T(32)), "inception_3a/")
+
+    val blas = new StaticGraph(Seq(in), Seq(outNode))
+    val irBlas = blas.toIRgraph(inputFormats = 5, outputFormats = Memory.Format.nchw)
+
+    val outBlas = blas.forward(input).toTensor[Float]
+
+    gradOutput.resizeAs(outBlas).rand()
+
+    val gradInputBlas = blas.backward(input, gradOutput).toTensor[Float]
+
+    RandomGenerator.RNG.setSeed(1000)
+    irBlas.build()
+    val outDnn = irBlas.forward(input).toTensor[Float]
+    val gradInputDnn = irBlas.backward(input, gradOutput).toTensor[Float]
+    val gradInputTensor = Tensor[Float]().resize(gradInputDnn.size()).copy(gradInputDnn)
+
+    Equivalent.nearequals(outDnn, outBlas, 1e-6) should be(true)
+    Equivalent.nearequals(gradInputTensor, gradInputBlas, 1e-5) should be(true)
+  }
+
   "inception_v1 blas to dnn" should "work properly" in {
     System.setProperty("bigdl.engineType", "mkldnn")
     val batchSize = 2
@@ -62,14 +98,17 @@ class Blas2DnnSpec extends BigDLSpecHelper {
     RandomGenerator.RNG.setSeed(1000)
     val input = Tensor[Float](Array(batchSize, 3, 224, 224)).apply1(_ =>
       RandomGenerator.RNG.uniform(0.1, 1.0).toFloat)
-    val gradOutput = Tensor[Float](batchSize, classNum).apply1(_ =>
+    var gradOutput = Tensor[Float](batchSize, classNum).apply1(_ =>
       RandomGenerator.RNG.uniform(1.0, 1000.0).toFloat)
 
     RandomGenerator.RNG.setSeed(1000)
     val blas = Inception_v1_NoAuxClassifier.graph(classNum, false).asInstanceOf[StaticGraph[Float]]
-    val irBlas = blas.toIRgraph(inputFormats = 5, outputFormats = Memory.Format.nc)
+    val irBlas = blas.toIRgraph(inputFormats = 5, outputFormats = Memory.Format.nchw)
 
     val outBlas = blas.forward(input).toTensor[Float]
+
+    gradOutput.resizeAs(outBlas).rand()
+
     val gradInputBlas = blas.backward(input, gradOutput).toTensor[Float]
 
     RandomGenerator.RNG.setSeed(1000)

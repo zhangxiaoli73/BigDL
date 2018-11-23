@@ -118,6 +118,8 @@ case class IRJoinTable[T: ClassTag](dimension: Int,
 
 case class IRConcatTable[T: ClassTag]() extends IROperate[T]
 
+case class IRInput[T: ClassTag]() extends IROperate[T]
+
 case class IRBlasModule[T: ClassTag](model: TensorModule[T]) extends IROperate[T]
 
 private[bigdl] class IRElement[T: ClassTag](

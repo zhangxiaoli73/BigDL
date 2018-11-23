@@ -155,7 +155,7 @@ class StaticGraph[T: ClassTag](
                 outputFormats: Int = Memory.Format.nc) : IRGraph[T] = {
     // reminder: forwardExcutions have all nodes in the graph
     val allNodes = forwardExecution
-    if (!BlasToIR[T].enableConvert(allNodes)) return null
+    // if (!BlasToIR[T].enableConvert(allNodes)) return null
     if (inputFormats == Memory.Format.nhwc) return null
 
     val oldToNew = BlasToIR[T].convert(allNodes)

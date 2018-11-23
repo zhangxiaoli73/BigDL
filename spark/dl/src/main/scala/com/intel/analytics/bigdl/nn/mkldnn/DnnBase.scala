@@ -157,6 +157,9 @@ trait MklDnnLayer extends AbstractModule[Activity, Activity, Float] with MklDnnM
     if (updateOutputMemoryPrimitives == null) {
       updateOutputMemoryPrimitives = getUpdateOutputMemoryPrimitives()
     }
+    if (this.getName() == "join") {
+      val tmp = 0
+    }
     if (updateOutputTensors == null || cachedInput == null || !cachedInput.eq(input)) {
       val buffer = new ArrayBuffer[Tensor[Float]]()
       if (input.isTensor) {

@@ -82,6 +82,8 @@ object Inception_Layer_v1 {
         ConstInitMethod(0.1)).setName(namePrefix + "3x3").inputs(relu3x3_1)
     val relu3x3_2 = ReLU(true).setName(namePrefix + "relu_3x3").inputs(conv3x3_2)
 
+
+
     val conv5x5_1 = SpatialConvolution(inputSize, config[Table](3)(1), 1, 1, 1, 1).setInitMethod(
       weightInitMethod = Xavier,
       ConstInitMethod(0.1)).setName(namePrefix + "5x5_reduce").inputs(input)
@@ -99,7 +101,7 @@ object Inception_Layer_v1 {
       ConstInitMethod(0.1)).setName(namePrefix + "pool_proj").inputs(pool)
     val reluPool = ReLU(true).setName(namePrefix + "relu_pool_proj").inputs(convPool)
 
-    JoinTable(2, 0).inputs(relu1x1, relu3x3_2, relu5x5_2, reluPool)
+    JoinTable(2, 0).setName("join").inputs(relu1x1, relu3x3_2, relu5x5_2, reluPool)
   }
 }
 
@@ -159,6 +161,7 @@ object Inception_v1_NoAuxClassifier {
     val conv2_norm2 = SpatialCrossMapLRN(5, 0.0001, 0.75)
       .setName("conv2/norm2").inputs(conv2_relu_3x3)
     val pool2_s2 = SpatialMaxPooling(3, 3, 2, 2).ceil().setName("pool2/3x3_s2").inputs(conv2_norm2)
+
     val inception_3a = Inception_Layer_v1(pool2_s2, 192,
       T(T(64), T(96, 128), T(16, 32), T(32)), "inception_3a/")
     val inception_3b = Inception_Layer_v1(inception_3a, 256,
@@ -186,7 +189,7 @@ object Inception_v1_NoAuxClassifier {
       .setName("loss3/classifier").inputs(view)
     val loss = LogSoftMax().setName("loss3/loss3").inputs(classifier)
 
-    Graph(input, loss)
+    Graph(input, pool2_s2)
   }
 }
 
