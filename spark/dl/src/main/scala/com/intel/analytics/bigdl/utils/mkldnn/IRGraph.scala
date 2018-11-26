@@ -86,7 +86,7 @@ class IRGraph[T: ClassTag](
     if (!initFwd && graph.isInstanceOf[DnnGraph]) {
       graph.asInstanceOf[DnnGraph].setRuntime(new MklDnnRuntime())
       graph.asInstanceOf[DnnGraph].initFwdPrimitives(
-        Array(HeapData(input.toTensor[T].size(), inputFormats)), Phase.TrainingPhase)
+        Array(HeapData(input.toTensor[T].size(), inputFormats)), null)
       initFwd = true
     }
     output = graph.updateOutput(input)
@@ -99,7 +99,7 @@ class IRGraph[T: ClassTag](
     }
     if (!initBwd && graph.isInstanceOf[DnnGraph]) {
       graph.asInstanceOf[DnnGraph].initBwdPrimitives(
-        graph.asInstanceOf[DnnGraph].outputFormats(), Phase.TrainingPhase)
+        graph.asInstanceOf[DnnGraph].outputFormats(), null)
       initBwd = true
     }
     gradInput = graph.updateGradInput(input, gradOutput)
@@ -112,7 +112,7 @@ class IRGraph[T: ClassTag](
     }
     if (!initAcc && graph.isInstanceOf[DnnGraph]) {
       graph.asInstanceOf[DnnGraph].initGradWPrimitives(
-        graph.asInstanceOf[DnnGraph].outputFormats(), Phase.TrainingPhase)
+        graph.asInstanceOf[DnnGraph].outputFormats(), null)
       initAcc = true
     }
     graph.accGradParameters(input, gradOutput)
