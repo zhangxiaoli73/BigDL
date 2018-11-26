@@ -85,9 +85,9 @@ class Blas2DnnSpec extends BigDLSpecHelper {
     irBlas.build()
     val outDnn = irBlas.forward(input).toTensor[Float]
     val gradInputDnn = irBlas.backward(input, gradOutput).toTensor[Float]
-    val gradInputTensor = Tensor[Float]().resize(gradInputDnn.size()).copy(gradInputDnn)
+    val gradInputTensor = gradInputDnn // Tensor[Float]().resize(gradInputDnn.size()).copy(gradInputDnn)
 
-    Equivalent.nearequals(outDnn, outBlas, 1e-6) should be(true)
+    Equivalent.nearequals(outDnn, outBlas, 1e-5) should be(true)
     Equivalent.nearequals(gradInputTensor, gradInputBlas, 1e-5) should be(true)
   }
 

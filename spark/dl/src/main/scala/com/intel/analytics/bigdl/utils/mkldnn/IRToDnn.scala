@@ -114,7 +114,7 @@ class IRToDnn extends ConvertBase[IRElement[Float], Module[Float]] {
       }
       oldToNew.put(node, dnn)
     })
-    cloneNode(oldToNew)
+    cloneNode(allNodes, oldToNew)
     oldToNew
   }
 

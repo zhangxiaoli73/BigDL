@@ -15,9 +15,10 @@
  */
 package com.intel.analytics.bigdl.nn.mkldnn
 
-import com.intel.analytics.bigdl.mkl.MklDnn
+import com.intel.analytics.bigdl.mkl.{Memory, MklDnn}
 import com.intel.analytics.bigdl.nn.DynamicContainer
 import com.intel.analytics.bigdl.nn.abstractnn.{AbstractModule, Activity}
+import com.intel.analytics.bigdl.nn.mkldnn.Phase.TrainingPhase
 import com.intel.analytics.bigdl.tensor.{DenseType, DnnTensor, MklDnnType, Tensor}
 import com.intel.analytics.bigdl.utils.T
 
@@ -153,6 +154,17 @@ trait MklDnnLayer extends AbstractModule[Activity, Activity, Float] with MklDnnM
     gradOutputFormats().map(_.getPrimitive(runtime)) ++
       gradInputFormats().map(_.getPrimitive(runtime))
   }
+  private def toNCHW(src: Tensor[Float], inputFormat: MemoryData): Tensor[Float] = {
+    val outputFormat = HeapData(inputFormat.shape,
+      if (src.size().length == 2) { Memory.Format.nc } else { Memory.Format.nchw })
+    val reorder = ReorderMemory(inputFormat, outputFormat, null, null)
+
+    reorder.setRuntime(new MklDnnRuntime)
+    reorder.initFwdPrimitives(Array(inputFormat), TrainingPhase)
+    reorder.forward(src).toTensor
+  }
+
+  var tin = T()
   override def updateOutput(input: Activity): Activity = {
     if (updateOutputMemoryPrimitives == null) {
       updateOutputMemoryPrimitives = getUpdateOutputMemoryPrimitives()
@@ -185,11 +197,37 @@ trait MklDnnLayer extends AbstractModule[Activity, Activity, Float] with MklDnnM
       updateOutputTensors = buffer.toArray
       cachedInput = input
     }
+    var out : Tensor[Float] = null
+    var out2: Tensor[Float] = null
+    if (this.getName() == "join") {
+      val tmp = 0
+      val buffer = new ArrayBuffer[Tensor[Float]]()
+      val inputF = inputFormats()
+      // val tin = T()
+      var i = 0
+      while (i < updateOutputTensors.length - 1) {
+        val in = toNCHW(updateOutputTensors(i), inputF(i))
+        buffer.append(in)
+        tin(i + 1) = in
+        i += 1
+      }
+
+      import com.intel.analytics.bigdl.nn
+      val join = new nn.JoinTable[Float](2, 0)
+      out = join.forward(tin).asInstanceOf[Tensor[Float]]
+      println("done")
+    }
+
     MklDnnOps.streamSubmit(
       runtime.stream, 1, updateOutputPrimitives, updateOutputPrimitives.length,
       updateOutputMemoryPrimitives,
       updateOutputTensors
     )
+
+    if (this.getName() == "join") {
+      out2 = toNCHW(output.toTensor[Float], HeapData(output.toTensor[Float].size(), 8))
+      val tmp = 0
+    }
     output
   }
 
@@ -227,6 +265,13 @@ trait MklDnnLayer extends AbstractModule[Activity, Activity, Float] with MklDnnM
     MklDnnOps.streamSubmit(runtime.stream, 1, updateGradInputPrimitives,
       updateGradInputPrimitives.length,
       updateGradInputMemoryPrimitives, updateGradInputTensors)
+    var out2 : Tensor[Float] = null
+    if (this.getName() == "join") {
+      import com.intel.analytics.bigdl.nn
+      val join = new nn.JoinTable[Float](2, 0)
+      out2 = join.forward(tin).asInstanceOf[Tensor[Float]]
+      join.backward(tin, gradOutput.asInstanceOf[Tensor[_]])
+    }
     gradInput
   }
 

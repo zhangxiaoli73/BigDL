@@ -22,6 +22,7 @@ import com.intel.analytics.bigdl.Module
 import com.intel.analytics.bigdl.mkl._
 import com.intel.analytics.bigdl.nn._
 import com.intel.analytics.bigdl.nn.abstractnn._
+import com.intel.analytics.bigdl.nn.mkldnn.Phase.TrainingPhase
 import com.intel.analytics.bigdl.tensor.{DnnTensor, Tensor}
 
 import scala.collection.mutable.ArrayBuffer
@@ -263,6 +264,16 @@ class SpatialConvolution(
     output
   }
 
+  private def toNCHW(src: Tensor[Float], inputFormat: MemoryData): Tensor[Float] = {
+    val outputFormat = HeapData(inputFormat.shape,
+      if (src.size().length == 2) { Memory.Format.nc } else { Memory.Format.nchw })
+    val reorder = ReorderMemory(inputFormat, outputFormat, null, null)
+
+    reorder.setRuntime(new MklDnnRuntime)
+    reorder.initFwdPrimitives(Array(inputFormat), TrainingPhase)
+    reorder.forward(src).toTensor
+  }
+
   override private[mkldnn] def initBwdPrimitives(grad: Array[MemoryData], phase: Phase) = {
     val inputShape = inputFormats()(0).shape.length match {
       case 1 => inputFormats()(0).shape ++ Array(1) // TODO Test
@@ -307,6 +318,13 @@ class SpatialConvolution(
 
     _gradInputFormats = Array(realDiffSrc)
     _gradOutputFormats = Array(realDiffDst)
+    if (this.getName() == "inception_3a/1x1") {
+      val tmp = 0
+    }
+    if (this.getName() == "inception_3a/3x3_reduce") {
+      val tmp = 0
+    }
+    println(this.getName() + s"**${_gradOutputFormats(0).layout}" + "**" + _gradInputFormats(0).layout)
     (_gradOutputFormats, _gradInputFormats)
   }
 
@@ -329,6 +347,15 @@ class SpatialConvolution(
     MklDnnOps.streamSubmit(runtime.stream, 1, updateGradInputPrimitives,
       updateGradInputPrimitives.length, updateGradInputMemoryPrimitives, updateGradInputTensors)
 
+    var out: Tensor[Float] = null
+    if (this.getName() == "inception_3a/1x1") {
+      val tmp = 0
+      out = toNCHW(gradInput.toTensor[Float], _gradInputFormats(0))
+    }
+    if (this.getName() == "inception_3a/3x3_reduce") {
+      out = toNCHW(gradInput.toTensor[Float], _gradInputFormats(0))
+      val tmp = 0
+    }
     gradInput
   }
   override private[mkldnn] def initGradWPrimitives(grad: Array[MemoryData],

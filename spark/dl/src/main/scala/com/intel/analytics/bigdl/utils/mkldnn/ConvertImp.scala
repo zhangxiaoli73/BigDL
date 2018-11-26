@@ -30,8 +30,8 @@ abstract class ConvertBase[T, D] {
     * clone node relations
     * @param oldToNew node element maps from T to D
     */
-  def cloneNode(oldToNew: mutable.HashMap[Node[T], Node[D]]): Unit = {
-    oldToNew.keySet.toArray.foreach(node => {
+  def cloneNode(allNodes: Array[Node[T]], oldToNew: mutable.HashMap[Node[T], Node[D]]): Unit = {
+    allNodes.foreach(node => {
       node.nextNodesAndEdges.foreach(nextNodeAndEdge => {
         if (oldToNew.contains(nextNodeAndEdge._1)) {
           oldToNew.get(node).get.add(oldToNew.get(nextNodeAndEdge._1).get, nextNodeAndEdge._2)
@@ -60,7 +60,7 @@ abstract class ConvertBase[T, D] {
     allNodes.foreach(node => {
       oldToNew.put(node, new Node(convertLayer(node.element)))
     })
-    cloneNode(oldToNew)
+    cloneNode(allNodes, oldToNew)
     oldToNew
   }
 }

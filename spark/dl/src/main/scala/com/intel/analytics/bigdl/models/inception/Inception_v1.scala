@@ -70,7 +70,7 @@ object Inception_Layer_v1 {
     val conv1x1 = SpatialConvolution(inputSize, config[Table](1)(1), 1, 1, 1, 1)
         .setInitMethod(weightInitMethod = Xavier,
           ConstInitMethod(0.1)).setName(namePrefix + "1x1").inputs(input)
-    val relu1x1 = ReLU(true).setName(namePrefix + "relu_1x1").inputs(conv1x1)
+    val relu1x1 = ReLU(true).setName(namePrefix + "relu_1x1").inputs(input)
 
     val conv3x3_1 = SpatialConvolution(inputSize, config[Table](2)(1), 1, 1, 1, 1).setInitMethod(
       weightInitMethod = Xavier,
@@ -80,9 +80,8 @@ object Inception_Layer_v1 {
       config[Table](2)(1), config[Table](2)(2), 3, 3, 1, 1, 1, 1)
       .setInitMethod(weightInitMethod = Xavier,
         ConstInitMethod(0.1)).setName(namePrefix + "3x3").inputs(relu3x3_1)
-    val relu3x3_2 = ReLU(true).setName(namePrefix + "relu_3x3").inputs(conv3x3_2)
-
-
+    // test
+    val relu3x3_2 = ReLU(true).setName(namePrefix + "relu_3x3").inputs(input)
 
     val conv5x5_1 = SpatialConvolution(inputSize, config[Table](3)(1), 1, 1, 1, 1).setInitMethod(
       weightInitMethod = Xavier,
@@ -101,7 +100,7 @@ object Inception_Layer_v1 {
       ConstInitMethod(0.1)).setName(namePrefix + "pool_proj").inputs(pool)
     val reluPool = ReLU(true).setName(namePrefix + "relu_pool_proj").inputs(convPool)
 
-    JoinTable(2, 0).setName("join").inputs(relu1x1, relu3x3_2, relu5x5_2, reluPool)
+    JoinTable(2, 0).setName("join").inputs(relu1x1, relu3x3_2) // relu5x5_2, reluPool)
   }
 }
 

@@ -26,6 +26,9 @@ import com.intel.analytics.bigdl.utils.mkldnn._
 import com.intel.analytics.bigdl.utils.{Node, Util}
 
 import scala.reflect.ClassTag
+import spire.macros.Auto.scala
+
+import _root_.scala.collection.mutable.ArrayBuffer
 
 /**
  * A graph container. The modules in the container are connected as a DAG graph.
@@ -151,11 +154,23 @@ class StaticGraph[T: ClassTag](
     gradInput
   }
 
+  private def getNodes(inputs: Seq[Node[Module[T]]],
+                       nodesBuffer: ArrayBuffer[Node[Module[T]]]): Unit = {
+    if (inputs.length == 0) return
+    inputs.foreach(node => {
+      if (!nodesBuffer.contains(node)) nodesBuffer.append(node)
+      getNodes(node.nextNodes, nodesBuffer)
+    })
+  }
+
   def toIRgraph(inputFormats: Int = Memory.Format.nchw,
                 outputFormats: Int = Memory.Format.nc) : IRGraph[T] = {
     // reminder: forwardExcutions have all nodes in the graph
-    val allNodes = forwardExecution
-    // if (!BlasToIR[T].enableConvert(allNodes)) return null
+    var allNodesTemp = new ArrayBuffer[Node[Module[T]]]
+    getNodes(_inputs, allNodesTemp)
+    val allNodes = allNodesTemp.toArray
+    // val allNodes = forwardExecution
+//    // if (!BlasToIR[T].enableConvert(allNodes)) return null
     if (inputFormats == Memory.Format.nhwc) return null
 
     val oldToNew = BlasToIR[T].convert(allNodes)
