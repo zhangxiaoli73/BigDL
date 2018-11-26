@@ -110,7 +110,7 @@ object AlexNet {
   }
 
   def graph(classNum: Int, hasDropout : Boolean = true): Module[Float] = {
-    val conv1 = SpatialConvolution(3, 96, 11, 11, 4, 4, 0, 0, 1, false)
+    val conv1 = SpatialConvolution(3, 96, 11, 11, 4, 4, 0, 0, 1, true)
       .setName("conv1").inputs()
     val relu1 = ReLU(true).setName("relu1").inputs(conv1)
     val norm1 = SpatialCrossMapLRN(5, 0.0001, 0.75).setName("norm1").inputs(relu1)

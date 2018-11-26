@@ -55,6 +55,15 @@ class Blas2DnnSpec extends BigDLSpecHelper {
 
     Equivalent.nearequals(outDnn, outBlas, 1e-6) should be(true)
     Equivalent.nearequals(gradInputTensor, gradInputBlas, 1e-4) should be(true)
+
+    val gradWeight1 = blas.getParameters()._2
+    val gradWeight2 = irBlas.getParameters()._2
+
+    val weight1 = blas.getParameters()._1
+    val weight2 = irBlas.getParameters()._1
+
+    Equivalent.nearequals(weight1, weight2) should be (true)
+    Equivalent.nearequals(gradWeight1, gradWeight2) should be (true)
   }
 
   "Inception_Layer_v1 blas to dnn 1111" should "work properly" in {
@@ -89,6 +98,15 @@ class Blas2DnnSpec extends BigDLSpecHelper {
 
     Equivalent.nearequals(outDnn, outBlas, 1e-5) should be(true)
     Equivalent.nearequals(gradInputTensor, gradInputBlas, 1e-5) should be(true)
+
+    val gradWeight1 = blas.getParameters()._2
+    val gradWeight2 = irBlas.getParameters()._2
+
+    val weight1 = blas.getParameters()._1
+    val weight2 = irBlas.getParameters()._1
+
+    Equivalent.nearequals(weight1, weight2) should be (true)
+    Equivalent.nearequals(gradWeight1, gradWeight2) should be (true)
   }
 
   "inception_v1 blas to dnn" should "work properly" in {
@@ -119,6 +137,15 @@ class Blas2DnnSpec extends BigDLSpecHelper {
 
     Equivalent.nearequals(outDnn, outBlas, 1e-6) should be(true)
     Equivalent.nearequals(gradInputTensor, gradInputBlas, 1e-5) should be(true)
+
+    val gradWeight1 = blas.getParameters()._2
+    val gradWeight2 = irBlas.getParameters()._2
+
+    val weight1 = blas.getParameters()._1
+    val weight2 = irBlas.getParameters()._1
+
+    Equivalent.nearequals(weight1, weight2) should be (true)
+    Equivalent.nearequals(gradWeight1, gradWeight2) should be (true)
   }
 
   "alexnet blas to dnn" should "work properly" in {
@@ -132,16 +159,42 @@ class Blas2DnnSpec extends BigDLSpecHelper {
     val irBlas = blas.toIRgraph(inputFormats = 5, outputFormats = Memory.Format.nc)
 
     val outBlas = blas.forward(input).toTensor[Float]
-    val gradInputBlas = blas.backward(input, gradOutput).toTensor[Float]
+
 
     RandomGenerator.RNG.setSeed(1000)
     irBlas.build()
     val outDnn = irBlas.forward(input).toTensor[Float]
+
+    val p1 = blas.getParametersTable()
+    val p2 = irBlas.graph.getParametersTable()
+    val keys = p1.keySet
+    for (i <- keys) {
+      val k = i.asInstanceOf[String]
+      println(k)
+      val t1 = p1[Table](k)
+      val t2 = p2[Table](k)
+      if (t1[Tensor[Float]]("weight").dim() == t2[Tensor[Float]]("weight").dim()) {
+        t1 should be(t2)
+      }
+
+    }
+
+    val weight1 = blas.getParameters()._1
+    val weight2 = irBlas.getParameters()._1
+
+    Equivalent.nearequals(weight1, weight2) should be (true)
+
+    val gradInputBlas = blas.backward(input, gradOutput).toTensor[Float]
     val gradInputDnn = irBlas.backward(input, gradOutput).toTensor[Float]
     val gradInputTensor = Tensor[Float]().resize(gradInputDnn.size()).copy(gradInputDnn)
 
     Equivalent.nearequals(outDnn, outBlas, 1e-6) should be(true)
     Equivalent.nearequals(gradInputTensor, gradInputBlas, 1e-5) should be(true)
+
+    val gradWeight1 = blas.getParameters()._2
+    val gradWeight2 = irBlas.getParameters()._2
+
+    Equivalent.nearequals(gradWeight1, gradWeight2) should be (true)
   }
 
   "lenet5 blas to dnn" should "work properly" in {
@@ -168,6 +221,15 @@ class Blas2DnnSpec extends BigDLSpecHelper {
     Equivalent.nearequals(outDnn, outBlas, 1e-6) should be(true)
     Equivalent.nearequals(gradInputTensor, gradInputBlas, 1e-6) should be(true)
 
+    val gradWeight1 = blas.getParameters()._2
+    val gradWeight2 = irBlas.getParameters()._2
+
+    val weight1 = blas.getParameters()._1
+    val weight2 = irBlas.getParameters()._1
+
+    Equivalent.nearequals(weight1, weight2) should be (true)
+    Equivalent.nearequals(gradWeight1, gradWeight2) should be (true)
+
   }
 
   "resnet50 blas to dnn" should "work properly" in {
@@ -176,7 +238,7 @@ class Blas2DnnSpec extends BigDLSpecHelper {
     val classNum = 1000
     RandomGenerator.RNG.setSeed(1000)
     val input = Tensor[Float](Array(batchSize, 3, 224, 224)).apply1(_ =>
-      RandomGenerator.RNG.uniform(0.1, 1.0).toFloat)
+      RandomGenerator.RNG.uniform(-1.0, 1.0).toFloat)
     var gradOutput = Tensor[Float](batchSize, classNum).apply1(_ =>
       RandomGenerator.RNG.uniform(1.0, 1000.0).toFloat)
 
@@ -199,6 +261,15 @@ class Blas2DnnSpec extends BigDLSpecHelper {
     val gradInputTensor = Tensor[Float]().resize(gradInputDnn.size()).copy(gradInputDnn)
 
     Equivalent.nearequals(outDnn, outBlas, 1e-4) should be(true)
-    Equivalent.nearequals(gradInputTensor, gradInputBlas, 1e-4) should be(true)
+    Equivalent.nearequals(gradInputTensor, gradInputBlas, 1e-3) should be(true)
+
+    val gradWeight1 = blas.getParameters()._2
+    val gradWeight2 = irBlas.getParameters()._2
+
+    val weight1 = blas.getParameters()._1
+    val weight2 = irBlas.getParameters()._1
+
+    Equivalent.nearequals(weight1, weight2) should be (true)
+    Equivalent.nearequals(gradWeight1, gradWeight2) should be (true)
   }
 }

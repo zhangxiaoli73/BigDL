@@ -102,7 +102,10 @@ class BlasToIR[T: ClassTag] extends ConvertBase[Module[T], IRElement[T]]{
     val layerName = layer.getClass.getSimpleName
     val className = "com.intel.analytics.bigdl.utils.mkldnn.IR" + layerName
     val cls = ReflectUtils.classFound(className)
-    if ( cls != null) {
+    if (layer.isInstanceOf[nn.SpatialMaxPooling[T]]) {
+      val tmp = 0
+    }
+    val l = if ( cls != null) {
       ReflectUtils.reflectToIR(layer, cls)
     } else if (layer.isInstanceOf[TensorModule[T]]) {
       val op = IRBlasModule[T](layer.asInstanceOf[TensorModule[T]])
@@ -110,6 +113,7 @@ class BlasToIR[T: ClassTag] extends ConvertBase[Module[T], IRElement[T]]{
     } else {
       throw new UnsupportedOperationException(s"can not convert $layer to IRelement ")
     }
+    l
   }
 }
 

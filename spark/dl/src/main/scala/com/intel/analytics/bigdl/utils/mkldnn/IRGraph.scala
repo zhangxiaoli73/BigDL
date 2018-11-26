@@ -57,7 +57,7 @@ class IRGraph[T: ClassTag](
   @transient private var initAcc: Boolean = false
 
   var allNodes = new ArrayBuffer[Node[IRElement[T]]]
-  private var graph: Graph[T] = null
+  private[bigdl] var graph: Graph[T] = null
 
   // init should find all nodes
   init()

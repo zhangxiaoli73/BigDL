@@ -20,9 +20,10 @@ import com.intel.analytics.bigdl.nn.abstractnn.Activity
 import com.intel.analytics.bigdl.tensor.{DnnTensor, Tensor}
 
 /**
- * Convert output to user defined layout
+ * Convert output to user defined layout and appoint gradOutput layout
  * @param outputLayOut output memory layout
- * @param gradOutputLayout gradoutput memory layout
+ * @param gradOutputLayout gradoutput memory layout,
+ *                         if it is -1, that means gradOutputLayout same with outputLayOut
  */
 class Output(outputLayOut: Int = Memory.Format.nc,
              gradOutputLayout: Int = -1) extends MklDnnLayer {
@@ -30,27 +31,28 @@ class Output(outputLayOut: Int = Memory.Format.nc,
   private val _outputLayOut = outputLayOut
   private val _gradOutputLayout = if (gradOutputLayout == -1) outputLayOut else gradOutputLayout
 
+
+  private def getShape(inLayout: Int, inShape: Array[Int], outLayout: Int): Array[Int] = {
+    val outputShape =
+      if (outLayout == Memory.Format.nhwc && inLayout != Memory.Format.nhwc) {
+        // nchw*  -> nhwc
+        Array(inShape(0), inShape(2), inShape(3), inShape(1))
+      } else if (outLayout != Memory.Format.nhwc && inLayout == Memory.Format.nhwc) {
+        // nhwc -> nchw*
+        Array(inShape(0), inShape(3), inShape(1), inShape(2))
+      } else inShape
+    outputShape
+  }
+
   override private[bigdl] def initFwdPrimitives(inputs: Array[MemoryData], phase: Phase) = {
     require(inputs.length == 1, "Only accept one tensor as input")
-    require(inputs(0).shape.length == 4 || inputs(0).shape.length == 2)
+    require(inputs(0).shape.length == 4 || inputs(0).shape.length == 2,
+      s"Only support input with 2 or 4 dimentions, but get ${inputs(0).shape.length}")
 
-    val inputShape = inputs(0).shape
-    val inputLayout = inputs(0).layout
-
-    if (inputLayout != outputLayOut) {
-      val outputShape = if (outputLayOut == Memory.Format.nhwc) {
-        // nchw -> nhwc
-        Array(inputShape(0), inputShape(2), inputShape(3), inputShape(1))
-      } else if (inputLayout == Memory.Format.nhwc) {
-        // nhwc -> nchw
-        Array(inputShape(0), inputShape(3), inputShape(1), inputShape(2))
-      } else inputShape
-      _outputFormats = Array(HeapData(outputShape, outputLayOut))
-      _inputFormats = _outputFormats
-    } else {
-      _outputFormats = inputs
-      _inputFormats = inputs
-    }
+    val outputShape = getShape(inputs(0).layout, inputs(0).shape, _outputLayOut)
+    // remind: output memory storage should be heapData
+    _outputFormats = Array(HeapData(outputShape, outputLayOut))
+    _inputFormats = _outputFormats
 
     (_inputFormats, _outputFormats)
   }
@@ -62,27 +64,15 @@ class Output(outputLayOut: Int = Memory.Format.nc,
 
   override private[bigdl] def initBwdPrimitives(grads: Array[MemoryData], phase: Phase) = {
     require(grads.length == 1, "Only accept one tensor as input")
-    require(grads(0).shape.length == 4 || grads(0).shape.length == 2)
+    require(grads(0).shape.length == 4 || grads(0).shape.length == 2,
+      s"Only support gradOutput with 2 or 4 dimentions, but get ${grads(0).shape.length}")
 
-    val inputShape = grads(0).shape
-    val inputLayout = grads(0).layout
+    val outputShape = getShape(grads(0).layout, grads(0).shape, _gradOutputLayout)
 
-    if (inputLayout != _gradOutputLayout) {
-      val outputShape = if (_gradOutputLayout == Memory.Format.nhwc) {
-        // nchw -> nhwc
-        Array(inputShape(0), inputShape(2), inputShape(3), inputShape(1))
-      } else if (inputLayout == Memory.Format.nhwc) {
-        // nhwc -> nchw
-        Array(inputShape(0), inputShape(3), inputShape(1), inputShape(2))
-      } else inputShape
-
-      _gradInputFormats = Array(HeapData(outputShape, _gradOutputLayout))
-      _gradOutputFormats = _gradInputFormats
-    } else {
-      _gradInputFormats = grads
-      _gradOutputFormats = grads
-    }
+    _gradInputFormats = Array(HeapData(outputShape, _gradOutputLayout))
+    _gradOutputFormats = _gradInputFormats
     _gradOutputFormatsForWeight = _gradOutputFormats
+
     (_gradInputFormats, _gradOutputFormats)
   }
 
