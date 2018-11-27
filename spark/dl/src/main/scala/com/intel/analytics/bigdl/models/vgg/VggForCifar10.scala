@@ -18,6 +18,7 @@ package com.intel.analytics.bigdl.models.vgg
 import com.intel.analytics.bigdl._
 import com.intel.analytics.bigdl.nn.Graph._
 import com.intel.analytics.bigdl.nn._
+import com.intel.analytics.bigdl.nn.mkldnn.DnnGraph
 import com.intel.analytics.bigdl.numeric.NumericFloat
 
 object VggForCifar10 {
@@ -180,6 +181,17 @@ object Vgg_16 {
     model
   }
 
+  def dnngraph(classNum: Int, hasDropout: Boolean = true)
+  : Module[Float] = {
+    val conv1 = mkldnn.SpatialConvolution(3, 64, 3, 3, 1, 1, 1, 1).inputs()
+    val relu1 = mkldnn.ReLU().inputs(conv1)
+    val conv2 = mkldnn.SpatialConvolution(64, 64, 3, 3, 1, 1, 1, 1).inputs(relu1)
+    val relu2 = mkldnn.ReLU().inputs(conv2)
+    val pool1 = mkldnn.MaxPooling(2, 2, 2, 2).inputs(relu2)
+
+    DnnGraph(Array(conv1), Array(pool1))
+  }
+
   def graph(classNum: Int, hasDropout: Boolean = true)
   : Module[Float] = {
     val conv1 = SpatialConvolution(3, 64, 3, 3, 1, 1, 1, 1).inputs()
@@ -228,7 +240,7 @@ object Vgg_16 {
     val linear3 = Linear(4096, classNum).inputs(drop2)
     val output = LogSoftMax().inputs(linear3)
 
-    Graph(conv1, output)
+    Graph(conv1, pool1)
   }
 }
 

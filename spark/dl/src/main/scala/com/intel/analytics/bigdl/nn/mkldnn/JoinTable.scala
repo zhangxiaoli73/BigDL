@@ -120,44 +120,44 @@ class JoinTable(val dimension: Int) extends MklDnnLayer {
       i += 1
     }
 
-    val inTable = input.toTable
-    var out : Tensor[Float] = null
-    var out2 = T()
-    import com.intel.analytics.bigdl.nn
-    val join = new nn.JoinTable[Float](2, 0)
-
-    if (this.getName() == "join") {
-      val tmp = 0
-      val buffer = new ArrayBuffer[Tensor[Float]]()
-      val inputF = inputFormats()
-      // val tin = T()
-      var i = 0
-      while (i < inTable.length) {
-        val in = toNCHW(inTable(i + 1).asInstanceOf[Tensor[Float]], inputF(i))
-        buffer.append(in)
-        tin(i + 1) = in
-        i += 1
-      }
-      out = join.forward(tin).asInstanceOf[Tensor[Float]]
-      println("done")
-    }
-
-    if (true) {
-      val buffer = T()
-      val inputF = inputFormats()
-      val inTable = gradInput.toTable
-      // val tin = T()
-      var i = 0
-      while (i < inTable.length) {
-        val in = toNCHW(inTable(i + 1).asInstanceOf[Tensor[Float]], inputF(i))
-        buffer(i + 1) = in
-        i += 1
-      }
-
-      val graout = toNCHW(gradOutput.toTensor[Float], _gradOutputFormats(0))
-      out2 = join.backward(tin, graout)
-      println("done")
-    }
+//    val inTable = input.toTable
+//    var out : Tensor[Float] = null
+//    var out2 = T()
+//    import com.intel.analytics.bigdl.nn
+//    val join = new nn.JoinTable[Float](2, 0)
+//
+//    if (this.getName() == "join") {
+//      val tmp = 0
+//      val buffer = new ArrayBuffer[Tensor[Float]]()
+//      val inputF = inputFormats()
+//      // val tin = T()
+//      var i = 0
+//      while (i < inTable.length) {
+//        val in = toNCHW(inTable(i + 1).asInstanceOf[Tensor[Float]], inputF(i))
+//        buffer.append(in)
+//        tin(i + 1) = in
+//        i += 1
+//      }
+//      out = join.forward(tin).asInstanceOf[Tensor[Float]]
+//      println("done")
+//    }
+//
+//    if (true) {
+//      val buffer = T()
+//      val inputF = inputFormats()
+//      val inTable = gradInput.toTable
+//      // val tin = T()
+//      var i = 0
+//      while (i < inTable.length) {
+//        val in = toNCHW(inTable(i + 1).asInstanceOf[Tensor[Float]], inputF(i))
+//        buffer(i + 1) = in
+//        i += 1
+//      }
+//
+//      val graout = toNCHW(gradOutput.toTensor[Float], _gradOutputFormats(0))
+//      out2 = join.backward(tin, graout)
+//      println("done")
+//    }
 
     gradInput
   }

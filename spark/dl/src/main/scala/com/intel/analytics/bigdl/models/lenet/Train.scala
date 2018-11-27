@@ -73,6 +73,7 @@ object Train {
         BytesToGreyImg(28, 28) -> GreyImgNormalizer(trainMean, trainStd) -> GreyImgToBatch(
         param.batchSize)
 
+      val tmp = trainSet.toDistributed().data(train = false).collect()
       val optimizer = Optimizer(
         model = model,
         dataset = trainSet,

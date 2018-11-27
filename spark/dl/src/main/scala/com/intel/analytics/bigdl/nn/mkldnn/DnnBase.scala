@@ -197,26 +197,26 @@ trait MklDnnLayer extends AbstractModule[Activity, Activity, Float] with MklDnnM
       updateOutputTensors = buffer.toArray
       cachedInput = input
     }
-    var out : Tensor[Float] = null
-    var out2: Tensor[Float] = null
-    if (this.getName() == "join") {
-      val tmp = 0
-      val buffer = new ArrayBuffer[Tensor[Float]]()
-      val inputF = inputFormats()
-      // val tin = T()
-      var i = 0
-      while (i < updateOutputTensors.length - 1) {
-        val in = toNCHW(updateOutputTensors(i), inputF(i))
-        buffer.append(in)
-        tin(i + 1) = in
-        i += 1
-      }
-
-      import com.intel.analytics.bigdl.nn
-      val join = new nn.JoinTable[Float](2, 0)
-      out = join.forward(tin).asInstanceOf[Tensor[Float]]
-      println("done")
-    }
+//    var out : Tensor[Float] = null
+//    var out2: Tensor[Float] = null
+//    if (this.getName() == "join") {
+//      val tmp = 0
+//      val buffer = new ArrayBuffer[Tensor[Float]]()
+//      val inputF = inputFormats()
+//      // val tin = T()
+//      var i = 0
+//      while (i < updateOutputTensors.length - 1) {
+//        val in = toNCHW(updateOutputTensors(i), inputF(i))
+//        buffer.append(in)
+//        tin(i + 1) = in
+//        i += 1
+//      }
+//
+//      import com.intel.analytics.bigdl.nn
+//      val join = new nn.JoinTable[Float](2, 0)
+//      out = join.forward(tin).asInstanceOf[Tensor[Float]]
+//      println("done")
+//    }
 
     MklDnnOps.streamSubmit(
       runtime.stream, 1, updateOutputPrimitives, updateOutputPrimitives.length,
@@ -224,10 +224,10 @@ trait MklDnnLayer extends AbstractModule[Activity, Activity, Float] with MklDnnM
       updateOutputTensors
     )
 
-    if (this.getName() == "join") {
-      out2 = toNCHW(output.toTensor[Float], HeapData(output.toTensor[Float].size(), 8))
-      val tmp = 0
-    }
+//    if (this.getName() == "join") {
+//      out2 = toNCHW(output.toTensor[Float], HeapData(output.toTensor[Float].size(), 8))
+//      val tmp = 0
+//    }
     output
   }
 
