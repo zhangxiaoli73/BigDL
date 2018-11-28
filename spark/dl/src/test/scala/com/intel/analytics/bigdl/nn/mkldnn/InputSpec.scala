@@ -32,4 +32,17 @@ class InputSpec extends BigDLSpecHelper {
     Tools.dense(output) should be(tensor)
     Tools.dense(gradInput) should be(grad)
   }
+
+  "Input wrapper" should "be correct" in {
+    val layer = new InputWrapper()
+    layer.setRuntime(new MklDnnRuntime())
+    layer.initFwdPrimitives(Array(HeapData(Array(2, 2), Memory.Format.nc)), Phase.TrainingPhase)
+    layer.initBwdPrimitives(Array(HeapData(Array(2, 2), Memory.Format.nc)), Phase.TrainingPhase)
+    val tensor = Tensor[Float](2, 2).rand()
+    val grad = Tensor[Float](2, 2).rand()
+    val output = layer.forward(tensor)
+    val gradInput = layer.backward(tensor, grad)
+    Tools.dense(output) should be(tensor)
+    Tools.dense(gradInput) should be(grad)
+  }
 }
