@@ -122,8 +122,8 @@ class IRToDnn extends ConvertBase[IRElement[Float], Module[Float]] {
 
   private def fromConv(node: IRElement[Float]) : Module[Float] = {
     val t = node.getOp().asInstanceOf[IRSpatialConvolution[Float]]
-    require(t.wRegularizer == null && t.bRegularizer == null,
-      "Dnn SpatialConvolution can not support Regularizer")
+//    require(t.wRegularizer == null && t.bRegularizer == null,
+//      "Dnn SpatialConvolution can not support Regularizer")
     require(t.format == DataFormat.NCHW, "Dnn SpatialConvolution only supports NCHW")
     val cls = Class.forName("com.intel.analytics.bigdl.nn.mkldnn.SpatialConvolution")
     ReflectUtils.reflectFromIR(node, cls)
@@ -185,8 +185,8 @@ class IRToDnn extends ConvertBase[IRElement[Float], Module[Float]] {
 
   private def fromLinear(node: IRElement[Float]) : Module[Float] = {
     val t = node.getOp().asInstanceOf[IRLinear[Float]]
-    require(t.wRegularizer == null && t.bRegularizer == null,
-      "Dnn Linear can not support Regularizer")
+//    require(t.wRegularizer == null && t.bRegularizer == null,
+//      "Dnn Linear can not support Regularizer")
     val cls = Class.forName("com.intel.analytics.bigdl.nn.mkldnn.Linear")
     ReflectUtils.reflectFromIR(node, cls)
   }

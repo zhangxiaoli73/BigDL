@@ -51,10 +51,8 @@ class DnnGraph(
 
   override def updateOutput(input: Activity): Activity = {
     var i = 0
-    println("*****************")
     while(i < forwardExecution.length) {
       val node = forwardExecution(i)
-      println(node.element)
       val nodeInput = findDnnInput(node, input)
       inputCache(i) = nodeInput
       node.element.forward(nodeInput)
@@ -318,12 +316,9 @@ class DnnGraph(
     var firstRealInputFormats: Array[MemoryData] = null
     for (i <- 0 until forwardExecution.length) {
       val m = forwardExecution(i)
-      println(m.element)
       lastOutputFormats = findInputFormats(m, inputs)
       val realInputAndOutputFormats =
         m.element.asInstanceOf[MklDnnModule].initFwdPrimitives(lastOutputFormats, phase)
-      test(realInputAndOutputFormats._1(0).shape)
-      test(realInputAndOutputFormats._2(0).shape)
       lastOutputFormats.zip(realInputAndOutputFormats._1).foreach {
         case (o, i) => reorderManager.register(o, i)
       }

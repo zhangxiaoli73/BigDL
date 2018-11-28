@@ -57,7 +57,7 @@ object ReflectUtils {
         if (ptype <:< universe.typeOf[ClassTag[_]]||
           ptype.typeSymbol == universe.typeOf[ClassTag[_]].typeSymbol) {
           require(tagIter.hasNext, "If your module contains multiple class tags, " +
-            "do you forget to override getClassTagNumerics method")
+            s"do you forget to override getClassTagNumerics method ${layer1}")
           args(i) = tagIter.next()
         } else if (ptype <:< universe.typeOf[TensorNumeric[_]]
           || ptype.typeSymbol == universe.typeOf[TensorNumeric[_]].typeSymbol) {
