@@ -35,6 +35,7 @@ import com.intel.analytics.bigdl.utils.{Engine, T, Table}
 import org.apache.log4j.Logger
 import scopt.OptionParser
 
+import scala.collection.mutable.ArrayBuffer
 import scala.reflect.ClassTag
 
 object Perf {
@@ -57,17 +58,11 @@ object Perf {
   }
 
   def main(argv: Array[String]): Unit = {
-    System.setProperty("bigdl.mkldnn.fusion.convbn", "false")
-    System.setProperty("bigdl.mkldnn.fusion.bnrelu", "false")
-    System.setProperty("bigdl.mkldnn.fusion.convrelu", "false")
-    System.setProperty("bigdl.mkldnn.fusion.convsum", "false")
-
-    System.setProperty("bigdl.localMode", "true")
-    System.setProperty("bigdl.engineType", "mkldnn")
-    Engine.init
-
     parser.parse(argv, new ResNet50PerfParams()).foreach { params =>
-      import com.intel.analytics.bigdl.nn
+      System.setProperty("bigdl.localMode", "true")
+      System.setProperty("bigdl.engineType", "mklblas")
+      Engine.init
+
       val batchSize = params.batchSize
       val training = params.training
       val iterations = params.iteration
@@ -108,13 +103,11 @@ object Perf {
         case _ => throw new UnsupportedOperationException(s"Unkown model ${params.model}")
       }
 
-      val model = if (true) {
+      val model = if (false) {
         val m = model1.asInstanceOf[StaticGraph[Float]].toIRgraph(5, Memory.Format.nc)
         m.build()
         m
       } else model1
-
-//      val model = model1
 
       val criterion = CrossEntropyCriterion()
 
@@ -125,6 +118,8 @@ object Perf {
       }
 
       var iteration = 0
+      val start = System.nanoTime()
+      val throughputs = new ArrayBuffer[Float]()
       while (iteration < iterations) {
         val start = System.nanoTime()
         val output = model.forward(input)
@@ -136,12 +131,14 @@ object Perf {
         }
 
         val takes = System.nanoTime() - start
-
+        throughputs.append(batchSize.toFloat / (takes / 1e9).toFloat)
         val throughput = "%.2f".format(batchSize.toFloat / (takes / 1e9))
         logger.info(s"Iteration $iteration, takes $takes s, throughput is $throughput imgs/sec")
 
         iteration += 1
       }
+      val avg = throughputs.toArray.reduce((a, b) => (a + b)) / iterations
+      logger.info(s"Average throughput is $avg imgs/sec")
     }
   }
 }
@@ -149,6 +146,6 @@ object Perf {
 case class ResNet50PerfParams (
   batchSize: Int = 16,
   iteration: Int = 50,
-  training: Boolean = true,
+  training: Boolean = false,
   model: String = "resnet"
 )

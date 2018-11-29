@@ -61,9 +61,9 @@ import scala.reflect.runtime.universe
 @SerialVersionUID(2277597677473874749L)
 class SpatialMaxPooling[T: ClassTag](
   val kW: Int, val kH: Int, val dW: Int, val dH: Int, val padW: Int = 0, val padH: Int = 0,
-  val format: DataFormat = DataFormat.NCHW)(implicit ev: TensorNumeric[T]) extends TensorModule[T] {
+  val format: DataFormat = DataFormat.NCHW,
+  var ceilMode: Boolean = false)(implicit ev: TensorNumeric[T]) extends TensorModule[T] {
 
-  var ceilMode = false
   val indices = Tensor[T]()
 
   def this(kW: Int, kH: Int)(implicit ev: TensorNumeric[T]) {
@@ -420,7 +420,8 @@ object SpatialMaxPooling extends ModuleSerializable {
       dH: Int = 1,
       padW: Int = 0,
       padH: Int = 0,
-      format: DataFormat = DataFormat.NCHW)
+      format: DataFormat = DataFormat.NCHW,
+      ceilMode: Boolean = false)
       (implicit ev: TensorNumeric[T]): SpatialMaxPooling[T] = {
     new SpatialMaxPooling[T](kW, kH, dW, dH, padW, padH, format)
   }

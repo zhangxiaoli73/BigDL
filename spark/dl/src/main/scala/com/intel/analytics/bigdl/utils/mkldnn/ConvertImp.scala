@@ -81,6 +81,9 @@ class IRToBlas[T: ClassTag] extends ConvertBase[IRElement[T], Module[T]]{
       return layer.getOp().asInstanceOf[IRBlasModule[T]].model
     }
     val name = layer.getOp().name
+    if (name == "IRSpatialMaxPooling") {
+      val tmp = 0
+    }
     val cls = Class.forName("com.intel.analytics.bigdl.nn." + name.substring(2))
     ReflectUtils.reflectFromIR(layer, cls)
   }
