@@ -45,7 +45,10 @@ object Perf {
   val parser = new OptionParser[ResNet50PerfParams]("BigDL w/ Dnn Local Model Performance Test") {
     opt[String]('m', "model")
       .text("model you want, vgg16 | resnet50 | vgg16_graph | resnet50_graph")
-      .action((v, p) => p.copy(model = v))
+      .action((v, p) => p.copy(dataType = v))
+    opt[String]('p', "path")
+      .text("model you want, vgg16 | resnet50 | vgg16_graph | resnet50_graph")
+      .action((v, p) => p.copy(modelPath = v))
     opt[Int]('b', "batchSize")
       .text("Batch size of input data")
       .action((v, p) => p.copy(batchSize = v))
@@ -60,7 +63,7 @@ object Perf {
   def main(argv: Array[String]): Unit = {
     parser.parse(argv, new ResNet50PerfParams()).foreach { params =>
       System.setProperty("bigdl.localMode", "true")
-      System.setProperty("bigdl.engineType", "mklblas")
+      System.setProperty("bigdl.engineType", "mkldnn")
       Engine.init
 
       val batchSize = params.batchSize
@@ -71,36 +74,34 @@ object Perf {
       var input : Tensor[Float] = null
       var label : Tensor[Float] = null
 
-      val model1 = params.model match {
-        case "vgg16" =>
+      val p = //"/home/zhangli/workspace/zoo-model/analytics-zoo_frcnn-pvanet-compress_PASCAL_0.1.0.model"
+//      "/home/zhangli/workspace/zoo-model/analytics-zoo_frcnn-pvanet_PASCAL_0.1.0.model"
+//      "/home/zhangli/workspace/zoo-model/analytics-zoo_frcnn-vgg16-compress_PASCAL_0.1.0.model"
+      "/home/zhangli/workspace/zoo-model/analytics-zoo_frcnn-vgg16_PASCAL_0.1.0.model"
+//      "/home/zhangli/workspace/zoo-model/analytics-zoo_inception-v3_imagenet_0.1.0.model"
+//      "/home/zhangli/workspace/zoo-model/analytics-zoo_squeezenet_imagenet_0.1.0.model"
+//      "/home/zhangli/workspace/zoo-model/analytics-zoo_ssd-mobilenet-300x300_PASCAL_0.1.0.model"
+//      "/home/zhangli/workspace/zoo-model/analytics-zoo_ssd-vgg16-300x300_PASCAL_0.1.0.model"
+//      "/home/zhangli/workspace/zoo-model/analytics-zoo_ssd-vgg16-512x512_PASCAL_0.1.0.model"
+//      "/home/zhangli/workspace/zoo-model/analytics-zoo_vgg-19_imagenet_0.1.0.model"
+
+      val modelLoad = Module.loadModule[Float](p)
+
+      val graph = if (!modelLoad.isInstanceOf[Graph[Float]]) modelLoad.toGraph() else modelLoad
+      val mLoad = graph.asInstanceOf[StaticGraph[Float]].toIRgraph(5, Memory.Format.nc)
+      mLoad.build()
+
+      val model1 = params.dataType match {
+        case "imagenet" =>
           val inputShape = Array(batchSize, 3, 224, 224)
           input = Tensor(inputShape).rand()
           label = Tensor(batchSize).apply1(_ => Math.ceil(RNG.uniform(0, 1) * 1000).toFloat)
           Vgg_16.graph(1000, false)
-        case "resnet" =>
+        case "ssd" =>
           val inputShape = Array(batchSize, 3, 224, 224)
           input = Tensor(inputShape).rand()
           label = Tensor(batchSize).apply1(_ => Math.ceil(RNG.uniform(0, 1) * 1000).toFloat)
-          ResNet.graph(1000,
-          T("shortcutType" -> ShortcutType.B, "depth" -> 50,
-              "optnet" -> false, "dataset" -> DatasetType.ImageNet))
-          .asInstanceOf[StaticGraph[Float]]
-        case "lenet5" =>
-          val inputShape = Array(batchSize, 1, 28, 28)
-          input = Tensor(inputShape).rand()
-          label = Tensor(batchSize).apply1(_ => Math.ceil(RNG.uniform(0, 1) * 10).toFloat)
-          LeNet5.graph(10)
-        case "alexnet" =>
-          val inputShape = Array(batchSize, 3, 256, 256)
-          input = Tensor(inputShape).rand()
-          label = Tensor(batchSize).apply1(_ => Math.ceil(RNG.uniform(0, 1) * 1000).toFloat)
-          AlexNet.graph(1000, false).asInstanceOf[StaticGraph[Float]]
-        case "inception_v1" =>
-          val inputShape = Array(batchSize, 3, 224, 224)
-          input = Tensor(inputShape).rand()
-          label = Tensor(batchSize).apply1(_ => Math.ceil(RNG.uniform(0, 1) * 1000).toFloat)
-          Inception_v1_NoAuxClassifier.graph(1000, false).asInstanceOf[StaticGraph[Float]]
-        case _ => throw new UnsupportedOperationException(s"Unkown model ${params.model}")
+        case _ => throw new UnsupportedOperationException(s"Unkown model ${params.dataType}")
       }
 
       val model = if (false) {
@@ -147,5 +148,6 @@ case class ResNet50PerfParams (
   batchSize: Int = 16,
   iteration: Int = 50,
   training: Boolean = false,
-  model: String = "resnet"
+  dataType: String = "resnet",
+  modelPath: String = ""
 )

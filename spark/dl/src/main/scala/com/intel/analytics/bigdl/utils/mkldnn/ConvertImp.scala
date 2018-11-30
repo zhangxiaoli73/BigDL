@@ -17,7 +17,7 @@
 package com.intel.analytics.bigdl.utils.mkldnn
 
 import com.intel.analytics.bigdl._
-import com.intel.analytics.bigdl.nn.abstractnn.TensorModule
+import com.intel.analytics.bigdl.nn.abstractnn.{AbstractModule, Activity, TensorModule}
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
 import com.intel.analytics.bigdl.utils.{Node, T}
 
@@ -101,7 +101,7 @@ class BlasToIR[T: ClassTag] extends ConvertBase[Module[T], IRElement[T]]{
     val className = "com.intel.analytics.bigdl.utils.mkldnn.IR" + layerName
     val cls = ReflectUtils.classFound(className)
     if ( cls != null) return true
-    if (layer.isInstanceOf[TensorModule[T]]) true
+    if (layer.isInstanceOf[AbstractModule[Activity, Activity, T]]) true
     else false
   }
 
@@ -111,8 +111,9 @@ class BlasToIR[T: ClassTag] extends ConvertBase[Module[T], IRElement[T]]{
     val cls = ReflectUtils.classFound(className)
     if ( cls != null) {
       ReflectUtils.reflectToIR(layer, cls)
-    } else if (layer.isInstanceOf[TensorModule[T]]) {
-      val op = IRBlasModule[T](layer.asInstanceOf[TensorModule[T]])
+    } else if (layer.isInstanceOf[AbstractModule[Activity, Activity, T]]) {
+      val op = IRBlasModule[T](
+        layer.asInstanceOf[AbstractModule[Activity, Activity, T]])
       IRElement(layer.getName(), op)
     } else {
       throw new UnsupportedOperationException(s"can not convert $layer to IRelement ")

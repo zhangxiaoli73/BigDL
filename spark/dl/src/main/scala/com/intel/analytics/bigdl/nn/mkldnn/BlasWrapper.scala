@@ -21,47 +21,57 @@ import com.intel.analytics.bigdl.mkl.Memory
 import com.intel.analytics.bigdl.nn.abstractnn.{AbstractModule, Activity, TensorModule}
 import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
-import com.intel.analytics.bigdl.utils.Shape
+import com.intel.analytics.bigdl.utils.{MultiShape, Shape}
 import spire.syntax.module
 
-// only support wrap bigdl to support nchw or nc
-class BlasWrapper(val module: TensorModule[Float]) extends MklDnnLayer {
+/**
+ * wrap blas module to be dnn module,
+ * and the module should have implemented "computeOutputShape" func.
+ * @param module
+ */
+private[bigdl] class BlasWrapper(val module: AbstractModule[Activity, Activity, Float])
+  extends MklDnnLayer {
 
-  output = Tensor[Float]()
-  gradInput = Tensor[Float]()
+  require(!module.isInstanceOf[MklDnnModule], "Only support wrapper blas layer to dnn layer")
+
+  output = module.output
+  gradInput = module.gradInput
+
+  private def inferFormats(inputs: Array[MemoryData]): Int = {
+    // reminder: here assume all shapes in inputs should be same
+    inputs.foreach(in =>
+      require(in.shape.length == 2 || in.shape.length == 4,
+      s"only input shape dim 2 and 4 supported, but get ${in.shape.length}"))
+
+    inputs(0).layout match {
+      case Memory.Format.nhwc => Memory.Format.nhwc
+      case Memory.Format.nc => Memory.Format.nc
+      case _ => Memory.Format.nchw
+    }
+  }
 
   override private[mkldnn] def initFwdPrimitives(inputs: Array[MemoryData], phase: Phase) = {
-    // todo: only support tensor model and implement computeOutputShape
-    val inputShape = if (inputs(0).layout == Memory.Format.nhwc) {
-      val s = inputs(0).shape
-      // from nhwc -> nchw
-      Array(s(0), s(3), s(1), s(2))
+    // reminder: only support model having implemented computeOutputShape
+    val inputShape = inputs.map(in => Shape(in.shape))
+    val outputShape = if (inputShape.length == 1) {
+      List(module.computeOutputShape(inputShape(0)))
     } else {
-      inputs(0).shape
+      // multi shape
+      val out = module.computeOutputShape(MultiShape(inputShape.toList))
+      if (out.isInstanceOf[MultiShape]) out.toMulti() else List(out)
     }
-    println(this)
+    val outDim = outputShape(0).toSingle().length
+    require(outDim == 4 || outDim == 2,
+      s"only output shape dim 2 and 4 supported, but get ${outDim}")
 
-    val outputShape = module.computeOutputShape(Shape(inputShape)).toSingle().toArray
+    val inputFormats = inferFormats(inputs)
+    val outputFormats = if (outDim == 4) inputFormats else Memory.Format.nc
 
-    require(inputShape.length == 2 || inputShape.length == 4,
-      s"just support input shape dim is 2 or 4, but get ${inputShape.length}")
-    require(outputShape.length == 2 || outputShape.length == 4,
-      s"just support output shape dim is 2 or 4, but get ${outputShape.length}")
+    val realInputs = inputShape.map(in => HeapData(in.toSingle().toArray, inputFormats))
+    val realOutputs = outputShape.map(in => HeapData(in.toSingle().toArray, outputFormats))
 
-    val realInputs = if (inputShape.length == 4) {
-      HeapData(inputShape, Memory.Format.nchw)
-    } else {
-      HeapData(inputShape, Memory.Format.nc)
-    }
-
-    val realOutputs = if (outputShape.length == 4) {
-      HeapData(outputShape, Memory.Format.nchw)
-    } else {
-      HeapData(outputShape, Memory.Format.nc)
-    }
-
-    _inputFormats = Array(realInputs)
-    _outputFormats = Array(realOutputs)
+    _inputFormats = realInputs.toArray
+    _outputFormats = realOutputs.toArray
 
     (_inputFormats, _outputFormats)
   }
@@ -78,17 +88,17 @@ class BlasWrapper(val module: TensorModule[Float]) extends MklDnnLayer {
   }
 
   override def updateOutput(input: Activity): Activity = {
-    output = module.forward(input.toTensor[Float])
+    output = module.forward(input)
     output
   }
 
   override def updateGradInput(input: Activity, gradOutput: Activity): Activity = {
-    gradInput = module.updateGradInput(input.toTensor[Float], gradOutput.toTensor[Float])
+    gradInput = module.updateGradInput(input, gradOutput)
     gradInput
   }
 
   override def accGradParameters(input: Activity, gradOutput: Activity): Unit = {
-    module.accGradParameters(input.toTensor[Float], gradOutput.toTensor[Float])
+    module.accGradParameters(input, gradOutput)
   }
 
   override def clearState() : this.type = {
@@ -122,6 +132,7 @@ class BlasWrapper(val module: TensorModule[Float]) extends MklDnnLayer {
 }
 
 
-object BlasWrapper {
-  def apply(module: TensorModule[Float]): BlasWrapper = new BlasWrapper(module)
+private[bigdl] object BlasWrapper {
+  def apply(module: AbstractModule[Activity, Activity, Float]): BlasWrapper =
+    new BlasWrapper(module)
 }

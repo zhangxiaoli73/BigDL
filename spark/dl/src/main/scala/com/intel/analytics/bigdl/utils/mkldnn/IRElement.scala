@@ -16,7 +16,7 @@
 
 package com.intel.analytics.bigdl.utils.mkldnn
 
-import com.intel.analytics.bigdl.nn.abstractnn.{Activity, DataFormat, TensorModule}
+import com.intel.analytics.bigdl.nn.abstractnn.{AbstractModule, Activity, DataFormat, TensorModule}
 import com.intel.analytics.bigdl.optim.Regularizer
 import com.intel.analytics.bigdl.tensor.{Tensor, TensorNumericMath}
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
@@ -120,7 +120,8 @@ case class IRConcatTable[T: ClassTag]() extends IROperate[T]
 
 case class IRInput[T: ClassTag]() extends IROperate[T]
 
-case class IRBlasModule[T: ClassTag](model: TensorModule[T]) extends IROperate[T]
+case class IRBlasModule[T: ClassTag](
+             model: AbstractModule[Activity, Activity, T]) extends IROperate[T]
 
 private[bigdl] class IRElement[T: ClassTag](
   val name: String,
