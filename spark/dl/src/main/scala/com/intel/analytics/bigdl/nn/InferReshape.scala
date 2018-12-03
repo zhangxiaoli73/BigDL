@@ -78,7 +78,7 @@ class InferReshape[T: ClassTag](
   }
 
   override def updateOutput(input: Tensor[T]): Tensor[T] = {
-    if (this.getName() == "mbox_conf_reshape") {
+    if (this.getName() == "mbox_conf_flatten") {
       val tmp = 0
     }
     var total = subTotal
@@ -171,6 +171,9 @@ class InferReshape[T: ClassTag](
   }
 
   override def computeOutputShape(inputShape: Shape): Shape = {
+    if (this.getName() == "mbox_conf_flatten") {
+      val tmp = 0
+    }
     val inputSize = inputShape.toSingle().toArray
     val size = inferedSizes
     var total = subTotal

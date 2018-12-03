@@ -55,7 +55,7 @@ private[bigdl] class BlasWrapper(val module: AbstractModule[Activity, Activity, 
     // reminder: only support model having implemented computeOutputShape
     val inputShape = inputs.map(in => Shape(in.shape))
     println("************")
-    println(module)
+    println(module.getName())
     val outputShape = if (inputShape.length == 1) {
       List(module.computeOutputShape(inputShape(0)))
     } else {
