@@ -39,13 +39,14 @@ private[bigdl] class BlasWrapper(val module: AbstractModule[Activity, Activity, 
 
   private def inferFormats(inputs: Array[MemoryData]): Int = {
     // reminder: here assume all shapes in inputs should be same
-    inputs.foreach(in =>
-      require(in.shape.length == 2 || in.shape.length == 4,
-      s"only input shape dim 2 and 4 supported, but get ${in.shape.length}"))
+//    inputs.foreach(in =>
+//      require(in.shape.length == 2 || in.shape.length == 4,
+//      s"only input shape dim 2 and 4 supported, but get ${in.shape.length}"))
 
     inputs(0).layout match {
       case Memory.Format.nhwc => Memory.Format.nhwc
       case Memory.Format.nc => Memory.Format.nc
+      case Memory.Format.ntc => Memory.Format.ntc
       case _ => Memory.Format.nchw
     }
   }
@@ -53,6 +54,8 @@ private[bigdl] class BlasWrapper(val module: AbstractModule[Activity, Activity, 
   override private[mkldnn] def initFwdPrimitives(inputs: Array[MemoryData], phase: Phase) = {
     // reminder: only support model having implemented computeOutputShape
     val inputShape = inputs.map(in => Shape(in.shape))
+    println("************")
+    println(module)
     val outputShape = if (inputShape.length == 1) {
       List(module.computeOutputShape(inputShape(0)))
     } else {
@@ -61,11 +64,15 @@ private[bigdl] class BlasWrapper(val module: AbstractModule[Activity, Activity, 
       if (out.isInstanceOf[MultiShape]) out.toMulti() else List(out)
     }
     val outDim = outputShape(0).toSingle().length
-    require(outDim == 4 || outDim == 2,
-      s"only output shape dim 2 and 4 supported, but get ${outDim}")
+//    require(outDim == 4 || outDim == 2,
+//      s"only output shape dim 2 and 4 supported, but get ${outDim}")
 
     val inputFormats = inferFormats(inputs)
-    val outputFormats = if (outDim == 4) inputFormats else Memory.Format.nc
+    val outputFormats = if (outDim == 4) {
+      inputFormats
+    } else if (outDim == 3) {
+     Memory.Format.ntc
+    } else Memory.Format.nc
 
     val realInputs = inputShape.map(in => HeapData(in.toSingle().toArray, inputFormats))
     val realOutputs = outputShape.map(in => HeapData(in.toSingle().toArray, outputFormats))

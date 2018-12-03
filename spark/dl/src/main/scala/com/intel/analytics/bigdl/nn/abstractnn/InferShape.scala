@@ -84,6 +84,7 @@ trait InferShape {
    * We suppose the first dim is batch
    */
   private[bigdl] def computeOutputShape(inputShape: Shape): Shape = {
+    println(this)
     throw new RuntimeException("Haven't been implemented yet. Do not use it with Keras Layer")
   }
 

@@ -74,41 +74,35 @@ object Perf {
       var input : Tensor[Float] = null
       var label : Tensor[Float] = null
 
-      val p = //"/home/zhangli/workspace/zoo-model/analytics-zoo_frcnn-pvanet-compress_PASCAL_0.1.0.model"
-//      "/home/zhangli/workspace/zoo-model/analytics-zoo_frcnn-pvanet_PASCAL_0.1.0.model"
+      val p = // "/home/zhangli/workspace/zoo-model/analytics-zoo_frcnn-pvanet-compress_PASCAL_0.1.0.model"
+ //     "/home/zhangli/workspace/zoo-model/analytics-zoo_frcnn-pvanet_PASCAL_0.1.0.model"
 //      "/home/zhangli/workspace/zoo-model/analytics-zoo_frcnn-vgg16-compress_PASCAL_0.1.0.model"
-      "/home/zhangli/workspace/zoo-model/analytics-zoo_frcnn-vgg16_PASCAL_0.1.0.model"
+//      "/home/zhangli/workspace/zoo-model/analytics-zoo_frcnn-vgg16_PASCAL_0.1.0.model"
 //      "/home/zhangli/workspace/zoo-model/analytics-zoo_inception-v3_imagenet_0.1.0.model"
 //      "/home/zhangli/workspace/zoo-model/analytics-zoo_squeezenet_imagenet_0.1.0.model"
 //      "/home/zhangli/workspace/zoo-model/analytics-zoo_ssd-mobilenet-300x300_PASCAL_0.1.0.model"
-//      "/home/zhangli/workspace/zoo-model/analytics-zoo_ssd-vgg16-300x300_PASCAL_0.1.0.model"
+      "/home/zhangli/workspace/zoo-model/analytics-zoo_ssd-vgg16-300x300_PASCAL_0.1.0.model"
 //      "/home/zhangli/workspace/zoo-model/analytics-zoo_ssd-vgg16-512x512_PASCAL_0.1.0.model"
 //      "/home/zhangli/workspace/zoo-model/analytics-zoo_vgg-19_imagenet_0.1.0.model"
 
       val modelLoad = Module.loadModule[Float](p)
 
       val graph = if (!modelLoad.isInstanceOf[Graph[Float]]) modelLoad.toGraph() else modelLoad
-      val mLoad = graph.asInstanceOf[StaticGraph[Float]].toIRgraph(5, Memory.Format.nc)
-      mLoad.build()
+      val model = graph.asInstanceOf[StaticGraph[Float]].toIRgraph(5, Memory.Format.nc)
+      model.build()
+//      val model = graph
 
-      val model1 = params.dataType match {
+      params.dataType match {
         case "imagenet" =>
           val inputShape = Array(batchSize, 3, 224, 224)
           input = Tensor(inputShape).rand()
           label = Tensor(batchSize).apply1(_ => Math.ceil(RNG.uniform(0, 1) * 1000).toFloat)
-          Vgg_16.graph(1000, false)
         case "ssd" =>
-          val inputShape = Array(batchSize, 3, 224, 224)
+          val inputShape = Array(batchSize, 3, 300, 300)
           input = Tensor(inputShape).rand()
           label = Tensor(batchSize).apply1(_ => Math.ceil(RNG.uniform(0, 1) * 1000).toFloat)
         case _ => throw new UnsupportedOperationException(s"Unkown model ${params.dataType}")
       }
-
-      val model = if (false) {
-        val m = model1.asInstanceOf[StaticGraph[Float]].toIRgraph(5, Memory.Format.nc)
-        m.build()
-        m
-      } else model1
 
       val criterion = CrossEntropyCriterion()
 
@@ -145,9 +139,9 @@ object Perf {
 }
 
 case class ResNet50PerfParams (
-  batchSize: Int = 16,
+  batchSize: Int = 4,
   iteration: Int = 50,
   training: Boolean = false,
-  dataType: String = "resnet",
-  modelPath: String = ""
+  dataType: String = "ssd",
+  modelPath: String = "imagenet"
 )

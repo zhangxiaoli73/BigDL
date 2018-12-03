@@ -316,6 +316,9 @@ class DnnGraph(
     var firstRealInputFormats: Array[MemoryData] = null
     for (i <- 0 until forwardExecution.length) {
       val m = forwardExecution(i)
+      if (m.element.getName() == "mbox_conf_reshape") {
+        val tmp = 0
+      }
       println(m)
       lastOutputFormats = findInputFormats(m, inputs)
       val realInputAndOutputFormats =

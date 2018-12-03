@@ -16,9 +16,11 @@
 
 package com.intel.analytics.bigdl.nn
 
+import breeze.linalg.normalize
 import com.intel.analytics.bigdl.nn.abstractnn.TensorModule
 import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
+import com.intel.analytics.bigdl.utils.Shape
 
 import scala.reflect.ClassTag
 
@@ -76,6 +78,9 @@ class InferReshape[T: ClassTag](
   }
 
   override def updateOutput(input: Tensor[T]): Tensor[T] = {
+    if (this.getName() == "mbox_conf_reshape") {
+      val tmp = 0
+    }
     var total = subTotal
     var i = 0
     while (i < size.length) {
@@ -163,6 +168,26 @@ class InferReshape[T: ClassTag](
       super.clearState()
     }
     this
+  }
+
+  override def computeOutputShape(inputShape: Shape): Shape = {
+    val inputSize = inputShape.toSingle().toArray
+    val size = inferedSizes
+    var total = subTotal
+    var i = 0
+    while (i < size.length) {
+      if (size(i) == 0) { // use the same dim value as input
+        size(i + startIndex) = inputSize(i)
+        total *= inputSize(i)
+      }
+      i += 1
+    }
+    if (inferIndex != -1) {
+      size(inferIndex) = inputSize.product / total
+      if (batchMode) size(inferIndex) = size(inferIndex) / inputSize(0)
+    }
+    if (batchMode) size(0) = inputSize(0)
+    Shape(size)
   }
 }
 
