@@ -142,6 +142,6 @@ case class ResNet50PerfParams (
   batchSize: Int = 4,
   iteration: Int = 50,
   training: Boolean = false,
-  dataType: String = "ssd", // model data set type
+  dataType: String = "ssd",
   modelPath: String = "imagenet"
 )
