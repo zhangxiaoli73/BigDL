@@ -22,6 +22,7 @@ import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
 import com.intel.analytics.bigdl.utils.Shape
 
+import scala.collection.mutable.ArrayBuffer
 import scala.reflect.ClassTag
 
 /**
@@ -78,8 +79,9 @@ class InferReshape[T: ClassTag](
   }
 
   override def updateOutput(input: Tensor[T]): Tensor[T] = {
-    if (this.getName() == "mbox_conf_flatten") {
+    if (this.getName() == "mbox_conf_reshape") {
       val tmp = 0
+      computeOutputShape(Shape(input.size()))
     }
     var total = subTotal
     var i = 0
@@ -171,26 +173,28 @@ class InferReshape[T: ClassTag](
   }
 
   override def computeOutputShape(inputShape: Shape): Shape = {
-    if (this.getName() == "mbox_conf_flatten") {
+    if (this.getName() == "mbox_conf_reshape") {
       val tmp = 0
     }
     val inputSize = inputShape.toSingle().toArray
-    val size = inferedSizes
+    val outputSize = new ArrayBuffer[Int]()
+    inferedSizes.foreach(outputSize.append(_))
+
     var total = subTotal
     var i = 0
     while (i < size.length) {
       if (size(i) == 0) { // use the same dim value as input
-        size(i + startIndex) = inputSize(i)
+        outputSize(i + startIndex) = inputSize(i)
         total *= inputSize(i)
       }
       i += 1
     }
     if (inferIndex != -1) {
-      size(inferIndex) = inputSize.product / total
-      if (batchMode) size(inferIndex) = size(inferIndex) / inputSize(0)
+      outputSize(inferIndex) = inputSize.product / total
+      if (batchMode) outputSize(inferIndex) = outputSize(inferIndex) / inputSize(0)
     }
-    if (batchMode) size(0) = inputSize(0)
-    Shape(size)
+    if (batchMode) outputSize(0) = inputSize(0)
+    Shape(outputSize.toArray)
   }
 }
 

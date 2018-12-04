@@ -125,6 +125,22 @@ class IRGraph[T: ClassTag](
   override def parameters(): (Array[Tensor[T]], Array[Tensor[T]]) = {
     graph.parameters()
   }
+
+  override def training(): this.type = {
+    train = true
+    graph.training()
+    this
+  }
+
+  /**
+    * Set the module to evaluate mode
+    * @return
+    */
+  override def evaluate(): this.type = {
+    train = false
+    graph.evaluate()
+    this
+  }
 }
 
 object IRGraph {

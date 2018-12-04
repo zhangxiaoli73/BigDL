@@ -23,7 +23,7 @@ import com.intel.analytics.bigdl.nn.{Module => _, _}
 import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
 import com.intel.analytics.bigdl.transform.vision.image.util.BboxUtil
-import com.intel.analytics.bigdl.utils.Table
+import com.intel.analytics.bigdl.utils.{Shape, Table}
 import org.apache.log4j.Logger
 import DetectionOutputSSD.logger
 
@@ -258,9 +258,20 @@ class DetectionOutputSSD[T: ClassTag](val nClasses: Int = 21,
       }
     }
     output = out
+    println("ddddddddddddddddd " + this.getName())
+    test(output.toTensor[T].size())
     output
   }
 
+  def test(a: Array[Int]): Unit = {
+    var name = ""
+    var i = 0
+    while (i < a.length) {
+      name = name + "," + a(i)
+      i += 1
+    }
+    println(name)
+  }
   override def updateGradInput(input: Table, gradOutput: Activity): Table = {
     gradInput = gradOutput.toTable
     gradInput
@@ -274,6 +285,14 @@ class DetectionOutputSSD[T: ClassTag](val nClasses: Int = 21,
     allIndicesNum = null
     if (null != confPost) confPost.clearState()
     this
+  }
+
+  override def computeOutputShape(inputShape: Shape): Shape = {
+    if (isTraining()) {
+      return inputShape
+    }
+    val batch = inputShape.toMulti()(0).toSingle().toArray
+    Shape(Array(batch(0), 1201))
   }
 }
 

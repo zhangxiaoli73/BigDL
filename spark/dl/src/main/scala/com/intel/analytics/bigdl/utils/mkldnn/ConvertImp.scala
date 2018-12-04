@@ -37,6 +37,23 @@ abstract class ConvertBase[T, D] {
           oldToNew.get(node).get.add(oldToNew.get(nextNodeAndEdge._1).get, nextNodeAndEdge._2)
         }
       })
+//      node.prevNodesAndEdges.foreach(prevNodeAndEdge => {
+//        if (oldToNew.contains(prevNodeAndEdge._1)) {
+//          oldToNew.get(node).get.from(oldToNew.get(prevNodeAndEdge._1).get, prevNodeAndEdge._2)
+//        }
+//      })
+    })
+    // sort previous node
+    oldToNew.toArray.foreach(node => {
+      require(node._1.prevNodesAndEdges.length == node._2.prevNodesAndEdges.length)
+      if (node._1.prevNodesAndEdges.length > 1) {
+        node._2.removePrevEdges()
+        node._1.prevNodesAndEdges.foreach(prevNodeAndEdge => {
+          if (oldToNew.contains(prevNodeAndEdge._1)) {
+            oldToNew.get(node._1).get.from(oldToNew.get(prevNodeAndEdge._1).get, prevNodeAndEdge._2)
+          }
+        })
+      }
     })
   }
 

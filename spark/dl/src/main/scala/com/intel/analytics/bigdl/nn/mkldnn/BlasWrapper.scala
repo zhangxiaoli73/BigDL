@@ -56,6 +56,9 @@ private[bigdl] class BlasWrapper(val module: AbstractModule[Activity, Activity, 
     val inputShape = inputs.map(in => Shape(in.shape))
     println("************")
     println(module.getName())
+    if (this.getName() == "detection_out") {
+      val tmp = 0
+    }
     val outputShape = if (inputShape.length == 1) {
       List(module.computeOutputShape(inputShape(0)))
     } else {
@@ -74,7 +77,9 @@ private[bigdl] class BlasWrapper(val module: AbstractModule[Activity, Activity, 
      Memory.Format.ntc
     } else Memory.Format.nc
 
-    val realInputs = inputShape.map(in => HeapData(in.toSingle().toArray, inputFormats))
+    // val realInputs = inputShape.map(in => HeapData(in.toSingle().toArray, inputFormats))
+    // todo: need fix
+    val realInputs = inputs.map(in => HeapData(in.shape, in.layout))
     val realOutputs = outputShape.map(in => HeapData(in.toSingle().toArray, outputFormats))
 
     _inputFormats = realInputs.toArray
@@ -135,6 +140,22 @@ private[bigdl] class BlasWrapper(val module: AbstractModule[Activity, Activity, 
     var hash = super.hashCode()
     hash = hash * seed + module.hashCode()
     hash
+  }
+
+  override def training(): this.type = {
+    train = true
+    module.training()
+    this
+  }
+
+  /**
+    * Set the module to evaluate mode
+    * @return
+    */
+  override def evaluate(): this.type = {
+    train = false
+    module.evaluate()
+    this
   }
 }
 
