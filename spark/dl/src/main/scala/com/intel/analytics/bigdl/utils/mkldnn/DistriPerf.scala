@@ -41,11 +41,11 @@ import scopt.OptionParser
 import scala.collection.mutable.ArrayBuffer
 import scala.reflect.ClassTag
 
-object Perf {
+object DistriPerf {
 
   val logger = Logger.getLogger(getClass)
 
-  val parser = new OptionParser[ResNet50PerfParams]("BigDL w/ Dnn Local Model Performance Test") {
+  val parser = new OptionParser[DistriPerfParams]("BigDL w/ Dnn Local Model Performance Test") {
     opt[String]('m', "model")
       .text("model you want, vgg16 | resnet50 | vgg16_graph | resnet50_graph")
       .action((v, p) => p.copy(dataType = v))
@@ -61,7 +61,7 @@ object Perf {
   }
 
   def main(argv: Array[String]): Unit = {
-    parser.parse(argv, new ResNet50PerfParams()).foreach { params =>
+    parser.parse(argv, new DistriPerfParams()).foreach { params =>
       System.setProperty("bigdl.engineType", "mkldnn")
       val conf = Engine.createSparkConf().setAppName("Test perf for convertion")
         .set("spark.akka.frameSize", 64.toString)
@@ -112,7 +112,7 @@ object Perf {
   }
 }
 
-case class ResNet50PerfParams (
+case class DistriPerfParams (
   batchSize: Int = 4,
   iteration: Int = 50,
   dataType: String = "ssd",

@@ -38,11 +38,11 @@ import scopt.OptionParser
 import scala.collection.mutable.ArrayBuffer
 import scala.reflect.ClassTag
 
-object Perf {
+object LocalPerf {
 
   val logger = Logger.getLogger(getClass)
 
-  val parser = new OptionParser[ResNet50PerfParams]("BigDL w/ Dnn Local Model Performance Test") {
+  val parser = new OptionParser[LocalPerfParams]("BigDL w/ Dnn Local Model Performance Test") {
     opt[String]('m', "model")
       .text("model you want, vgg16 | resnet50 | vgg16_graph | resnet50_graph")
       .action((v, p) => p.copy(dataType = v))
@@ -61,7 +61,7 @@ object Perf {
   }
 
   def main(argv: Array[String]): Unit = {
-    parser.parse(argv, new ResNet50PerfParams()).foreach { params =>
+    parser.parse(argv, new LocalPerfParams()).foreach { params =>
       System.setProperty("bigdl.localMode", "true")
       System.setProperty("bigdl.engineType", "mkldnn")
       Engine.init
@@ -74,20 +74,24 @@ object Perf {
       var input : Tensor[Float] = null
       var label : Tensor[Float] = null
 
-      val p = // "/home/zhangli/workspace/zoo-model/analytics-zoo_frcnn-pvanet-compress_PASCAL_0.1.0.model"
- //     "/home/zhangli/workspace/zoo-model/analytics-zoo_frcnn-pvanet_PASCAL_0.1.0.model"
+      val p = "/home/zhangli/workspace/zoo-model/analytics-zoo_frcnn-pvanet-compress_PASCAL_0.1.0.model"
+ //    "/home/zhangli/workspace/zoo-model/analytics-zoo_frcnn-pvanet_PASCAL_0.1.0.model"
 //      "/home/zhangli/workspace/zoo-model/analytics-zoo_frcnn-vgg16-compress_PASCAL_0.1.0.model"
 //      "/home/zhangli/workspace/zoo-model/analytics-zoo_frcnn-vgg16_PASCAL_0.1.0.model"
 //      "/home/zhangli/workspace/zoo-model/analytics-zoo_inception-v3_imagenet_0.1.0.model"
 //      "/home/zhangli/workspace/zoo-model/analytics-zoo_squeezenet_imagenet_0.1.0.model"
 //      "/home/zhangli/workspace/zoo-model/analytics-zoo_ssd-mobilenet-300x300_PASCAL_0.1.0.model"
-      "/home/zhangli/workspace/zoo-model/analytics-zoo_ssd-vgg16-300x300_PASCAL_0.1.0.model"
+//      "/home/zhangli/workspace/zoo-model/analytics-zoo_ssd-vgg16-300x300_PASCAL_0.1.0.model"
 //      "/home/zhangli/workspace/zoo-model/analytics-zoo_ssd-vgg16-512x512_PASCAL_0.1.0.model"
 //      "/home/zhangli/workspace/zoo-model/analytics-zoo_vgg-19_imagenet_0.1.0.model"
+      val modelLoad = Module.loadModule[Float](p)
 
-      val modelLoad = Module.loadModule[Float](params.modelPath)
+//      import com.intel.analytics.bigdl.nn
+//      val modelLoad = nn.Sequential()
+//      modelLoad.add(LeNet5.graph(10))
+//      modelLoad.add(nn.ReLU())
 
-      val graph = if (!modelLoad.isInstanceOf[Graph[Float]]) modelLoad.toGraph() else modelLoad
+      val graph = modelLoad.toGraph() // if (!modelLoad.isInstanceOf[Graph[Float]]) modelLoad.toGraph() else modelLoad
       val model = graph.asInstanceOf[StaticGraph[Float]].toIRgraph(5, Memory.Format.nc)
       model.build()
 
@@ -137,7 +141,7 @@ object Perf {
   }
 }
 
-case class ResNet50PerfParams (
+case class LocalPerfParams (
   batchSize: Int = 4,
   iteration: Int = 80,
   training: Boolean = false,
