@@ -258,8 +258,8 @@ class DetectionOutputSSD[T: ClassTag](val nClasses: Int = 21,
       }
     }
     output = out
-    println("ddddddddddddddddd " + this.getName())
-    test(output.toTensor[T].size())
+//    println("ddddddddddddddddd " + this.getName())
+//    test(output.toTensor[T].size())
     output
   }
 

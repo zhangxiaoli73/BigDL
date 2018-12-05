@@ -54,11 +54,11 @@ private[bigdl] class BlasWrapper(val module: AbstractModule[Activity, Activity, 
   override private[mkldnn] def initFwdPrimitives(inputs: Array[MemoryData], phase: Phase) = {
     // reminder: only support model having implemented computeOutputShape
     val inputShape = inputs.map(in => Shape(in.shape))
-    println("************")
-    println(module.getName())
-    if (this.getName() == "detection_out") {
-      val tmp = 0
-    }
+//    println("************")
+//    println(module.getName())
+//    if (this.getName() == "detection_out") {
+//      val tmp = 0
+//    }
     val outputShape = if (inputShape.length == 1) {
       List(module.computeOutputShape(inputShape(0)))
     } else {

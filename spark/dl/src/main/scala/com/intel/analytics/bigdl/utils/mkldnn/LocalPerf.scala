@@ -62,9 +62,7 @@ object LocalPerf {
 
   def main(argv: Array[String]): Unit = {
     parser.parse(argv, new LocalPerfParams()).foreach { params =>
-      System.setProperty("bigdl.localMode", "true")
       System.setProperty("bigdl.engineType", "mkldnn")
-      Engine.init
 
       val batchSize = params.batchSize
       val training = params.training
@@ -74,7 +72,7 @@ object LocalPerf {
       var input : Tensor[Float] = null
       var label : Tensor[Float] = null
 
-      val p = "/home/zhangli/workspace/zoo-model/analytics-zoo_frcnn-pvanet-compress_PASCAL_0.1.0.model"
+      val p = "/home/zhangli/workspace/zoo-model/analytics-zoo_vgg-16_imagenet_0.1.0.model"
  //    "/home/zhangli/workspace/zoo-model/analytics-zoo_frcnn-pvanet_PASCAL_0.1.0.model"
 //      "/home/zhangli/workspace/zoo-model/analytics-zoo_frcnn-vgg16-compress_PASCAL_0.1.0.model"
 //      "/home/zhangli/workspace/zoo-model/analytics-zoo_frcnn-vgg16_PASCAL_0.1.0.model"
@@ -84,14 +82,12 @@ object LocalPerf {
 //      "/home/zhangli/workspace/zoo-model/analytics-zoo_ssd-vgg16-300x300_PASCAL_0.1.0.model"
 //      "/home/zhangli/workspace/zoo-model/analytics-zoo_ssd-vgg16-512x512_PASCAL_0.1.0.model"
 //      "/home/zhangli/workspace/zoo-model/analytics-zoo_vgg-19_imagenet_0.1.0.model"
-      val modelLoad = Module.loadModule[Float](p)
-
-//      import com.intel.analytics.bigdl.nn
-//      val modelLoad = nn.Sequential()
-//      modelLoad.add(LeNet5.graph(10))
-//      modelLoad.add(nn.ReLU())
-
-      val graph = modelLoad.toGraph() // if (!modelLoad.isInstanceOf[Graph[Float]]) modelLoad.toGraph() else modelLoad
+      val modelLoad = if (params.modelPath == "lenet") {
+        LeNet5.graph(10)
+      } else {
+        Module.loadModule[Float](params.modelPath)
+      }
+      val graph = if (!modelLoad.isInstanceOf[Graph[Float]]) modelLoad.toGraph() else modelLoad
       val model = graph.asInstanceOf[StaticGraph[Float]].toIRgraph(5, Memory.Format.nc)
       model.build()
 
@@ -104,6 +100,10 @@ object LocalPerf {
           val inputShape = Array(batchSize, 3, 300, 300)
           input = Tensor(inputShape).rand()
           label = Tensor(batchSize).apply1(_ => Math.ceil(RNG.uniform(0, 1) * 1000).toFloat)
+        case "lenet" =>
+          val inputShape = Array(batchSize, 1, 28, 28)
+          input = Tensor(inputShape).rand()
+          label = Tensor(batchSize).apply1(_ => Math.ceil(RNG.uniform(0, 1) * 10).toFloat)
         case _ => throw new UnsupportedOperationException(s"Unkown model ${params.dataType}")
       }
 
@@ -131,12 +131,12 @@ object LocalPerf {
         val takes = System.nanoTime() - start
         throughputs.append(batchSize.toFloat / (takes / 1e9).toFloat)
         val throughput = "%.2f".format(batchSize.toFloat / (takes / 1e9))
-        logger.info(s"Iteration $iteration, takes $takes s, throughput is $throughput imgs/sec")
+        println(s"Iteration $iteration, takes $takes s, throughput is $throughput imgs/sec")
 
         iteration += 1
       }
       val avg = throughputs.toArray.reduce((a, b) => (a + b)) / iterations
-      logger.info(s"Average throughput is $avg imgs/sec")
+      println(s"Average throughput is $avg imgs/sec")
     }
   }
 }
@@ -145,6 +145,6 @@ case class LocalPerfParams (
   batchSize: Int = 4,
   iteration: Int = 80,
   training: Boolean = false,
-  dataType: String = "ssd",
+  dataType: String = "lenet",
   modelPath: String = "imagenet"
 )
