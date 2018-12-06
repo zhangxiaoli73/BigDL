@@ -20,13 +20,7 @@ import com.intel.analytics.bigdl.Module
 import com.intel.analytics.bigdl.dataset.{MiniBatch, Sample}
 import com.intel.analytics.bigdl.example.loadmodel.AlexNet
 import com.intel.analytics.bigdl.mkl.Memory
-import com.intel.analytics.bigdl.models.inception.Inception_v1_NoAuxClassifier
-import com.intel.analytics.bigdl.models.lenet.LeNet5
-import com.intel.analytics.bigdl.models.resnet.ResNet
-import com.intel.analytics.bigdl.models.resnet.ResNet.{DatasetType, ShortcutType}
-import com.intel.analytics.bigdl.models.vgg.Vgg_16
-import com.intel.analytics.bigdl.nn.Graph._
-import com.intel.analytics.bigdl.nn._
+import com.intel.analytics.bigdl.nn.{Graph, Module, StaticGraph}
 import com.intel.analytics.bigdl.nn.abstractnn.Activity
 import com.intel.analytics.bigdl.numeric.NumericFloat
 import com.intel.analytics.bigdl.optim.Top1Accuracy
@@ -35,8 +29,9 @@ import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
 import com.intel.analytics.bigdl.utils.RandomGenerator._
 import com.intel.analytics.bigdl.utils.{Engine, T, Table}
 import org.apache.log4j.Logger
-import org.apache.spark.SparkContext
+import org.apache.spark.{SparkContext, broadcast}
 import scopt.OptionParser
+import com.intel.analytics.bigdl.utils.MklDnn
 
 import scala.collection.mutable.ArrayBuffer
 import scala.reflect.ClassTag
@@ -62,7 +57,6 @@ object DistriPerf {
 
   def main(argv: Array[String]): Unit = {
     parser.parse(argv, new DistriPerfParams()).foreach { params =>
-      System.setProperty("bigdl.engineType", "mkldnn")
       val conf = Engine.createSparkConf().setAppName("Test perf for convertion")
         .set("spark.akka.frameSize", 64.toString)
         .set("spark.task.maxFailures", "1")
@@ -78,28 +72,42 @@ object DistriPerf {
 
       val modelLoad = Module.loadModule[Float](params.modelPath)
       val graph = if (!modelLoad.isInstanceOf[Graph[Float]]) modelLoad.toGraph() else modelLoad
-      val model = graph.asInstanceOf[StaticGraph[Float]].toIRgraph(5, Memory.Format.nc)
-      model.build()
+      val model = if (Engine.getEngineType() == MklDnn) {
+        val m = graph.asInstanceOf[StaticGraph[Float]].toIRgraph(5, Memory.Format.nc)
+        m.build()
+        m
+      } else {
+        graph
+      }
 
       params.dataType match {
         case "imagenet" =>
-          val inputShape = Array(batchSize, 3, 224, 224)
+          val inputShape = Array(3, 224, 224)
           input = Tensor(inputShape).rand()
-          label = Tensor(batchSize).apply1(_ => Math.ceil(RNG.uniform(0, 1) * 1000).toFloat)
+          label = Tensor(1).apply1(_ => Math.ceil(RNG.uniform(0, 1) * 1000).toFloat)
         case "ssd" =>
-          val inputShape = Array(batchSize, 3, 300, 300)
+          val inputShape = Array(3, 300, 300)
           input = Tensor(inputShape).rand()
-          label = Tensor(batchSize).apply1(_ => Math.ceil(RNG.uniform(0, 1) * 1000).toFloat)
+          label = Tensor(1).apply1(_ => Math.ceil(RNG.uniform(0, 1) * 1000).toFloat)
+        case "lenet" =>
+          val inputShape = Array(1, 28, 28)
+          input = Tensor(inputShape).rand()
+          label = Tensor(1).apply1(_ => Math.ceil(RNG.uniform(0, 1) * 10).toFloat)
         case _ => throw new UnsupportedOperationException(s"Unkown model ${params.dataType}")
       }
 
       model.evaluate()
-      val broadcast = sc.broadcast(input, label)
+      val broadcast = sc.broadcast(input, label, model)
       val length = batchSize * Engine.nodeNumber() * Engine.coreNumber() * iterations
       val rdd = sc.parallelize((1 to length), Engine.nodeNumber)
         .mapPartitions(iter => {
           val broad = broadcast.value
-          Iterator.single(Sample(broad._1.clone().rand(), broad._2.clone().rand()))
+          val t = new ArrayBuffer[Sample[Float]]()
+          while (iter.hasNext) {
+            iter.next()
+            t.append(Sample(broad._1.clone().rand(), broad._2.clone().rand()))
+          }
+          t.toIterator
         }).persist()
 
       val start = System.nanoTime()
@@ -108,12 +116,14 @@ object DistriPerf {
       val takes = System.nanoTime() - start
       val avg = takes / iterations / 1e9
       logger.info(s"Average throughput is $avg imgs/sec")
+      result.foreach(r => println(s"${r._2} is ${r._1}"))
+      sc.stop()
     }
   }
 }
 
 case class DistriPerfParams (
-  batchSize: Int = 4,
+  batchSize: Int = 1,
   iteration: Int = 50,
   dataType: String = "ssd",
   modelPath: String = "imagenet"

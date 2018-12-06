@@ -143,7 +143,7 @@ object Inception_v1_NoAuxClassifier {
 
   def graph(classNum: Int, hasDropout: Boolean = true)
   : Module[Float] = {
-   val input = SpatialConvolution(3, 64, 7, 7, 2, 2, 3, 3, 1, false)
+   val input = SpatialConvolution(3, 64, 7, 7, 2, 2, 3, 3, 1, true)
       .setInitMethod(weightInitMethod = Xavier,
         ConstInitMethod(0.1)).setName("conv1/7x7_s2").inputs()
     val conv1_relu = ReLU(true).setName("conv1/relu_7x7").inputs(input)

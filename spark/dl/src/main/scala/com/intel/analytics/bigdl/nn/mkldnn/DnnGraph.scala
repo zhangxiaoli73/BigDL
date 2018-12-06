@@ -320,6 +320,7 @@ class DnnGraph(
     var firstRealInputFormats: Array[MemoryData] = null
     for (i <- 0 until forwardExecution.length) {
       val m = forwardExecution(i)
+      println(m)
       lastOutputFormats = findInputFormats(m, inputs)
 
       val realInputAndOutputFormats =

@@ -103,7 +103,7 @@ class Blas2DnnSpec extends BigDLSpecHelper {
 
     RandomGenerator.RNG.setSeed(1000)
     val blas = Inception_v1_NoAuxClassifier.graph(classNum, false).asInstanceOf[StaticGraph[Float]]
-    val irBlas = blas.toIRgraph(inputFormats = 5, outputFormats = Memory.Format.nchw)
+    val irBlas = blas.toIRgraph(inputFormats = 5, outputFormats = Memory.Format.nc)
 
     val outBlas = blas.forward(input).toTensor[Float]
 

@@ -16,14 +16,19 @@
 
 package com.intel.analytics.bigdl.utils.mkldnn
 
+import com.intel.analytics.bigdl.nn.ReLU
 import com.intel.analytics.bigdl.nn.abstractnn.{AbstractModule, Activity, DataFormat, TensorModule}
 import com.intel.analytics.bigdl.optim.Regularizer
+import com.intel.analytics.bigdl.serialization.Bigdl.{AttrValue, BigDLModule}
 import com.intel.analytics.bigdl.tensor.{Tensor, TensorNumericMath}
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
+import com.intel.analytics.bigdl.utils.serializer.converters.DataConverter
+import com.intel.analytics.bigdl.utils.serializer.{DeserializeContext, ModuleSerializable, ModuleSerializer, SerializeContext}
 
 import scala.reflect.ClassTag
+import scala.reflect.runtime._
 
-sealed class IROperate[T: ClassTag] {
+sealed class IROperate[T: ClassTag] extends Serializable {
   val tag: ClassTag[T] = scala.reflect.classTag[T]
   val numerics: TensorNumeric[T] = tag match {
     case ClassTag.Float => TensorNumeric.NumericFloat.asInstanceOf[TensorNumeric[T]]
@@ -128,7 +133,7 @@ private[bigdl] class IRElement[T: ClassTag](
   val op_type: IROperate[T],
   var formats: String = "",
   private var weights: Tensor[T] = null,
-  private var gradWeights: Tensor[T] = null) {
+  private var gradWeights: Tensor[T] = null) extends Serializable {
 
   /**
    * set weight and bias
@@ -163,3 +168,60 @@ object IRElement {
             bias: Tensor[T] = null): IRElement[T] =
     new IRElement[T](name, op_type, formats, weights, bias)
 }
+
+//object IRElement extends ModuleSerializable {
+//  def apply[T: ClassTag](name: String, op_type: IROperate[T],
+//            formats: String = "", weights: Tensor[T] = null,
+//            bias: Tensor[T] = null): IRElement[T] =
+//    new IRElement[T](name, op_type, formats, weights, bias)
+//
+//  override def doLoadModule[T: ClassTag](context: DeserializeContext)
+//      (implicit ev: TensorNumeric[T]) : IRElement[T] = {
+//
+//    val attrMap = context.bigdlModule.getAttrMap
+//    val name = DataConverter.getAttributeValue(context, attrMap.get("name")).
+//      asInstanceOf[String]
+//    val op_type = DataConverter.getAttributeValue(context, attrMap.get("op_type")).
+//      asInstanceOf[IROperate[T]]
+//    val formats = DataConverter.getAttributeValue(context, attrMap.get("formats")).
+//      asInstanceOf[String]
+//    val weights = DataConverter.getAttributeValue(context, attrMap.get("weights")).
+//      asInstanceOf[Tensor[T]]
+//    val gradWeights = DataConverter.getAttributeValue(context, attrMap.get("bias")).
+//      asInstanceOf[Tensor[T]]
+//
+//    IRElement(name, op_type, formats, weights, gradWeights)
+//  }
+//
+//  override def doSerializeModule[T: ClassTag](context: SerializeContext[T],
+//                                              reshapeBuilder : BigDLModule.Builder)
+//                                             (implicit ev: TensorNumeric[T]) : Unit = {
+//
+//    val reshape = context.moduleData.module.asInstanceOf[IRElement[T]]
+//
+//    val nameBuilder = AttrValue.newBuilder
+//    DataConverter.setAttributeValue(context, nameBuilder, reshape.name,
+//      universe.typeOf[String])
+//    reshapeBuilder.putAttr("name", nameBuilder.build)
+//
+////    val opBuilder = AttrValue.newBuilder
+////    DataConverter.setAttributeValue(context, opBuilder, reshape.getOp(),
+////      IROperate[T].typeSignature)
+////    reshapeBuilder.putAttr("op_type", opBuilder.build)
+//
+//    val formatsBuilder = AttrValue.newBuilder
+//    DataConverter.setAttributeValue(context, formatsBuilder, reshape.formats,
+//      universe.typeOf[String])
+//    reshapeBuilder.putAttr("formats", formatsBuilder.build)
+//
+//    val weightsBuilder = AttrValue.newBuilder
+//    DataConverter.setAttributeValue(context, weightsBuilder, reshape.weights,
+//      ModuleSerializer.tensorType)
+//    reshapeBuilder.putAttr("weights", weightsBuilder.build)
+//
+//    val biasBuilder = AttrValue.newBuilder
+//    DataConverter.setAttributeValue(context, biasBuilder, reshape.gradWeights,
+//      ModuleSerializer.tensorType)
+//    reshapeBuilder.putAttr("bias", biasBuilder.build)
+//  }
+//}

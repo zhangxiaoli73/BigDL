@@ -31,7 +31,7 @@ import com.intel.analytics.bigdl.numeric.NumericFloat
 import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
 import com.intel.analytics.bigdl.utils.RandomGenerator._
-import com.intel.analytics.bigdl.utils.{Engine, T, Table}
+import com.intel.analytics.bigdl.utils.{Engine, MklDnn, T, Table}
 import org.apache.log4j.Logger
 import scopt.OptionParser
 
@@ -62,7 +62,7 @@ object LocalPerf {
 
   def main(argv: Array[String]): Unit = {
     parser.parse(argv, new LocalPerfParams()).foreach { params =>
-      System.setProperty("bigdl.engineType", "mkldnn")
+//      System.setProperty("bigdl.engineType", "mkldnn")
 
       val batchSize = params.batchSize
       val training = params.training
@@ -84,12 +84,20 @@ object LocalPerf {
 //      "/home/zhangli/workspace/zoo-model/analytics-zoo_vgg-19_imagenet_0.1.0.model"
       val modelLoad = if (params.modelPath == "lenet") {
         LeNet5.graph(10)
+      } else if (params.modelPath == "inceptionV1") {
+        Inception_v1_NoAuxClassifier.graph(1000)
       } else {
         Module.loadModule[Float](params.modelPath)
       }
       val graph = if (!modelLoad.isInstanceOf[Graph[Float]]) modelLoad.toGraph() else modelLoad
-      val model = graph.asInstanceOf[StaticGraph[Float]].toIRgraph(5, Memory.Format.nc)
-      model.build()
+      val model = if (Engine.getEngineType() == MklDnn) {
+        val m = graph.asInstanceOf[StaticGraph[Float]].toIRgraph(5, Memory.Format.nc)
+        m.build()
+        m
+      } else {
+        graph
+      }
+
 
       params.dataType match {
         case "imagenet" =>
