@@ -184,10 +184,10 @@ class DetectionOutputSSD[T: ClassTag](val nClasses: Int = 21,
   }
 
   override def updateOutput(input: Table): Activity = {
-    if (isTraining()) {
-      output = input
-      return output
-    }
+//    if (isTraining()) {
+//      output = input
+//      return output
+//    }
     if (nms == null) nms = new Nms()
     val loc = input[Tensor[Float]](1)
     val conf = if (confPostProcess) {
@@ -288,9 +288,9 @@ class DetectionOutputSSD[T: ClassTag](val nClasses: Int = 21,
   }
 
   override def computeOutputShape(inputShape: Shape): Shape = {
-    if (isTraining()) {
-      return inputShape
-    }
+//    if (isTraining()) {
+//      return inputShape
+//    }
     val batch = inputShape.toMulti()(0).toSingle().toArray
     Shape(Array(batch(0), 1201))
   }

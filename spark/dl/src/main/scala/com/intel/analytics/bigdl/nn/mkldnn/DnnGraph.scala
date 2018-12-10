@@ -54,11 +54,10 @@ class DnnGraph(
     while(i < forwardExecution.length) {
       // println(s"ccccccccccc $i")
       val node = forwardExecution(i)
-      if (node.element.getName() == "detection_out") {
-        val tmp = 0
-      }
+      println(node.element)
       val nodeInput = findDnnInput(node, input)
       inputCache(i) = nodeInput
+      println("ccccccccccc")
       node.element.forward(nodeInput)
       i += 1
     }
@@ -321,6 +320,9 @@ class DnnGraph(
     for (i <- 0 until forwardExecution.length) {
       val m = forwardExecution(i)
       println(m)
+      if (m.element.isInstanceOf[mkldnn.Output]) {
+        val tmp = 0
+      }
       lastOutputFormats = findInputFormats(m, inputs)
 
       val realInputAndOutputFormats =

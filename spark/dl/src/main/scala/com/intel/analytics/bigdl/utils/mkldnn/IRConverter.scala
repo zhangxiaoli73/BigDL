@@ -37,7 +37,7 @@ private[bigdl] class IRConverter[T: ClassTag](IRgraph: IRGraph[T])(implicit ev: 
    * @return
    */
   def toGraph() : Graph[T] = {
-    if (utils.Engine.getEngineType() == MklBlas) {
+    if (false) { // utils.Engine.getEngineType() == MklBlas) {
       require(IRToBlas[T].enableConvert(IRgraph.allNodes.toArray),
         "IR graph can not convert to Blas layer")
       toBlasGraph()

@@ -257,9 +257,9 @@ object DistriOptimizer extends AbstractOptimizer {
               val input = miniBatchBuffer(i).getInput()
               val target = miniBatchBuffer(i).getTarget()
               val output = localModel.forward(input)
-              lossArray(i) = ev.toType[Double](localCriterion.forward(output, target))
-              val errors = localCriterion.backward(output, target)
-              localModel.backward(input, errors)
+//              lossArray(i) = ev.toType[Double](localCriterion.forward(output, target))
+//              val errors = localCriterion.backward(output, target)
+//              localModel.backward(input, errors)
               cached.moduleTimeList(i + pre) = System.nanoTime() - trainStart + weightSyncTime
               i
             }

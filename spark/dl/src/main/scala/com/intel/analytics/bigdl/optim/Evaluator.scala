@@ -19,6 +19,7 @@ package com.intel.analytics.bigdl.optim
 import com.intel.analytics.bigdl._
 import com.intel.analytics.bigdl.dataset.{Sample, SampleToMiniBatch}
 import com.intel.analytics.bigdl.models.utils.ModelBroadcast
+import com.intel.analytics.bigdl.nn.mkldnn.{DnnGraph, Phase}
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
 import org.apache.spark.rdd.RDD
 
@@ -49,23 +50,46 @@ class Evaluator[T: ClassTag] private[optim](model: Module[T])(implicit ev: Tenso
    vMethods: Array[ValidationMethod[T]],
    batchSize: Option[Int] = None): Array[(ValidationResult, ValidationMethod[T])] = {
 
+    println("start broadcast model")
     val modelBroad = ModelBroadcast[T]().broadcast(dataset.sparkContext, model.evaluate())
+    println("done broadcast model")
     val partitionNum = dataset.partitions.length
 
     val totalBatch = batchSize.getOrElse(batchPerPartition * partitionNum)
+    println("start broadcast others")
     val otherBroad = dataset.sparkContext.broadcast(vMethods, SampleToMiniBatch(
       batchSize = totalBatch, partitionNum = Some(partitionNum)))
+    println("done broadcast others")
 
     dataset.mapPartitions(partition => {
+      println("start get model")
       val localModel = modelBroad.value()
+      if (localModel.isInstanceOf[DnnGraph]) {
+        localModel.asInstanceOf[DnnGraph].compile(Phase.InferencePhase)
+      }
+      println("done get model")
       val localMethod = otherBroad.value._1.map(_.clone())
       val localTransformer = otherBroad.value._2.cloneTransformer()
+      println("start get minibatch")
       val miniBatch = localTransformer(partition)
+      println("done get minibatch")
+      var i = 1
       miniBatch.map(batch => {
+        println(s"11111111 ${i}")
+        i += 1
+        if (i == 2 || i == 3) {
+          val tmp = batch.getInput().toTensor[T].size()
+          println(s"batch_size ${tmp(0)}")
+        }
+        println("start model forward")
         val output = localModel.forward(batch.getInput())
+        println("done model forward")
+
+        println("start validation")
         localMethod.map(validation => {
-          validation(output, batch.getTarget())
+          validation( batch.getTarget(), batch.getTarget())
         })
+        // println("done validation")
       })
     }).reduce((left, right) => {
         left.zip(right).map { case (l, r) => l + r }

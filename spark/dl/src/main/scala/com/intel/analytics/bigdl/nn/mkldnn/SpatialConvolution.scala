@@ -231,6 +231,7 @@ class SpatialConvolution(
       val result = reorderManager.infer(Array(srcFormat), Array(dstFormat), weight.dense)
       weight.dense.copy(result.toTensor)
     }
+    println(s"weights: default ${defaultWeightLayout} real ${realWei.layout}")
 
     _inputFormats = Array(realSrc)
     _outputFormats = Array(realDst)
@@ -257,9 +258,13 @@ class SpatialConvolution(
       bias.syncToNative()
     }
 
+    if (this.getName() == "conv6_2_mbox_conf") {
+      val tmp = 0
+    }
+    println(s"submit ${_inputFormats(0).layout} ${_outputFormats(0).layout}")
     MklDnnOps.streamSubmit(runtime.stream, 1, updateOutputPrimitives, updateOutputPrimitives.length,
       updateOutputMemoryPrimitives, updateOutputTensors)
-
+    println("submit done")
     output
   }
 
