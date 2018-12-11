@@ -123,7 +123,7 @@ class BlockManagerParameterSynchronizer[T: ClassTag](val partitionID: Int, val t
       }
     })
 
-  initAffinityThreads
+  // initAffinityThreads
 
   private def initAffinityThreads(): Unit = {
     initAffinityThreadsForThreadPool(fetchPool, syncPoolSize)

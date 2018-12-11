@@ -81,7 +81,7 @@ class IRToDnn extends ConvertBase[IRElement[Float], Module[Float]] {
     var convert = true
     allNodes.foreach(node => {
       val op = node.element.getOp()
-      println(op)
+      // println(op)
       if (!enableConvertLayer(node.element)) {
         convert = false
       }

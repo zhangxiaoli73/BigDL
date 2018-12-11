@@ -231,7 +231,7 @@ class SpatialConvolution(
       val result = reorderManager.infer(Array(srcFormat), Array(dstFormat), weight.dense)
       weight.dense.copy(result.toTensor)
     }
-    println(s"weights: default ${defaultWeightLayout} real ${realWei.layout}")
+    // println(s"weights: default ${defaultWeightLayout} real ${realWei.layout}")
 
     _inputFormats = Array(realSrc)
     _outputFormats = Array(realDst)
@@ -261,10 +261,10 @@ class SpatialConvolution(
     if (this.getName() == "conv6_2_mbox_conf") {
       val tmp = 0
     }
-    println(s"submit ${_inputFormats(0).layout} ${_outputFormats(0).layout}")
+    // println(s"submit ${_inputFormats(0).layout} ${_outputFormats(0).layout}")
     MklDnnOps.streamSubmit(runtime.stream, 1, updateOutputPrimitives, updateOutputPrimitives.length,
       updateOutputMemoryPrimitives, updateOutputTensors)
-    println("submit done")
+    // println("submit done")
     output
   }
 
@@ -401,15 +401,24 @@ class SpatialConvolution(
   }
 
   override def parameters(): (Array[Tensor[Float]], Array[Tensor[Float]]) = {
-    (Array(weight.dense, bias.dense), Array(gradWeight.dense, gradBias.dense))
+    if (withBias) {
+      (Array(weight.dense, bias.dense), Array(gradWeight.dense, gradBias.dense))
+    } else {
+      (Array(weight.dense), Array(gradWeight.dense))
+    }
+
   }
 
   override def zeroGradParameters(): Unit = {
   }
 
   override def parametersWithShape(): (Array[MemoryData], Array[MemoryData]) = {
-    (Array(weight.memoryData(), bias.memoryData()),
-      Array(gradWeight.memoryData(), bias.memoryData()))
+    if (withBias) {
+      (Array(weight.memoryData(), bias.memoryData()),
+        Array(gradWeight.memoryData(), bias.memoryData()))
+    } else {
+      (Array(weight.memoryData()), Array(gradWeight.memoryData()))
+    }
   }
 
   override def release(): Unit = {

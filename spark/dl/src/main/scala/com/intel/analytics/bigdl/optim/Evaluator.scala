@@ -21,6 +21,7 @@ import com.intel.analytics.bigdl.dataset.{Sample, SampleToMiniBatch}
 import com.intel.analytics.bigdl.models.utils.ModelBroadcast
 import com.intel.analytics.bigdl.nn.mkldnn.{DnnGraph, Phase}
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
+import com.intel.analytics.bigdl.utils.Engine
 import org.apache.spark.rdd.RDD
 
 import scala.reflect.ClassTag
@@ -49,43 +50,38 @@ class Evaluator[T: ClassTag] private[optim](model: Module[T])(implicit ev: Tenso
   def test(dataset: RDD[Sample[T]],
    vMethods: Array[ValidationMethod[T]],
    batchSize: Option[Int] = None): Array[(ValidationResult, ValidationMethod[T])] = {
-
-    println("start broadcast model")
     val modelBroad = ModelBroadcast[T]().broadcast(dataset.sparkContext, model.evaluate())
-    println("done broadcast model")
     val partitionNum = dataset.partitions.length
 
     val totalBatch = batchSize.getOrElse(batchPerPartition * partitionNum)
-    println("start broadcast others")
     val otherBroad = dataset.sparkContext.broadcast(vMethods, SampleToMiniBatch(
       batchSize = totalBatch, partitionNum = Some(partitionNum)))
-    println("done broadcast others")
+
+    val nExecutor = Engine.nodeNumber()
+    val executorCores = Engine.coreNumber()
 
     dataset.mapPartitions(partition => {
-      println("start get model")
+      Engine.setNodeAndCore(nExecutor, executorCores)
+      // println("start get model")
       val localModel = modelBroad.value()
       if (localModel.isInstanceOf[DnnGraph]) {
         localModel.asInstanceOf[DnnGraph].compile(Phase.InferencePhase)
       }
-      println("done get model")
+      // println("done get model")
       val localMethod = otherBroad.value._1.map(_.clone())
       val localTransformer = otherBroad.value._2.cloneTransformer()
-      println("start get minibatch")
+      // println("start get minibatch")
       val miniBatch = localTransformer(partition)
-      println("done get minibatch")
+      // println("done get minibatch")
       var i = 1
       miniBatch.map(batch => {
-        println(s"11111111 ${i}")
+        // println(s"11111111 ${i}")
         i += 1
-        if (i == 2 || i == 3) {
-          val tmp = batch.getInput().toTensor[T].size()
-          println(s"batch_size ${tmp(0)}")
-        }
-        println("start model forward")
+        // println("start model forward")
         val output = localModel.forward(batch.getInput())
-        println("done model forward")
+        // println("done model forward")
 
-        println("start validation")
+        // println("start validation")
         localMethod.map(validation => {
           validation( batch.getTarget(), batch.getTarget())
         })

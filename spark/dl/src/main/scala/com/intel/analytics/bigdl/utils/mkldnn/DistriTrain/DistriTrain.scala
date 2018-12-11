@@ -24,8 +24,11 @@ import com.intel.analytics.bigdl.mkl.Memory
 import com.intel.analytics.bigdl.models.inception.Inception_v1_NoAuxClassifier
 import com.intel.analytics.bigdl.models.lenet.LeNet5
 import com.intel.analytics.bigdl.models.lenet.Utils._
+import com.intel.analytics.bigdl.models.resnet.ResNet
+import com.intel.analytics.bigdl.models.resnet.ResNet.{DatasetType, ShortcutType}
 import com.intel.analytics.bigdl.nn.{CrossEntropyCriterion, Graph, Module, StaticGraph}
 import com.intel.analytics.bigdl.nn.abstractnn.Activity
+import com.intel.analytics.bigdl.nn.mkldnn.{DnnGraph, Phase}
 import com.intel.analytics.bigdl.numeric.NumericFloat
 import com.intel.analytics.bigdl.optim._
 import com.intel.analytics.bigdl.tensor.Tensor
@@ -77,6 +80,9 @@ object DistriTrain {
         LeNet5.graph(10)
       } else if (params.modelPath == "inceptionV1") {
         Inception_v1_NoAuxClassifier.graph(1000)
+      } else if (params.modelPath == "resnet50") {
+        ResNet(1000, T("shortcutType" -> ShortcutType.B, "depth" -> 50,
+          "optnet" -> false, "dataSet" -> DatasetType.ImageNet))
       } else {
         Module.loadModule[Float](params.modelPath)
       }

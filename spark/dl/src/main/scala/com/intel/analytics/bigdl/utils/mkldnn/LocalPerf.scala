@@ -61,6 +61,10 @@ object LocalPerf {
   }
 
   def main(argv: Array[String]): Unit = {
+    System.setProperty("bigdl.localMode", "true")
+    System.setProperty("bigdl.engineType", "mkldnn")
+    Engine.init
+
     parser.parse(argv, new LocalPerfParams()).foreach { params =>
 //      System.setProperty("bigdl.engineType", "mkldnn")
 
@@ -86,8 +90,11 @@ object LocalPerf {
         LeNet5.graph(10)
       } else if (params.modelPath == "inceptionV1") {
         Inception_v1_NoAuxClassifier.graph(1000)
+      } else if (params.modelPath == "resnet50") {
+        ResNet(1000, T("shortcutType" -> ShortcutType.B, "depth" -> 50,
+          "optnet" -> false, "dataSet" -> DatasetType.ImageNet))
       } else {
-        Module.loadModule[Float](params.modelPath)
+         Module.loadModule[Float](params.modelPath)
       }
       val graph = if (!modelLoad.isInstanceOf[Graph[Float]]) modelLoad.toGraph() else modelLoad
       val model = if (Engine.getEngineType() == MklDnn) {

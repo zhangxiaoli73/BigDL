@@ -84,6 +84,7 @@ class IRGraph[T: ClassTag](
       throw new UnsupportedOperationException("forward not supported, Please build graph first")
     }
     if (!initFwd && graph.isInstanceOf[DnnGraph]) {
+      println("dnn_graph")
       graph.asInstanceOf[DnnGraph].setRuntime(new MklDnnRuntime())
       graph.asInstanceOf[DnnGraph].initFwdPrimitives(
         Array(HeapData(input.toTensor[T].size(), inputFormats)), null)
