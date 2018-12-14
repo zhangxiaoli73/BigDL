@@ -57,7 +57,7 @@ class IRGraph[T: ClassTag](
   @transient private var initAcc: Boolean = false
 
   var allNodes = new ArrayBuffer[Node[IRElement[T]]]
-  private var graph: Graph[T] = null
+  private[bigdl] var graph: Graph[T] = null
 
   // init should find all nodes
   init()
@@ -121,6 +121,8 @@ class IRGraph[T: ClassTag](
 
   def build(): Unit = {
     graph = new IRConverter[T](this).toGraph()
+    // release all nodes for memory
+    allNodes.clear()
   }
 
   override def parameters(): (Array[Tensor[T]], Array[Tensor[T]]) = {

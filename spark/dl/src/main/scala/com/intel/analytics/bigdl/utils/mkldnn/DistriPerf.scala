@@ -29,6 +29,7 @@ import com.intel.analytics.bigdl.nn.{Graph, Module, StaticGraph}
 import com.intel.analytics.bigdl.nn.abstractnn.Activity
 import com.intel.analytics.bigdl.nn.mkldnn.{DnnGraph, Phase}
 import com.intel.analytics.bigdl.nn.mkldnn.Phase.InferencePhase
+import com.intel.analytics.bigdl.nn.mkldnn.models.Vgg_16
 import com.intel.analytics.bigdl.numeric.NumericFloat
 import com.intel.analytics.bigdl.optim.{Top1Accuracy, ValidationMethod, ValidationResult}
 import com.intel.analytics.bigdl.tensor.Tensor
@@ -77,33 +78,25 @@ object DistriPerf {
   def testPredict(dataset: RDD[Sample[Float]],
            model : Module[Float],  batchSize: Int): Unit = {
 
-    println("start broadcast model")
     val modelBroad = ModelBroadcast[Float]().broadcast(dataset.sparkContext, model.evaluate())
-    println("done broadcast model")
     val partitionNum = dataset.partitions.length
 
     val totalBatch = batchSize
-    println("start broadcast others")
     val otherBroad = dataset.sparkContext.broadcast(SampleToMiniBatch(
       batchSize = totalBatch, partitionNum = Some(partitionNum)))
-    println("done broadcast others")
 
     val nExecutor = Engine.nodeNumber()
     val executorCores = Engine.coreNumber()
 
     val res = dataset.mapPartitions(partition => {
       Engine.setNodeAndCore(nExecutor, executorCores)
-      println("start get model")
       val localModel = modelBroad.value()
       if (localModel.isInstanceOf[DnnGraph]) {
         localModel.asInstanceOf[DnnGraph].compile(Phase.InferencePhase)
       }
       Engine.setNodeAndCore(1, 1)
-      println("done get model")
       val localTransformer = otherBroad.value.cloneTransformer()
-      println("start get minibatch")
       val miniBatch = localTransformer(partition)
-      println("done get minibatch")
       var i = 1
       miniBatch.map(batch => {
         println(s"11111111 ${i}")
@@ -147,14 +140,24 @@ object DistriPerf {
 //        Module.loadModule[Float](params.modelPath)
 //      }
 
-      val modelLoad = Module.loadModule[Float](params.modelPath)
+      val modelLoad = if (params.modelPath == "vgg16") {
+        Vgg_16.blas(1000)
+      } else if (params.modelPath == "vgg16_graph") {
+        println("graph_type: dnn graph")
+        Vgg_16.graph(batchSize, 1000)
+      } else {
+        Module.loadModule[Float](params.modelPath)
+      }
+
       val graph = if (!modelLoad.isInstanceOf[Graph[Float]]) modelLoad.toGraph() else modelLoad
-      val model = if (params.modelType == "mkldnn") {
+      val model = if (Engine.getEngineType() == MklDnn
+        && params.modelPath != "vgg16" && params.modelPath != "vgg16_graph") {
         val back = utils.Engine.getEngineType()
         utils.Engine.setEngineType(MklDnn)
         val m = graph.asInstanceOf[StaticGraph[Float]].toIRgraph(5, Memory.Format.nc)
         m.build()
         utils.Engine.setEngineType(back)
+        println("graph_type: dnn graph")
         m
       } else {
         graph
@@ -209,7 +212,7 @@ object DistriPerf {
       val takes = System.nanoTime() - start
       val avgTime = takes / 1e9
       val avg = length / avgTime
-      logger.info(s"Average throughput is $avg imgs/sec")
+      logger.info(s"${params.modelPath} ${params.batchSize} Average throughput is $avg imgs/sec")
       result.foreach(r => println(s"${r._2} is ${r._1}"))
       sc.stop()
     }
@@ -220,6 +223,6 @@ case class DistriPerfParams (
   batchSize: Int = 4,
   iteration: Int = 80,
   dataType: String = "ssd",
-  modelPath: String = "lenet",
+  modelPath: String = "vgg16",
   modelType: String = "mkldnn"
 )

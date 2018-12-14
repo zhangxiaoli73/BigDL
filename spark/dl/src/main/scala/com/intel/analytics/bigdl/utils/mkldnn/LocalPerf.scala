@@ -23,16 +23,18 @@ import com.intel.analytics.bigdl.models.inception.Inception_v1_NoAuxClassifier
 import com.intel.analytics.bigdl.models.lenet.LeNet5
 import com.intel.analytics.bigdl.models.resnet.ResNet
 import com.intel.analytics.bigdl.models.resnet.ResNet.{DatasetType, ShortcutType}
-import com.intel.analytics.bigdl.models.vgg.Vgg_16
+import com.intel.analytics.bigdl.nn.mkldnn.models.Vgg_16
 import com.intel.analytics.bigdl.nn.Graph._
 import com.intel.analytics.bigdl.nn._
 import com.intel.analytics.bigdl.nn.abstractnn.Activity
+import com.intel.analytics.bigdl.nn.mkldnn.{DnnGraph, Phase}
 import com.intel.analytics.bigdl.numeric.NumericFloat
 import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
 import com.intel.analytics.bigdl.utils.RandomGenerator._
 import com.intel.analytics.bigdl.utils.{Engine, MklDnn, T, Table}
 import org.apache.log4j.Logger
+import org.apache.spark.SparkContext
 import scopt.OptionParser
 
 import scala.collection.mutable.ArrayBuffer
@@ -61,12 +63,13 @@ object LocalPerf {
   }
 
   def main(argv: Array[String]): Unit = {
-    System.setProperty("bigdl.localMode", "true")
-    System.setProperty("bigdl.engineType", "mkldnn")
-    Engine.init
-
     parser.parse(argv, new LocalPerfParams()).foreach { params =>
-//      System.setProperty("bigdl.engineType", "mkldnn")
+      val conf = Engine.createSparkConf()
+        .setAppName("Test perf")
+        .set("spark.task.maxFailures", "1")
+      val sc = new SparkContext(conf)
+
+      Engine.init
 
       val batchSize = params.batchSize
       val training = params.training
@@ -86,25 +89,25 @@ object LocalPerf {
 //      "/home/zhangli/workspace/zoo-model/analytics-zoo_ssd-vgg16-300x300_PASCAL_0.1.0.model"
 //      "/home/zhangli/workspace/zoo-model/analytics-zoo_ssd-vgg16-512x512_PASCAL_0.1.0.model"
 //      "/home/zhangli/workspace/zoo-model/analytics-zoo_vgg-19_imagenet_0.1.0.model"
-      val modelLoad = if (params.modelPath == "lenet") {
-        LeNet5.graph(10)
-      } else if (params.modelPath == "inceptionV1") {
-        Inception_v1_NoAuxClassifier.graph(1000)
-      } else if (params.modelPath == "resnet50") {
-        ResNet(1000, T("shortcutType" -> ShortcutType.B, "depth" -> 50,
-          "optnet" -> false, "dataSet" -> DatasetType.ImageNet))
+      val modelLoad = if (params.modelPath == "vgg16") {
+          // Vgg_16.blas(1000)
+       Vgg_16.graph(batchSize, 1000)
+      } else if (params.modelPath == "vgg16_graph") {
+        println("graph_type: dnn graph")
+        Vgg_16.graph(batchSize, 1000)
       } else {
          Module.loadModule[Float](params.modelPath)
       }
       val graph = if (!modelLoad.isInstanceOf[Graph[Float]]) modelLoad.toGraph() else modelLoad
-      val model = if (Engine.getEngineType() == MklDnn) {
+      val model = if (Engine.getEngineType() == MklDnn
+        && params.modelPath != "vgg16" && params.modelPath != "vgg16_graph") {
         val m = graph.asInstanceOf[StaticGraph[Float]].toIRgraph(5, Memory.Format.nc)
         m.build()
+        println("graph_type: dnn graph")
         m
       } else {
         graph
       }
-
 
       params.dataType match {
         case "imagenet" =>
@@ -127,6 +130,9 @@ object LocalPerf {
       if (training) {
         model.training()
       } else {
+        if (model.isInstanceOf[DnnGraph]) {
+          model.asInstanceOf[DnnGraph].compile(Phase.InferencePhase)
+        }
         model.evaluate()
       }
 
@@ -151,7 +157,7 @@ object LocalPerf {
         iteration += 1
       }
       val avg = throughputs.toArray.reduce((a, b) => (a + b)) / iterations
-      println(s"Average throughput is $avg imgs/sec")
+      println(s"${params.modelPath} ${params.batchSize} Average throughput is $avg imgs/sec")
     }
   }
 }
