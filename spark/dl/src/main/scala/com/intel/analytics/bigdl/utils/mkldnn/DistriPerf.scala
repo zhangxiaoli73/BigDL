@@ -16,8 +16,10 @@
 
 package com.intel.analytics.bigdl.utils.mkldnn
 
+import java.util.concurrent.atomic.AtomicInteger
+
 import com.intel.analytics.bigdl.{Module, utils}
-import com.intel.analytics.bigdl.dataset.{MiniBatch, Sample, SampleToMiniBatch}
+import com.intel.analytics.bigdl.dataset.{LocalDataSet, MiniBatch, Sample, SampleToMiniBatch}
 import com.intel.analytics.bigdl.example.loadmodel.AlexNet
 import com.intel.analytics.bigdl.mkl.Memory
 import com.intel.analytics.bigdl.models.inception.Inception_v1_NoAuxClassifier
@@ -31,15 +33,14 @@ import com.intel.analytics.bigdl.nn.mkldnn.{DnnGraph, Phase}
 import com.intel.analytics.bigdl.nn.mkldnn.Phase.InferencePhase
 import com.intel.analytics.bigdl.nn.mkldnn.models.Vgg_16
 import com.intel.analytics.bigdl.numeric.NumericFloat
-import com.intel.analytics.bigdl.optim.{Top1Accuracy, ValidationMethod, ValidationResult}
+import com.intel.analytics.bigdl.optim._
 import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
 import com.intel.analytics.bigdl.utils.RandomGenerator._
-import com.intel.analytics.bigdl.utils.{Engine, T, Table}
+import com.intel.analytics.bigdl.utils._
 import org.apache.log4j.Logger
 import org.apache.spark.{SparkContext, broadcast}
 import scopt.OptionParser
-import com.intel.analytics.bigdl.utils.MklDnn
 import org.apache.spark.rdd.RDD
 
 import scala.collection.mutable.ArrayBuffer
@@ -75,39 +76,79 @@ object DistriPerf {
     DnnGraph(Array(input), Array(out))
   }
 
-  def testPredict(dataset: RDD[Sample[Float]],
-           model : Module[Float],  batchSize: Int): Unit = {
+  def predict(model: Module[Float], input: MiniBatch[Float],
+              params: DistriPerfParams): Unit = {
+    val subModelNumber = Engine.coreNumber
+    val workingModels = {
+      val wb = Util.getAndClearWeightBias(model.parameters())
+      val models = (1 to subModelNumber).map(i => {
+        logger.info(s"Clone $i model...")
+        val m = model.cloneModule()
+        Util.putWeightBias(wb, m)
+        m
+      }).toArray
+      Util.putWeightBias(wb, model)
+      models
+    }
 
-    val modelBroad = ModelBroadcast[Float]().broadcast(dataset.sparkContext, model.evaluate())
-    val partitionNum = dataset.partitions.length
+    if (model.isInstanceOf[DnnGraph]) {
+      workingModels.foreach(model => model.asInstanceOf[DnnGraph].compile(Phase.InferencePhase))
+    }
 
-    val totalBatch = batchSize
-    val otherBroad = dataset.sparkContext.broadcast(SampleToMiniBatch(
-      batchSize = totalBatch, partitionNum = Some(partitionNum)))
+    val stackSize = input.size() / subModelNumber
+    val extraSize = input.size() % subModelNumber
+    val parallelism = if (stackSize == 0) extraSize else subModelNumber
+    val inputBuffer = new Array[MiniBatch[Float]](parallelism)
+    var b = 0
+    while (b < parallelism) {
+      val offset = b * stackSize + math.min(b, extraSize) + 1
+      val length = stackSize + (if (b < extraSize) 1 else 0)
+      inputBuffer(b) = input.slice(offset, length)
+      b += 1
+    }
 
-    val nExecutor = Engine.nodeNumber()
-    val executorCores = Engine.coreNumber()
+    // warm up
+    val warmup = 20
+    val warmpresults = Engine.default.invoke((0 until Engine.coreNumber).map(i =>
+      () => {
+        val localModel = workingModels(i)
+        val data = inputBuffer(i)
+        localModel.evaluate()
+        for (i <- 0 to warmup) {
+          val output = localModel.forward(data.getInput()).toTensor[Float]
+        }
+        1
+      }))
+    Engine.default.sync(warmpresults)
 
-    val res = dataset.mapPartitions(partition => {
-      Engine.setNodeAndCore(nExecutor, executorCores)
-      val localModel = modelBroad.value()
-      if (localModel.isInstanceOf[DnnGraph]) {
-        localModel.asInstanceOf[DnnGraph].compile(Phase.InferencePhase)
-      }
-      Engine.setNodeAndCore(1, 1)
-      val localTransformer = otherBroad.value.cloneTransformer()
-      val miniBatch = localTransformer(partition)
-      var i = 1
-      miniBatch.map(batch => {
-        println(s"11111111 ${i}")
-        i += 1
-        println("start model forward")
-        val output = localModel.forward(batch.getInput())
-        println("done model forward")
-      })
-    })
+    val start = System.nanoTime()
+    val results = Engine.default.invoke((0 until Engine.coreNumber).map(i =>
+      () => {
+        val localModel = workingModels(i)
+        val data = inputBuffer(i)
+        localModel.evaluate()
+        for (i <- 0 to params.iteration) {
+          val output = localModel.forward(data.getInput()).toTensor[Float]
+        }
+        1
+      }))
+    Engine.default.sync(results)
 
-    res.count()
+    val end = System.nanoTime()
+    logger.info(s"${params.modelPath} isGraph ${model.isInstanceOf[DnnGraph]} " +
+      s"isIR ${model.isInstanceOf[IRGraph[Float]]}" +
+      s"Iteration -iteration time is ${(end - start) / 1e9}s " +
+      s"Average Throughput is ${params.batchSize.toDouble * params.iteration / (end - start) * 1e9} record / second."
+    )
+  }
+
+  def fillInput(input: Activity, f: Tensor[Float] => Tensor[Float]): Unit = {
+    input match {
+      case t: Tensor[_] =>
+        f(t.asInstanceOf[Tensor[Float]])
+      case t: Table =>
+        t.foreach(v => f(v._2.asInstanceOf[Tensor[Float]]))
+    }
   }
 
   def main(argv: Array[String]): Unit = {
@@ -152,11 +193,8 @@ object DistriPerf {
       val graph = if (!modelLoad.isInstanceOf[Graph[Float]]) modelLoad.toGraph() else modelLoad
       val model = if (Engine.getEngineType() == MklDnn
         && params.modelPath != "vgg16" && params.modelPath != "vgg16_graph") {
-        val back = utils.Engine.getEngineType()
-        utils.Engine.setEngineType(MklDnn)
         val m = graph.asInstanceOf[StaticGraph[Float]].toIRgraph(5, Memory.Format.nc)
         m.build()
-        utils.Engine.setEngineType(back)
         println("graph_type: dnn graph")
         m
       } else {
@@ -167,54 +205,23 @@ object DistriPerf {
       var outputShape: Array[Int] = null
       params.dataType match {
         case "imagenet" =>
-          inputShape = Array(3, 224, 224)
-          outputShape = Array(1)
+          inputShape = Array(batchSize, 3, 224, 224)
+          outputShape = Array(batchSize)
         case "ssd" =>
-          inputShape = Array(3, 300, 300)
-          outputShape = Array(1)
+          inputShape = Array(batchSize, 3, 300, 300)
+          outputShape = Array(batchSize)
         case "lenet" =>
-          inputShape = Array(1, 28, 28)
-          outputShape = Array(1)
+          inputShape = Array(batchSize, 1, 28, 28)
+          outputShape = Array(batchSize)
         case "conv" =>
-          inputShape = Array(512, 10, 10)
-          outputShape = Array(1)
+          inputShape = Array(batchSize, 512, 10, 10)
+          outputShape = Array(batchSize)
         case _ => throw new UnsupportedOperationException(s"Unkown model ${params.dataType}")
       }
 
       model.evaluate()
-      val broadcast = sc.broadcast(inputShape, outputShape)
-      val length = batchSize * iterations
-      val rdd = sc.parallelize((1 to length), Engine.nodeNumber)
-        .mapPartitions(iter => {
-          val broad = broadcast.value
-          val inputShape = broad._1
-          val outputShape = broad._2
-          val t = new ArrayBuffer[Sample[Float]]()
-          while (iter.hasNext) {
-            iter.next()
-            val input = Tensor(inputShape).rand()
-            val label = Tensor(outputShape).apply1(_ => Math.ceil(RNG.uniform(0, 1) * 1000).toFloat)
-            t.append(Sample(input, label))
-          }
-          t.toIterator
-        }).persist()
-
-//      val start = System.nanoTime()
-//      val result = testPredict(rdd, model, batchSize)
-//      val takes = System.nanoTime() - start
-//      val avgTime = takes / 1e9
-//      val avg = length / avgTime
-//      logger.info(s"Average throughput is $avg imgs/sec")
-
-      val start = System.nanoTime()
-      val result = model.evaluate(rdd,
-        Array(new Top1Accuracy[Float]), Some(batchSize))
-      val takes = System.nanoTime() - start
-      val avgTime = takes / 1e9
-      val avg = length / avgTime
-      logger.info(s"${params.modelPath} ${params.batchSize} Average throughput is $avg imgs/sec")
-      result.foreach(r => println(s"${r._2} is ${r._1}"))
-      sc.stop()
+      val miniBatch = MiniBatch(Tensor(inputShape).rand(), Tensor(outputShape).rand())
+      predict(model, miniBatch, params)
     }
   }
 }
