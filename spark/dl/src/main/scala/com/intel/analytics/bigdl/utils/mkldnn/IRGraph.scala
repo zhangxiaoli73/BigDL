@@ -56,7 +56,7 @@ class IRGraph[T: ClassTag](
   @transient private var initBwd: Boolean = false
   @transient private var initAcc: Boolean = false
 
-  var allNodes = new ArrayBuffer[Node[IRElement[T]]]
+  @transient var allNodes = new ArrayBuffer[Node[IRElement[T]]]
   private[bigdl] var graph: Graph[T] = null
 
   // init should find all nodes
@@ -84,7 +84,7 @@ class IRGraph[T: ClassTag](
       throw new UnsupportedOperationException("forward not supported, Please build graph first")
     }
     if (!initFwd && graph.isInstanceOf[DnnGraph]) {
-      println("dnn_graph")
+      // println("dnn_graph")
       graph.asInstanceOf[DnnGraph].setRuntime(new MklDnnRuntime())
       graph.asInstanceOf[DnnGraph].initFwdPrimitives(
         Array(HeapData(input.toTensor[T].size(), inputFormats)), null)
@@ -122,6 +122,12 @@ class IRGraph[T: ClassTag](
   def build(): Unit = {
     graph = new IRConverter[T](this).toGraph()
     // release all nodes for memory
+    // clear all nodes parameters
+    allNodes.foreach(node => {
+      val p = node.element.getParameters()
+      if (p._1 != null) p._1.set()
+      if (p._2 != null) p._2.set()
+    })
     allNodes.clear()
   }
 
