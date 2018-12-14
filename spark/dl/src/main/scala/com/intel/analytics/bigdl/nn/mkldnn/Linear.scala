@@ -55,16 +55,16 @@ class Linear(
   override def reset(): Unit = {
     if (initWeight == null) {
       weightInitMethod.init(weight.dense, VariableFormat.OUT_IN)
-      weight.syncToNative()
+      // weight.syncToNative()
     } else {
-      weight.copy(initWeight)
+      weight.dense.copy(initWeight)
     }
 
     if (initBias == null) {
       biasInitMethod.init(bias.dense, VariableFormat.ONE_D)
-      bias.syncToNative()
+      // bias.syncToNative()
     } else {
-      bias.copy(initBias)
+      bias.dense.copy(initBias)
     }
 
     gradWeight.zero()

@@ -127,16 +127,17 @@ class SpatialConvolution(
       } else {
         VariableFormat.GP_OUT_IN_KW_KH
       })
-      weight.syncToNative()
     } else {
-      weight.copy(initWeight)
+//      weight.copy(initWeight)
+      weight.dense.copy(initWeight)
     }
 
     if (initBias == null) {
       biasInitMethod.init(bias.dense, VariableFormat.ONE_D)
-      bias.syncToNative()
+      // bias.syncToNative()
     } else {
-      bias.copy(initBias)
+      // bias.copy(initBias)
+      bias.dense.copy(initBias)
     }
 
     gradWeight.zero()

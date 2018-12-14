@@ -34,7 +34,7 @@ import com.intel.analytics.bigdl.tensor.{DnnTensor, Tensor}
  */
 private[mkldnn] class Blob(_size: Array[Int]) extends Serializable {
   val dense: Tensor[Float] = Tensor[Float](_size)
-  val native: DnnTensor[Float] = DnnTensor[Float](_size)
+  @transient var native: DnnTensor[Float] = _
 
   @transient private var _memoryData: MemoryData = _
 
@@ -66,6 +66,7 @@ private[mkldnn] class Blob(_size: Array[Int]) extends Serializable {
     // we should resize the tensor. Because sometimes, weight of Linear will has 4-D, where
     // the last 2 dims is 1. we should reisze it. It will not allocate a new storage because of
     // the same size.
+    if (native == null)  native = DnnTensor[Float](_size)
     List(native, dense).foreach(_.resize(memoryData.shape))
     _memoryData = memoryData
   }
@@ -85,12 +86,12 @@ private[mkldnn] class Blob(_size: Array[Int]) extends Serializable {
 
   def zero(): Unit = {
     dense.zero()
-    native.zero()
+    if (native != null) native.zero()
   }
 
   def copy(t: Tensor[Float]): Unit = {
     dense.copy(t)
-    native.copy(t)
+    if (native != null) native.copy(t)
   }
 
   def size(): Array[Int] = {

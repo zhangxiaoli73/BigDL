@@ -78,8 +78,11 @@ object DistriPerf {
 
   def predict(model: Module[Float], input: MiniBatch[Float],
               params: DistriPerfParams): Unit = {
-    val subModelNumber = Engine.coreNumber
-    val workingModels = {
+    val subModelNumber = Engine.getEngineType() match {
+      case MklBlas => Engine.coreNumber()
+      case MklDnn => 1
+    }
+    val workingModels = if (true) { // subModelNumber != 1) {
       val wb = Util.getAndClearWeightBias(model.parameters())
       val models = (1 to subModelNumber).map(i => {
         logger.info(s"Clone $i model...")
@@ -89,6 +92,8 @@ object DistriPerf {
       }).toArray
       Util.putWeightBias(wb, model)
       models
+    } else {
+      Array(model)
     }
 
     if (model.isInstanceOf[DnnGraph]) {
@@ -109,7 +114,7 @@ object DistriPerf {
 
     // warm up
     val warmup = 20
-    val warmpresults = Engine.default.invoke((0 until Engine.coreNumber).map(i =>
+    val warmpResults = Engine.default.invoke((0 until subModelNumber).map(i =>
       () => {
         val localModel = workingModels(i)
         val data = inputBuffer(i)
@@ -119,10 +124,11 @@ object DistriPerf {
         }
         1
       }))
-    Engine.default.sync(warmpresults)
+    Engine.default.sync(warmpResults)
 
+    println("start predict throughput test")
     val start = System.nanoTime()
-    val results = Engine.default.invoke((0 until Engine.coreNumber).map(i =>
+    val results = Engine.default.invoke((0 until subModelNumber).map(i =>
       () => {
         val localModel = workingModels(i)
         val data = inputBuffer(i)
@@ -136,19 +142,10 @@ object DistriPerf {
 
     val end = System.nanoTime()
     logger.info(s"${params.modelPath} isGraph ${model.isInstanceOf[DnnGraph]} " +
-      s"isIR ${model.isInstanceOf[IRGraph[Float]]}" +
-      s"Iteration -iteration time is ${(end - start) / 1e9}s " +
+      s"isIR ${model.isInstanceOf[IRGraph[Float]]} engineType ${Engine.getEngineType()} " +
+      s"batchSize ${params.batchSize} " +
       s"Average Throughput is ${params.batchSize.toDouble * params.iteration / (end - start) * 1e9} record / second."
     )
-  }
-
-  def fillInput(input: Activity, f: Tensor[Float] => Tensor[Float]): Unit = {
-    input match {
-      case t: Tensor[_] =>
-        f(t.asInstanceOf[Tensor[Float]])
-      case t: Table =>
-        t.foreach(v => f(v._2.asInstanceOf[Tensor[Float]]))
-    }
   }
 
   def main(argv: Array[String]): Unit = {
@@ -181,18 +178,15 @@ object DistriPerf {
 //        Module.loadModule[Float](params.modelPath)
 //      }
 
-      val modelLoad = if (params.modelPath == "vgg16") {
-        Vgg_16.blas(1000)
-      } else if (params.modelPath == "vgg16_graph") {
-        println("graph_type: dnn graph")
-        Vgg_16.graph(batchSize, 1000)
-      } else {
-        Module.loadModule[Float](params.modelPath)
-      }
+//      val vgg_g_no = Module.loadModule[Float]("/home/zhangli/workspace/BigDL/noweights.model-g")
+//      // val vgg_ir = Module.loadModule[Float]("/home/zhangli/workspace/BigDL/weights.model-ir")
+//      val vgg_ir_no = Module.loadModule[Float]("/home/zhangli/workspace/BigDL/noweights.model-ir")
+//      val vgg_blas = Module.loadModule[Float]("/home/zhangli/workspace/BigDL/weights.model-blas")
+//      val vgg_blas_no = Module.loadModule[Float]("/home/zhangli/workspace/BigDL/noweights.model-blas")
+      val modelLoad = Module.loadModule[Float](params.modelPath)
 
       val graph = if (!modelLoad.isInstanceOf[Graph[Float]]) modelLoad.toGraph() else modelLoad
-      val model = if (Engine.getEngineType() == MklDnn
-        && params.modelPath != "vgg16" && params.modelPath != "vgg16_graph") {
+      val model = if (Engine.getEngineType() == MklDnn) {
         val m = graph.asInstanceOf[StaticGraph[Float]].toIRgraph(5, Memory.Format.nc)
         m.build()
         println("graph_type: dnn graph")
