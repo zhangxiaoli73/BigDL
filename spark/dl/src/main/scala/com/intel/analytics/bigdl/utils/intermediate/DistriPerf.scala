@@ -30,7 +30,7 @@ import com.intel.analytics.bigdl.models.resnet.ResNet.{DatasetType, ShortcutType
 import com.intel.analytics.bigdl.models.utils.ModelBroadcast
 import com.intel.analytics.bigdl.nn.{Graph, Module, StaticGraph}
 import com.intel.analytics.bigdl.nn.abstractnn.Activity
-import com.intel.analytics.bigdl.nn.mkldnn.{DnnGraph, Phase}
+import com.intel.analytics.bigdl.nn.mkldnn.{DnnGraph, MklDnnContainer, Phase}
 import com.intel.analytics.bigdl.nn.mkldnn.Phase.InferencePhase
 import com.intel.analytics.bigdl.nn.mkldnn.models.Vgg_16
 import com.intel.analytics.bigdl.numeric.NumericFloat
@@ -69,14 +69,6 @@ object DistriPerf {
       .action((v, p) => p.copy(iteration = v))
   }
 
-  def testConv(shape: Array[Int]) : Module[Float] = {
-    import com.intel.analytics.bigdl.nn.mkldnn
-    val input = mkldnn.Input(shape, Memory.Format.nchw).inputs()
-    val conv = mkldnn.SpatialConvolution(512, 126, 3, 3, 1, 1).inputs(input)
-    val out = mkldnn.Output(Memory.Format.nchw).inputs(conv)
-    DnnGraph(Array(input), Array(out))
-  }
-
   def predict(model: Module[Float], input: MiniBatch[Float],
               params: DistriPerfParams): Unit = {
     val subModelNumber = Engine.getEngineType() match {
@@ -99,6 +91,9 @@ object DistriPerf {
 
     if (model.isInstanceOf[DnnGraph]) {
       workingModels.foreach(model => model.asInstanceOf[DnnGraph].compile(Phase.InferencePhase))
+    } else if (model.isInstanceOf[MklDnnContainer]) {
+      workingModels.foreach(model =>
+        model.asInstanceOf[MklDnnContainer].compile(Phase.InferencePhase))
     }
 
     val stackSize = input.size() / subModelNumber
@@ -119,9 +114,6 @@ object DistriPerf {
       () => {
         val localModel = workingModels(i)
         val data = inputBuffer(i)
-        if (params.modelType != "resnet50") {
-          localModel.evaluate()
-        }
         for (i <- 0 to warmup) {
           val output = localModel.forward(data.getInput()).toTensor[Float]
         }
@@ -135,9 +127,6 @@ object DistriPerf {
       () => {
         val localModel = workingModels(i)
         val data = inputBuffer(i)
-        if (params.modelType != "resnet50") {
-          localModel.evaluate()
-        }
         for (i <- 0 to params.iteration) {
           val output = localModel.forward(data.getInput()).toTensor[Float]
         }
@@ -154,13 +143,10 @@ object DistriPerf {
   }
 
   def main(argv: Array[String]): Unit = {
-    parser.parse(argv, new DistriPerfParams()).foreach { params =>
-      val conf = Engine.createSparkConf()
-        .setAppName("Test perf")
-        .set("spark.task.maxFailures", "1")
-      val sc = new SparkContext(conf)
-      Engine.init
+    System.setProperty("bigdl.localMode", "true")
+    Engine.init
 
+    parser.parse(argv, new DistriPerfParams()).foreach { params =>
       val batchSize = params.batchSize
       val iterations = params.iteration
 

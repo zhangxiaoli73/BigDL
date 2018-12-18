@@ -54,10 +54,10 @@ object Perf {
   }
 
   def main(argv: Array[String]): Unit = {
-    System.setProperty("bigdl.mkldnn.fusion.convbn", "true")
-    System.setProperty("bigdl.mkldnn.fusion.bnrelu", "true")
-    System.setProperty("bigdl.mkldnn.fusion.convrelu", "true")
-    System.setProperty("bigdl.mkldnn.fusion.convsum", "true")
+    System.setProperty("bigdl.mkldnn.fusion.convbn", "false")
+    System.setProperty("bigdl.mkldnn.fusion.bnrelu", "false")
+    System.setProperty("bigdl.mkldnn.fusion.convrelu", "false")
+    System.setProperty("bigdl.mkldnn.fusion.convsum", "false")
 
     System.setProperty("bigdl.localMode", "true")
     System.setProperty("bigdl.engineType", "mkldnn")
