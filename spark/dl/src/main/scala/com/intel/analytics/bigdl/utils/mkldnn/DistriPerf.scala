@@ -118,7 +118,9 @@ object DistriPerf {
       () => {
         val localModel = workingModels(i)
         val data = inputBuffer(i)
-        localModel.evaluate()
+        if (params.modelType != "resnet50") {
+          localModel.evaluate()
+        }
         for (i <- 0 to warmup) {
           val output = localModel.forward(data.getInput()).toTensor[Float]
         }
@@ -132,7 +134,9 @@ object DistriPerf {
       () => {
         val localModel = workingModels(i)
         val data = inputBuffer(i)
-        localModel.evaluate()
+        if (params.modelType != "resnet50") {
+          localModel.evaluate()
+        }
         for (i <- 0 to params.iteration) {
           val output = localModel.forward(data.getInput()).toTensor[Float]
         }
@@ -162,28 +166,19 @@ object DistriPerf {
       val inputFormat = Memory.Format.nchw
       var input : Tensor[Float] = null
       var label : Tensor[Float] = null
-//
-//      val modelLoad = if (params.modelPath == "lenet") {
-//        LeNet5.graph(10)
-//      } else if (params.modelPath == "inceptionV1") {
-//        Inception_v1_NoAuxClassifier.graph(1000)
-//      } else if (params.modelPath == "resnet50") {
-//        ResNet(1000, T("shortcutType" -> ShortcutType.B, "depth" -> 50,
-//          "optnet" -> false, "dataSet" -> DatasetType.ImageNet))
-//      } else if (params.modelPath == "testConv") {
-//        val m = testConv(Array(batchSize, 512, 10, 10))
-//        m.asInstanceOf[DnnGraph].compile(Phase.InferencePhase)
-//        m
-//      } else {
-//        Module.loadModule[Float](params.modelPath)
-//      }
 
-//      val vgg_g_no = Module.loadModule[Float]("/home/zhangli/workspace/BigDL/noweights.model-g")
-//      // val vgg_ir = Module.loadModule[Float]("/home/zhangli/workspace/BigDL/weights.model-ir")
-//      val vgg_ir_no = Module.loadModule[Float]("/home/zhangli/workspace/BigDL/noweights.model-ir")
-//      val vgg_blas = Module.loadModule[Float]("/home/zhangli/workspace/BigDL/weights.model-blas")
-//      val vgg_blas_no = Module.loadModule[Float]("/home/zhangli/workspace/BigDL/noweights.model-blas")
-      val modelLoad = Module.loadModule[Float](params.modelPath)
+      val modelLoad = if (params.modelPath == "vgg16") {
+        import com.intel.analytics.bigdl.models.vgg
+        vgg.Vgg_16(1000, false)
+      } else if (params.modelPath == "vgg19") {
+        import com.intel.analytics.bigdl.models.vgg
+        vgg.Vgg_19(1000, false)
+      } else if (params.modelPath == "resnet50") {
+        ResNet(1000, T("shortcutType" -> ShortcutType.B, "depth" -> 50,
+          "optnet" -> false, "dataSet" -> DatasetType.ImageNet))
+      } else {
+        Module.loadModule[Float](params.modelPath)
+      }
 
       val graph = if (!modelLoad.isInstanceOf[Graph[Float]]) modelLoad.toGraph() else modelLoad
       val model = if (Engine.getEngineType() == MklDnn) {
@@ -213,7 +208,6 @@ object DistriPerf {
         case _ => throw new UnsupportedOperationException(s"Unkown model ${params.dataType}")
       }
 
-      model.evaluate()
       val miniBatch = MiniBatch(Tensor(inputShape).rand(), Tensor(outputShape).rand())
       predict(model, miniBatch, params)
     }

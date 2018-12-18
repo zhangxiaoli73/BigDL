@@ -197,6 +197,7 @@ class IRToDnn extends ConvertBase[IRElement[Float], Module[Float]] {
 
   private def fromBlasModule(node: IRElement[Float]) : Module[Float] = {
     val t = node.getOp().asInstanceOf[IRBlasModule[Float]]
+    println("wrapper " + t.model)
     BlasWrapper(t.model)
   }
 

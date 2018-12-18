@@ -93,27 +93,30 @@ class SoftMax() extends MklDnnLayer {
   }
 
   override def updateOutput(input: Activity): Activity = {
-      if (this.isTraining()) {
-        nnSoftMax.forward(input)
-        output = nnSoftMax.output
-      } else {
-        if (updateOutputTensors == null) {
-          val buffer = new ArrayBuffer[Tensor[Float]]()
-          buffer.append(input.asInstanceOf[Tensor[Float]])
-          buffer.append(output.asInstanceOf[Tensor[Float]])
-          updateOutputTensors = buffer.toArray
-        }
+//      if (this.isTraining()) {
+//        nnSoftMax.forward(input)
+//        output = nnSoftMax.output
+//      } else {
+//        if (updateOutputTensors == null) {
+//          val buffer = new ArrayBuffer[Tensor[Float]]()
+//          buffer.append(input.asInstanceOf[Tensor[Float]])
+//          buffer.append(output.asInstanceOf[Tensor[Float]])
+//          updateOutputTensors = buffer.toArray
+//        }
+//
+//        input.toTensor[Float].getTensorType match {
+//          case DenseType => updateOutputTensors(0) = input.toTensor
+//          case _ =>
+//        }
+//
+//        MklDnnOps.streamSubmit(runtime.stream, 1,
+//          updateOutputPrimitives,
+//          updateOutputPrimitives.length,
+//          updateOutputMemoryPrimitives, updateOutputTensors)
+//    }
 
-        input.toTensor[Float].getTensorType match {
-          case DenseType => updateOutputTensors(0) = input.toTensor
-          case _ =>
-        }
-
-        MklDnnOps.streamSubmit(runtime.stream, 1,
-          updateOutputPrimitives,
-          updateOutputPrimitives.length,
-          updateOutputMemoryPrimitives, updateOutputTensors)
-    }
+    nnSoftMax.forward(input)
+    output = nnSoftMax.output
 
     output
   }

@@ -17,6 +17,7 @@
 package com.intel.analytics.bigdl.nn.mkldnn
 
 import breeze.linalg.Axis._1
+import com.intel.analytics.bigdl.mkl.Memory
 import com.intel.analytics.bigdl.nn.Graph.ModuleNode
 import com.intel.analytics.bigdl.nn.abstractnn.{AbstractModule, Activity}
 import com.intel.analytics.bigdl.nn.tf.{ControlDependency, WithoutInput}
@@ -25,6 +26,7 @@ import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
 import com.intel.analytics.bigdl.utils.{LayerException, Node, T}
 import com.intel.analytics.bigdl.nn
+import com.intel.analytics.bigdl.nn.mkldnn.Phase.TrainingPhase
 
 import scala.reflect.ClassTag
 
@@ -49,16 +51,37 @@ class DnnGraph(
 
   buildBackwardGraph()
 
+  def toNCHW(src: Tensor[Float], inputFormat: MemoryData): Tensor[Float] = {
+    val outputFormat = HeapData(inputFormat.shape,
+      if (src.size().length == 2) { Memory.Format.nc } else { Memory.Format.nchw })
+    val reorder = ReorderMemory(inputFormat, outputFormat, null, null)
+
+    reorder.setRuntime(new MklDnnRuntime)
+    reorder.initFwdPrimitives(Array(inputFormat), TrainingPhase)
+    reorder.forward(src).toTensor
+  }
+
   override def updateOutput(input: Activity): Activity = {
     var i = 0
     while(i < forwardExecution.length) {
       // println(s"ccccccccccc $i")
       val node = forwardExecution(i)
       // println(node.element)
+      if (node.element.getName() == "prob") {
+        val tmp = 0
+      }
       val nodeInput = findDnnInput(node, input)
       inputCache(i) = nodeInput
       // println("ccccccccccc")
       node.element.forward(nodeInput)
+      // get all output:
+      val out = node.element.output
+//      if (out.isTensor) {
+ //       val s = out.toTensor[Float].size()
+ //       val f = node.element.asInstanceOf[MklDnnModule].outputFormats()(0)
+ //       val out2 = toNCHW(out.asInstanceOf[Tensor[Float]], f).storage().array()
+ //       println(out2(1) + " **" + out2(5) + "***" + node.element)
+ //     }
       i += 1
     }
     output = dummyOutput.element.output

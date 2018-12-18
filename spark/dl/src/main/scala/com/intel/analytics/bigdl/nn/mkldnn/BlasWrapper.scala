@@ -24,6 +24,7 @@ import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
 import com.intel.analytics.bigdl.utils.{MultiShape, Shape}
 import spire.syntax.module
 
+import com.intel.analytics.bigdl.nn
 /**
  * wrap blas module to be dnn module,
  * and the module should have implemented "computeOutputShape" func.
@@ -85,6 +86,9 @@ private[bigdl] class BlasWrapper(val module: AbstractModule[Activity, Activity, 
     _inputFormats = realInputs.toArray
     _outputFormats = realOutputs.toArray
 
+    if (this.module.isInstanceOf[nn.SoftMax[Float]]) {
+      val tmp = 0
+    }
     (_inputFormats, _outputFormats)
   }
 
