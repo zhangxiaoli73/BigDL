@@ -118,7 +118,7 @@ class Blas2DnnSpec extends BigDLSpecHelper {
     val gradInputTensor = Tensor[Float]().resize(gradInputDnn.size()).copy(gradInputDnn)
 
     Equivalent.nearequals(outDnn, outBlas, 1e-6) should be(true)
-    Equivalent.nearequals(gradInputTensor, gradInputBlas, 1e-5) should be(true)
+    Equivalent.nearequals(gradInputTensor, gradInputBlas, 1e-3) should be(true)
   }
 
   "alexnet blas to dnn" should "work properly" in {

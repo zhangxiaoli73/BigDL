@@ -134,7 +134,7 @@ class IRToDnn extends ConvertBase[IRElement[Float], Module[Float]] {
     require(t.format == DataFormat.NCHW, "Dnn SpatialMaxPooling only supports NCHW")
     val cls = Class.forName("com.intel.analytics.bigdl.nn.mkldnn.MaxPooling")
     val layer = ReflectUtils.reflectFromIR(node, cls).asInstanceOf[MaxPooling]
-    if (t.ceilMode) layer.ceil()
+    if (t.ceilMode) layer.ceil() else layer.floor()
     layer
   }
 
@@ -143,7 +143,7 @@ class IRToDnn extends ConvertBase[IRElement[Float], Module[Float]] {
     require(t.format == DataFormat.NCHW, "Dnn SpatialAveragePooling only supports NCHW")
     val cls = Class.forName("com.intel.analytics.bigdl.nn.mkldnn.AvgPooling")
     val layer = ReflectUtils.reflectFromIR(node, cls).asInstanceOf[AvgPooling]
-    if (t.ceilMode) layer.ceil()
+    if (t.ceilMode) layer.ceil() else layer.floor()
     layer
   }
 
@@ -198,7 +198,7 @@ class IRToDnn extends ConvertBase[IRElement[Float], Module[Float]] {
   private def fromBlasModule(node: IRElement[Float]) : Module[Float] = {
     val t = node.getOp().asInstanceOf[IRBlasModule[Float]]
     println("wrapper " + t.model)
-    BlasWrapper(t.model)
+    BlasWrapper(t.model.clone(deepCopy = true))
   }
 
   private def fromInput(node: IRElement[Float]) : Module[Float] = {

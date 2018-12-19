@@ -123,12 +123,12 @@ class IRGraph[T: ClassTag](
     graph = new IRConverter[T](this).toGraph()
     // release all nodes for memory
     // clear all nodes parameters
-    allNodes.foreach(node => {
-      val p = node.element.getParameters()
-      if (p._1 != null) p._1.set()
-      if (p._2 != null) p._2.set()
-    })
-    allNodes.clear()
+//    allNodes.foreach(node => {
+//      val p = node.element.getParameters()
+//      if (p._1 != null) p._1.set()
+//      if (p._2 != null) p._2.set()
+//    })
+//    allNodes.clear()
   }
 
   override def parameters(): (Array[Tensor[T]], Array[Tensor[T]]) = {
