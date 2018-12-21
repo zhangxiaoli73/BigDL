@@ -60,7 +60,7 @@ object Perf {
     System.setProperty("bigdl.mkldnn.fusion.convsum", "false")
 
     System.setProperty("bigdl.localMode", "true")
-    System.setProperty("bigdl.engineType", "mkldnn")
+    // System.setProperty("bigdl.engineType", "mkldnn")
     Engine.init
 
     parser.parse(argv, new ResNet50PerfParams()).foreach { params =>
@@ -81,6 +81,10 @@ object Perf {
         case "vgg16_graph" => Vgg_16.graph(batchSize, classNum, true)
         case "resnet50_graph" =>
           ResNet.graph(batchSize, classNum, T("depth" -> 50, "dataSet" -> ImageNet))
+        case "resnet50_blas" =>
+          import com.intel.analytics.bigdl.models.resnet
+          resnet.ResNet(1000, T("shortcutType" -> resnet.ResNet.ShortcutType.B, "depth" -> 50,
+            "optnet" -> false, "dataSet" -> resnet.ResNet.DatasetType.ImageNet))
         case _ => throw new UnsupportedOperationException(s"Unkown model ${params.model}")
       }
 
@@ -93,7 +97,7 @@ object Perf {
         } else if (model.isInstanceOf[DnnGraph]) {
           model.asInstanceOf[DnnGraph].compile(TrainingPhase)
         }
-        model.training()
+        // model.training()
       } else {
         if (model.isInstanceOf[MklDnnContainer]) {
           model.asInstanceOf[MklDnnContainer]
@@ -101,7 +105,7 @@ object Perf {
         } else if (model.isInstanceOf[DnnGraph]) {
           model.asInstanceOf[DnnGraph].compile(InferencePhase)
         }
-        model.evaluate()
+        // model.evaluate()
       }
 
       var iteration = 0
