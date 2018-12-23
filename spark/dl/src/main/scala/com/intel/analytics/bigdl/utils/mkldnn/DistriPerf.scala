@@ -113,6 +113,7 @@ object DistriPerf {
     }
 
     // warm up
+    println(s"engine default pool size ${Engine.default.getPoolSize}")
     val warmup = 20
     val warmpResults = Engine.default.invoke((0 until subModelNumber).map(i =>
       () => {
