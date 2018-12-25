@@ -63,14 +63,9 @@ object LocalPerf {
   }
 
   def main(argv: Array[String]): Unit = {
+    System.setProperty("bigdl.localMode", "true")
+    Engine.init
     parser.parse(argv, new LocalPerfParams()).foreach { params =>
-      val conf = Engine.createSparkConf()
-        .setAppName("Test perf")
-        .set("spark.task.maxFailures", "1")
-      val sc = new SparkContext(conf)
-
-      Engine.init
-
       val batchSize = params.batchSize
       val training = params.training
       val iterations = params.iteration
@@ -98,6 +93,8 @@ object LocalPerf {
       } else {
          Module.loadModule[Float](params.modelPath)
       }
+
+      println(modelLoad)
       val graph = if (!modelLoad.isInstanceOf[Graph[Float]]) modelLoad.toGraph() else modelLoad
       val model = if (Engine.getEngineType() == MklDnn
         && params.modelPath != "vgg16" && params.modelPath != "vgg16_graph") {
@@ -166,6 +163,6 @@ case class LocalPerfParams (
   batchSize: Int = 4,
   iteration: Int = 80,
   training: Boolean = false,
-  dataType: String = "lenet",
-  modelPath: String = "imagenet"
+  dataType: String = "ssd",
+  modelPath: String = "vgg16"
 )

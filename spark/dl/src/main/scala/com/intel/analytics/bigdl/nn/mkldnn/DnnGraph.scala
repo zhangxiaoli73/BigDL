@@ -67,14 +67,10 @@ class DnnGraph(
       // println(s"ccccccccccc $i")
       val node = forwardExecution(i)
       // println(node.element)
-      if (node.element.getName() == "prob") {
-        val tmp = 0
-      }
       val nodeInput = findDnnInput(node, input)
       inputCache(i) = nodeInput
-      // println("ccccccccccc")
+      println(s"start ${node.element}")
       node.element.forward(nodeInput)
-      // get all output:
       val out = node.element.output
 //      if (out.isTensor) {
  //       val s = out.toTensor[Float].size()
@@ -342,13 +338,13 @@ class DnnGraph(
     var firstRealInputFormats: Array[MemoryData] = null
     for (i <- 0 until forwardExecution.length) {
       val m = forwardExecution(i)
-      // println(m)
+      println(m.element)
       lastOutputFormats = findInputFormats(m, inputs)
 
       val realInputAndOutputFormats =
         m.element.asInstanceOf[MklDnnModule].initFwdPrimitives(lastOutputFormats, phase)
-      // test(realInputAndOutputFormats._1(0).shape)
-      // test(realInputAndOutputFormats._2(0).shape)
+      test(realInputAndOutputFormats._1(0).shape)
+      test(realInputAndOutputFormats._2(0).shape)
       lastOutputFormats.zip(realInputAndOutputFormats._1).foreach {
         case (o, i) => reorderManager.register(o, i)
       }

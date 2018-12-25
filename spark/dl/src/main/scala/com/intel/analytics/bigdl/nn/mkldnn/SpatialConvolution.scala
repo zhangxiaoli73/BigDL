@@ -258,13 +258,10 @@ class SpatialConvolution(
       bias.syncToNative()
     }
 
-    if (this.getName() == "conv6_2_mbox_conf") {
-      val tmp = 0
-    }
-    // println(s"submit ${_inputFormats(0).layout} ${_outputFormats(0).layout}")
+    println(s"conv submit ${_inputFormats(0).layout} ${_outputFormats(0).layout}")
     MklDnnOps.streamSubmit(runtime.stream, 1, updateOutputPrimitives, updateOutputPrimitives.length,
       updateOutputMemoryPrimitives, updateOutputTensors)
-    // println("submit done")
+    println("conv submit done")
     output
   }
 
