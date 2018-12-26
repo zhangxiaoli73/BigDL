@@ -258,10 +258,10 @@ class SpatialConvolution(
       bias.syncToNative()
     }
 
-    println(s"conv submit ${_inputFormats(0).layout} ${_outputFormats(0).layout}")
+    // println(s"conv submit ${_inputFormats(0).layout} ${_outputFormats(0).layout}")
     MklDnnOps.streamSubmit(runtime.stream, 1, updateOutputPrimitives, updateOutputPrimitives.length,
       updateOutputMemoryPrimitives, updateOutputTensors)
-    println("conv submit done")
+    // println("conv submit done")
     output
   }
 

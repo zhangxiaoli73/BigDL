@@ -34,31 +34,25 @@ private[mkldnn] object MklDnnOps {
     require(MklDnn.isLoaded, "mkldnn isn't loaded")
     require(memory_primitives.length == buffers.length)
 
-    var skipped = false
-    val flags = new Array[Int](memory_primitives.length)
-    val handles = new Array[Array[Float]](memory_primitives.length)
-    val offsets = new Array[Int](memory_primitives.length)
-    val pointers = new Array[Long](memory_primitives.length)
-
-    // check the validation of primitives
-    var i = 0
-    while (i < memory_primitives.length) {
-      require(memory_primitives(i) != 0L)
-      flags(i) = 0
-      offsets(i) = 0
-      i += 1
-    }
-
+    val handle = new Array[Long](memory_primitives.length)
     for (i <- memory_primitives.indices) {
-      if (!buffers(i).isInstanceOf[DnnTensor[_]]) {
-        flags(i) = 1
-        handles(i) = buffers(i).storage().array()
-        offsets(i) = buffers(i).storageOffset() - 1
-      } else {
-        pointers(i) = buffers(i).asInstanceOf[DnnTensor[_]].storageAddress()
+      if (memory_primitives(i) != 0L) {
+        if (buffers(i).isInstanceOf[DnnTensor[_]]) {
+          Memory.SetDataHandle(memory_primitives(i),
+            buffers(i).asInstanceOf[DnnTensor[Float]].storageAddress(), 0)
+        } else {
+          handle(i) = MklDnnOps.memorySetDataHandle(
+            memory_primitives(i), buffers(i), buffers(i).storageOffset() - 1)
+        }
       }
     }
 
-    DnnStream.Submit(loc, block, primitives, memory_primitives, pointers, handles, offsets, flags)
+    DnnStream.Submit(loc, block, primitives)
+
+    for (i <- memory_primitives.indices) {
+      if (handle(i) != 0L) {
+         MklDnnOps.memoryReleaseDataHandle(buffers(i), handle(i))
+      }
+    }
   }
 }
