@@ -37,8 +37,9 @@ import com.intel.analytics.bigdl.optim.DistriOptimizer.{Cache, getModel}
 import org.apache.commons.lang.exception.ExceptionUtils
 import com.intel.analytics.bigdl.visualization.{TrainSummary, ValidationSummary}
 import org.apache.log4j.Logger
+import org.apache.spark
 import org.apache.spark.network.netty.SparkTransportConf
-import org.apache.spark.{SparkContext, TaskContext}
+import org.apache.spark.{SparkContext, TaskContext, rdd}
 import org.apache.spark.rdd.{RDD, ZippedPartitionsWithLocalityRDD}
 
 import scala.collection.mutable
@@ -570,11 +571,11 @@ object DistriOptimizer extends AbstractOptimizer {
       Engine.setNodeAndCore(nExecutor, executorCores)
       val cached = (0 until _subModelNumber).map { _ =>
         val localModel = modelBroadcast.value(true)
-        localModel match {
-          case container: MklDnnContainer => container.compile(TrainingPhase)
-          case graph: DnnGraph => graph.compile(TrainingPhase)
-          case _ =>
-        }
+//        localModel match {
+//          case container: MklDnnContainer => container.compile(TrainingPhase)
+//          case graph: DnnGraph => graph.compile(TrainingPhase)
+//          case _ =>
+//        }
         // differentiate partition models from each other by partition ID
         setModelId(localModel, partitionId)
         val localCriterion = broadcastCriterion.cloneCriterion()

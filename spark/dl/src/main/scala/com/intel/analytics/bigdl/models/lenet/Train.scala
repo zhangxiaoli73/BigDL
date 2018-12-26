@@ -51,10 +51,12 @@ object Train {
         if (param.graphModel) {
           LeNet5.graph(classNum = 10)
         } else {
-          Engine.getEngineType() match {
-            case MklBlas => LeNet5(10)
-            case MklDnn => LeNet5.dnnGraph(param.batchSize / Engine.nodeNumber(), 10)
-          }
+          LeNet5.graph(10)
+//
+//          Engine.getEngineType() match {
+//            case MklBlas => LeNet5(10)
+//            case MklDnn => LeNet5.dnnGraph(param.batchSize / Engine.nodeNumber(), 10)
+//          }
         }
       }
       val criterion = Engine.getEngineType() match {

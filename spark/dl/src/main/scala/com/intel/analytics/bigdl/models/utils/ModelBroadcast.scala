@@ -20,9 +20,12 @@ import java.io.{IOException, ObjectInputStream, ObjectOutputStream}
 import java.util.UUID
 
 import com.intel.analytics.bigdl.Module
-import com.intel.analytics.bigdl.nn.Container
+import com.intel.analytics.bigdl.nn.{Container, Graph, StaticGraph}
+import com.intel.analytics.bigdl.nn.mkldnn.Phase.{InferencePhase, TrainingPhase}
+import com.intel.analytics.bigdl.nn.mkldnn.{DnnGraph, MklDnnContainer}
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
 import com.intel.analytics.bigdl.tensor._
+import com.intel.analytics.bigdl.utils.{Engine, MklDnn}
 import com.intel.analytics.bigdl.utils.Util._
 import org.apache.commons.lang3.SerializationUtils
 import org.apache.spark.SparkContext
@@ -85,6 +88,35 @@ private[bigdl] class ModelBroadcastImp[T: ClassTag](applyProtoBuffer: Boolean = 
   private var broadcastParameters: Broadcast[Array[Tensor[T]]] = _
 
   /**
+   * convert model to ir graph and build
+   * @param model
+   * @return
+   */
+  private def convertion(model: Module[T]): Module[T] = {
+   val m = if (!model.isInstanceOf[Graph[T]]) model.toGraph() else model
+   if (!m.isInstanceOf[StaticGraph[T]]) return null
+    m.asInstanceOf[StaticGraph[T]].toIRgraph().asInstanceOf[Module[T]]
+  }
+  /**
+   * set environment according to engine type and model type
+   * @param model
+   * @return
+   */
+  private def envSet(model: Module[T]): Module[T] = {
+    val phase = if (model.isTraining()) TrainingPhase else InferencePhase
+    model match {
+      case container: MklDnnContainer => container.compile(phase)
+      case graph: DnnGraph => graph.compile(phase)
+      case _ =>
+    }
+    // todo: set core number = 1 for dnn engine type
+    if (Engine.getEngineType() == MklDnn) {
+      Engine.setNodeAndCore(Engine.nodeNumber(), 1)
+    }
+    model
+  }
+
+  /**
    * broadcast the model
    * first get and clear Const values from the model
    * then get and clear the weight and bias parameters from the model
@@ -96,24 +128,27 @@ private[bigdl] class ModelBroadcastImp[T: ClassTag](applyProtoBuffer: Boolean = 
   override def broadcast(sc: SparkContext, model: Module[T]): this.type = {
     CachedModels.deleteAll(uuid) // delete the models on driver
 
+    val convertedModel = convertion(model)
+    val modelNew = if (convertedModel != null) convertedModel else model
+
     if (applyProtoBuffer) {
-      broadcastModel = sc.broadcast(ModelInfo(uuid, model))
+      broadcastModel = sc.broadcast(ModelInfo(uuid, modelNew))
     } else {
       // broadcast Consts
-      if (model.isInstanceOf[Container[_, _, T]]) {
-        val moduleConsts = getAndClearConsts(model.asInstanceOf[Container[_, _, T]])
+      if (modelNew.isInstanceOf[Container[_, _, T]]) {
+        val moduleConsts = getAndClearConsts(modelNew.asInstanceOf[Container[_, _, T]])
         // TODO: broadcast Const, model structure and weight in the same broadcast.
         broadcastConsts = sc.broadcast(moduleConsts)
       }
       // broadcast weight and model
-      val weightsBias = getAndClearWeightBias(model.parameters())
-      broadcastModel = sc.broadcast(ModelInfo[T](uuid, model))
+      val weightsBias = getAndClearWeightBias(modelNew.parameters())
+      broadcastModel = sc.broadcast(ModelInfo[T](uuid, modelNew))
       broadcastParameters = sc.broadcast(weightsBias)
 
       // For quantized model if we don't clone weightsBias, the original model will be released also
       // when we delete all models used in `ModelBroadcast`.
-      putWeightBias(SerializationUtils.clone(weightsBias), model)
-      initGradWeightBias(weightsBias, model)
+      putWeightBias(SerializationUtils.clone(weightsBias), modelNew)
+      initGradWeightBias(weightsBias, modelNew)
     }
     this
   }
@@ -128,7 +163,7 @@ private[bigdl] class ModelBroadcastImp[T: ClassTag](applyProtoBuffer: Boolean = 
    */
   override def value(initGradient: Boolean = false, shareWeight: Boolean = true): Module[T] = {
     CachedModels.deleteAll(uuid)
-    if (applyProtoBuffer) {
+    val model = if (applyProtoBuffer) {
       val localModel = broadcastModel.value.model.clone(false)
       val uuid = broadcastModel.value.uuid
       CachedModels.add(uuid, localModel)
@@ -160,6 +195,7 @@ private[bigdl] class ModelBroadcastImp[T: ClassTag](applyProtoBuffer: Boolean = 
       }
       localModel
     }
+    envSet(model)
   }
 
   private def getWeightBias(parameters: (Array[Tensor[T]], Array[Tensor[T]]))

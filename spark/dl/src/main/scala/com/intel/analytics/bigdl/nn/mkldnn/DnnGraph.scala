@@ -20,7 +20,7 @@ import breeze.linalg.Axis._1
 import com.intel.analytics.bigdl.nn.Graph.ModuleNode
 import com.intel.analytics.bigdl.nn.abstractnn.{AbstractModule, Activity}
 import com.intel.analytics.bigdl.nn.tf.{ControlDependency, WithoutInput}
-import com.intel.analytics.bigdl.nn.{StaticGraph, mkldnn}
+import com.intel.analytics.bigdl.nn.{Graph, StaticGraph, mkldnn}
 import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
 import com.intel.analytics.bigdl.utils.{LayerException, Node, T}
@@ -34,9 +34,9 @@ class DnnGraph(
   private val _outputs : Seq[ModuleNode[Float]],
   private val _variables: Option[(Array[Tensor[Float]], Array[Tensor[Float]])] = None,
   private val enableExcludeChecking: Boolean = true)
-  extends StaticGraph[Float](_inputs, _outputs, _variables, enableExcludeChecking)
+  extends Graph[Float](_inputs, _outputs, _variables)
   with MklDnnLayer {
-  private var forwardExecution: Array[Node[AbstractModule[Activity, Activity, Float]]] = _
+  private var forwardExecution = forwardGraph.topologySort.reverse
   private var backwardExecution: Array[Node[AbstractModule[Activity, Activity, Float]]] = _
   private var inputCache: Array[Activity] = _
   private var backId2ForwardId: Array[Int] = _
@@ -100,9 +100,20 @@ class DnnGraph(
     }
   }
 
+  override def populateModules(): Unit = {
+    modules.appendAll(
+      forwardGraph.topologySort
+        // todo: convert control dep node to edge
+        .filterNot(_.element.isInstanceOf[ControlDependency[Float]])
+        .filter(n => !n.eq(dummyOutput)).map(_.element)
+        .reverse
+    )
+    checkDuplicate()
+  }
+
   override def buildBackwardGraph(): this.type = {
     super.buildBackwardGraph()
-    forwardExecution = forwardGraph.topologySort.reverse
+    // forwardExecution = forwardGraph.topologySort.reverse
     inputCache = new Array[Activity](forwardExecution.length)
     backwardExecution = backwardGraph.topologySort.reverse
     backId2ForwardId = new Array[Int](backwardExecution.length)

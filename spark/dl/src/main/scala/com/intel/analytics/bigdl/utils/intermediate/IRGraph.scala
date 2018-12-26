@@ -118,7 +118,10 @@ private[bigdl] class IRGraph[T: ClassTag](
     if (!initFwd && graph.isInstanceOf[DnnGraph]) {
       val inputMemory = new Array[MemoryData](inputFormats.length)
       if (input.isInstanceOf[Tensor[T]]) {
-        inputMemory(0) = HeapData(input.toTensor[T].size(), inputFormats(0))
+        // todo: handle for 3 dimensions, expand 3 dims to 4 dims
+        val size = input.toTensor[T].size()
+        val sizeNew = if (size.length == 3)  Array(size(0), 1, size(1), size(2)) else size
+        inputMemory(0) = HeapData(sizeNew, inputFormats(0))
       } else {
         val tensors = input.toTable
         require(tensors.length() == inputFormats.length, s"table input length " +
