@@ -104,7 +104,7 @@ private[bigdl] class ModelBroadcastImp[T: ClassTag](applyProtoBuffer: Boolean = 
    * @return
    */
   private def envSet(model: Module[T]): Module[T] = {
-    println("111111111111111111")
+    println("dnngraph_dnngraph_dnngraph")
     val phase = if (model.isTraining()) TrainingPhase else InferencePhase
     model match {
       case container: MklDnnContainer => container.compile(phase)

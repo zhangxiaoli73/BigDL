@@ -627,9 +627,9 @@ object DistriOptimizer extends AbstractOptimizer {
    * @return trained model
    */
   override protected def getModel[T: ClassTag](
-                                                models: spark.rdd.RDD[Cache[T]],
-                                                parameters: Map[String, AllReduceParameter[T]],
-                                                trainingModel: Module[T])(implicit ev: TensorNumeric[T]): Module[T] = {
+    models: RDD[Cache[T]],
+    parameters: Map[String, AllReduceParameter[T]],
+    trainingModel: Module[T])(implicit ev: TensorNumeric[T]): Module[T] = {
     val partitionNum = models.partitions.length
     val extraState = models.map(_.localModels.head.getExtraParameter()).first()
     trainingModel.setExtraParameter(extraState)
