@@ -20,13 +20,15 @@ import java.io.{IOException, ObjectInputStream, ObjectOutputStream}
 import java.util.UUID
 
 import com.intel.analytics.bigdl.Module
+import com.intel.analytics.bigdl.nn.abstractnn.Activity
 import com.intel.analytics.bigdl.nn.{Container, Graph, StaticGraph}
 import com.intel.analytics.bigdl.nn.mkldnn.Phase.{InferencePhase, TrainingPhase}
 import com.intel.analytics.bigdl.nn.mkldnn.{DnnGraph, MklDnnContainer}
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
 import com.intel.analytics.bigdl.tensor._
-import com.intel.analytics.bigdl.utils.{Engine, MklDnn}
+import com.intel.analytics.bigdl.utils.{Engine, MklBlas, MklDnn}
 import com.intel.analytics.bigdl.utils.Util._
+import com.intel.analytics.bigdl.utils.intermediate.ReflectionUtils
 import org.apache.commons.lang3.SerializationUtils
 import org.apache.spark.SparkContext
 import org.apache.spark.broadcast.Broadcast
@@ -87,6 +89,17 @@ private[bigdl] class ModelBroadcastImp[T: ClassTag](applyProtoBuffer: Boolean = 
   private var broadcastConsts: Broadcast[Map[String, Tensor[_]]] = _
   private var broadcastParameters: Broadcast[Array[Tensor[T]]] = _
 
+
+  private def allSuperClass(model: Object, name: String) : Boolean = {
+    var cls = model.getClass().asInstanceOf[Class[_]]
+    var contains = false
+    while (cls != null) {
+      println(cls.getName())
+      if (cls.getName == name) contains = true
+      cls = cls.getSuperclass().asInstanceOf[Class[_]]
+    }
+    contains
+  }
   /**
    * convert model to ir graph and build
    * @param model
@@ -94,9 +107,33 @@ private[bigdl] class ModelBroadcastImp[T: ClassTag](applyProtoBuffer: Boolean = 
    */
   private def convertion(model: Module[T]): Module[T] = {
     println("222222222222222222")
-   val m = if (!model.isInstanceOf[Graph[T]]) model.toGraph() else model
+    val name = "com.intel.analytics.zoo.models.common.ZooModel"
+    val contains = allSuperClass(model, name)
+    val tmpModel = if (contains) {
+      model.asInstanceOf[Container[Activity, Activity, T]].modules(0)
+    } else {
+      model
+    }
+//    val tmpModel = if (model.isInstanceOf[Container[Activity, Activity, T]]) {
+//      val con = model.asInstanceOf[Container[Activity, Activity, T]]
+//      if (con.modules.length == 1) {
+//       con.modules(0)
+//      } else con
+//    } else model
+
+//    val cls = ReflectionUtils.findClass(name)
+//    val tmpModel = if (cls != null) {
+//      if (model.getClass.isAssignableFrom(cls)) {
+//        model.asInstanceOf[Container[Activity, Activity, T]].modules(0)
+//      } else model
+//    } else {
+//      model
+//    }
+   val m = if (!tmpModel.isInstanceOf[Graph[T]]) tmpModel.toGraph() else tmpModel
    if (!m.isInstanceOf[StaticGraph[T]]) return null
-    m.asInstanceOf[StaticGraph[T]].toIRgraph().asInstanceOf[Module[T]]
+    if (Engine.getEngineType() == MklDnn) {
+      m.asInstanceOf[StaticGraph[T]].toIRgraph().asInstanceOf[Module[T]]
+    } else m
   }
   /**
    * set environment according to engine type and model type

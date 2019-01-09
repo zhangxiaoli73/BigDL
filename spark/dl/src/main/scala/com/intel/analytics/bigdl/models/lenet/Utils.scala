@@ -38,7 +38,7 @@ object Utils {
     batchSize: Int = 12,
     learningRate: Double = 0.05,
     learningRateDecay: Double = 0.0,
-    maxEpoch: Int = 10,
+    maxEpoch: Int = 4,
     coreNumber: Int = -1,
     nodeNumber: Int = -1,
     overWriteCheckpoint: Boolean = false,
