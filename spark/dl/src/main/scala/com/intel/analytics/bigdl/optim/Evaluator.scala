@@ -50,6 +50,9 @@ class Evaluator[T: ClassTag] private[optim](model: Module[T])(implicit ev: Tenso
    batchSize: Option[Int] = None): Array[(ValidationResult, ValidationMethod[T])] = {
 
     val modelBroad = ModelBroadcast[T]().broadcast(dataset.sparkContext, model.evaluate())
+    val modelNew = modelBroad.value()
+
+    // ********
     val partitionNum = dataset.partitions.length
 
     val totalBatch = batchSize.getOrElse(batchPerPartition * partitionNum)

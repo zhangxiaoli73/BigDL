@@ -20,7 +20,7 @@ import java.io.{IOException, ObjectInputStream, ObjectOutputStream}
 import java.util.UUID
 
 import com.intel.analytics.bigdl.Module
-import com.intel.analytics.bigdl.nn.abstractnn.Activity
+import com.intel.analytics.bigdl.nn.abstractnn.{AbstractModule, Activity}
 import com.intel.analytics.bigdl.nn.{Container, Graph, StaticGraph}
 import com.intel.analytics.bigdl.nn.mkldnn.Phase.{InferencePhase, TrainingPhase}
 import com.intel.analytics.bigdl.nn.mkldnn.{DnnGraph, MklDnnContainer}
@@ -28,7 +28,7 @@ import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
 import com.intel.analytics.bigdl.tensor._
 import com.intel.analytics.bigdl.utils.{Engine, MklBlas, MklDnn}
 import com.intel.analytics.bigdl.utils.Util._
-import com.intel.analytics.bigdl.utils.intermediate.ReflectionUtils
+import com.intel.analytics.bigdl.utils.intermediate.{IRGraph, ReflectionUtils}
 import org.apache.commons.lang3.SerializationUtils
 import org.apache.spark.SparkContext
 import org.apache.spark.broadcast.Broadcast
@@ -133,7 +133,9 @@ private[bigdl] class ModelBroadcastImp[T: ClassTag](applyProtoBuffer: Boolean = 
    if (!m.isInstanceOf[StaticGraph[T]]) return null
     if (Engine.getEngineType() == MklDnn) {
       m.asInstanceOf[StaticGraph[T]].toIRgraph().asInstanceOf[Module[T]]
-    } else m
+    } else {
+      m
+    }
   }
   /**
    * set environment according to engine type and model type
@@ -170,6 +172,8 @@ private[bigdl] class ModelBroadcastImp[T: ClassTag](applyProtoBuffer: Boolean = 
     val convertedModel = convertion(model)
     val modelNew = if (convertedModel != null) convertedModel else model
 
+//     val modelNew = model
+
     if (applyProtoBuffer) {
       broadcastModel = sc.broadcast(ModelInfo(uuid, modelNew))
     } else {
@@ -180,14 +184,14 @@ private[bigdl] class ModelBroadcastImp[T: ClassTag](applyProtoBuffer: Boolean = 
         broadcastConsts = sc.broadcast(moduleConsts)
       }
       // broadcast weight and model
-      val weightsBias = getAndClearWeightBias(modelNew.parameters())
+      val weightsBias = getAndClearWeightBias(model.cloneModule().parameters())
       broadcastModel = sc.broadcast(ModelInfo[T](uuid, modelNew))
       broadcastParameters = sc.broadcast(weightsBias)
 
       // For quantized model if we don't clone weightsBias, the original model will be released also
       // when we delete all models used in `ModelBroadcast`.
-      putWeightBias(SerializationUtils.clone(weightsBias), modelNew)
-      initGradWeightBias(weightsBias, modelNew)
+      // putWeightBias(SerializationUtils.clone(weightsBias), modelNew)
+      // initGradWeightBias(weightsBias, modelNew)
     }
     this
   }
@@ -223,7 +227,14 @@ private[bigdl] class ModelBroadcastImp[T: ClassTag](applyProtoBuffer: Boolean = 
       }
 
       // share weight
-      putWeightBias(parameters, localModel)
+      // tests
+      if (localModel.asInstanceOf[AbstractModule[Activity, Activity, T]].isInstanceOf[IRGraph[T]]) {
+        localModel.asInstanceOf[IRGraph[T]].build()
+      }
+
+      val p1 = localModel.getParameters()._1.clone()
+       putWeightBias(parameters, localModel)
+      val p2 = localModel.getParameters()
       // share Consts
       if (localModel.isInstanceOf[Container[_, _, T]] && broadcastConsts.value.nonEmpty) {
         putConsts(localModel.asInstanceOf[Container[_, _, T]], broadcastConsts.value)
@@ -234,6 +245,9 @@ private[bigdl] class ModelBroadcastImp[T: ClassTag](applyProtoBuffer: Boolean = 
       }
       localModel
     }
+
+//    val convertedModel = convertion(model)
+//    val modelNew = if (convertedModel != null) convertedModel else model
     envSet(model)
   }
 

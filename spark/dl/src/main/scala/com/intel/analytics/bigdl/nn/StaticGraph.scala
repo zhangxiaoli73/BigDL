@@ -206,6 +206,7 @@ class StaticGraph[T: ClassTag](
     val outputsIR = outputs.toArray.map(n => nodeMap.get(n).get)
 
     val model = IRGraph(inputsIR, outputsIR, variables, true, inFormats, outFormats)
-    model.build()
+    // model.build()
+    model
   }
 }

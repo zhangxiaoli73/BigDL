@@ -56,12 +56,12 @@ object Test {
       val evaluationSet = transformer(rddData)
 
       val model = Module.loadModule[Float](param.model)
-      val modelTmp = model.cloneModule().asInstanceOf[StaticGraph[Float]].toIRgraph()
-
-      val in = Tensor[Float]( 1, 3, 224, 224).rand()
-
-      val out1 = model.forward(in)
-      val out2 = modelTmp.forward(in)
+//      val modelTmp = model.cloneModule().asInstanceOf[StaticGraph[Float]].toIRgraph()
+//
+//      val in = Tensor[Float]( 1, 3, 224, 224).rand()
+//
+//      val out1 = model.forward(in)
+//      val out2 = modelTmp.forward(in)
 
       val result = model.evaluate(evaluationSet,
         Array(new Top1Accuracy[Float], new Top5Accuracy[Float]), param.batchSize)
