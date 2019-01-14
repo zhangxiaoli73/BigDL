@@ -184,7 +184,7 @@ private[bigdl] class ModelBroadcastImp[T: ClassTag](applyProtoBuffer: Boolean = 
         broadcastConsts = sc.broadcast(moduleConsts)
       }
       // broadcast weight and model
-      val weightsBias = getAndClearWeightBias(model.cloneModule().parameters())
+      val weightsBias = getAndClearWeightBias(modelNew.parameters())
       broadcastModel = sc.broadcast(ModelInfo[T](uuid, modelNew))
       broadcastParameters = sc.broadcast(weightsBias)
 
@@ -228,13 +228,13 @@ private[bigdl] class ModelBroadcastImp[T: ClassTag](applyProtoBuffer: Boolean = 
 
       // share weight
       // tests
-      if (localModel.asInstanceOf[AbstractModule[Activity, Activity, T]].isInstanceOf[IRGraph[T]]) {
-        localModel.asInstanceOf[IRGraph[T]].build()
-      }
+//      if (localModel.asInstanceOf[AbstractModule[Activity, Activity, T]].isInstanceOf[IRGraph[T]]) {
+//        localModel.asInstanceOf[IRGraph[T]].build()
+//      }
 
-      val p1 = localModel.getParameters()._1.clone()
+      // val p1 = localModel.getParameters()._1.clone()
        putWeightBias(parameters, localModel)
-      val p2 = localModel.getParameters()
+      // val p2 = localModel.getParameters()
       // share Consts
       if (localModel.isInstanceOf[Container[_, _, T]] && broadcastConsts.value.nonEmpty) {
         putConsts(localModel.asInstanceOf[Container[_, _, T]], broadcastConsts.value)

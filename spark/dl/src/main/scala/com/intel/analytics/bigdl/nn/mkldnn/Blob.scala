@@ -61,7 +61,7 @@ private[mkldnn] class Blob(_size: Array[Int]) extends Serializable {
    */
   def setMemoryData(memoryData: MemoryData): Unit = {
     require(_memoryData == null, "You should only set once")
-    require(size().product == memoryData.shape.product, s"You may assign wrong layout")
+    require(size().product == memoryData.shape.product, s"You may assign wrong layout ${size().product} ${memoryData.shape.product}")
 
     // we should resize the tensor. Because sometimes, weight of Linear will has 4-D, where
     // the last 2 dims is 1. we should reisze it. It will not allocate a new storage because of

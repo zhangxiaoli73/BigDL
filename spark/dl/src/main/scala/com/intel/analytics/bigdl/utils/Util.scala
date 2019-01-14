@@ -183,7 +183,7 @@ object Util {
     var i = 0
     while (i < localWeightBias.length) {
       if (localWeightBias(i) != null) {
-        broadcastWeightBias(i).resizeAs(localWeightBias(i))
+        // broadcastWeightBias(i).resizeAs(localWeightBias(i))
         clearAndSet(localWeightBias(i), broadcastWeightBias(i))
       }
       i += 1
