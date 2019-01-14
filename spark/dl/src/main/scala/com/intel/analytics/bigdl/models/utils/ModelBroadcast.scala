@@ -20,13 +20,15 @@ import java.io.{IOException, ObjectInputStream, ObjectOutputStream}
 import java.util.UUID
 
 import com.intel.analytics.bigdl.Module
+import com.intel.analytics.bigdl.nn.abstractnn.{AbstractModule, Activity}
 import com.intel.analytics.bigdl.nn.{Container, Graph, StaticGraph}
 import com.intel.analytics.bigdl.nn.mkldnn.Phase.{InferencePhase, TrainingPhase}
 import com.intel.analytics.bigdl.nn.mkldnn.{DnnGraph, MklDnnContainer}
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
 import com.intel.analytics.bigdl.tensor._
-import com.intel.analytics.bigdl.utils.{Engine, MklDnn}
+import com.intel.analytics.bigdl.utils.{Engine, MklBlas, MklDnn}
 import com.intel.analytics.bigdl.utils.Util._
+import com.intel.analytics.bigdl.utils.intermediate.{IRGraph, ReflectionUtils}
 import org.apache.commons.lang3.SerializationUtils
 import org.apache.spark.SparkContext
 import org.apache.spark.broadcast.Broadcast
@@ -93,10 +95,14 @@ private[bigdl] class ModelBroadcastImp[T: ClassTag](applyProtoBuffer: Boolean = 
    * @return
    */
   private def convertion(model: Module[T]): Module[T] = {
-    println("222222222222222222")
-   val m = if (!model.isInstanceOf[Graph[T]]) model.toGraph() else model
-   if (!m.isInstanceOf[StaticGraph[T]]) return null
-    m.asInstanceOf[StaticGraph[T]].toIRgraph().asInstanceOf[Module[T]]
+    if (model.isInstanceOf[IRGraph[T]]) {
+      val g = model.asInstanceOf[IRGraph[T]]
+      if (g.graph == null) g.build() else g
+    } else {
+      val m = if (!model.isInstanceOf[Graph[T]]) model.toGraph() else model
+      if (!m.isInstanceOf[StaticGraph[T]] || Engine.getEngineType() == MklBlas) return model
+      m.asInstanceOf[StaticGraph[T]].toIRgraph().asInstanceOf[Module[T]]
+    }
   }
   /**
    * set environment according to engine type and model type
@@ -104,7 +110,6 @@ private[bigdl] class ModelBroadcastImp[T: ClassTag](applyProtoBuffer: Boolean = 
    * @return
    */
   private def envSet(model: Module[T]): Module[T] = {
-    println("dnngraph_dnngraph_dnngraph")
     val phase = if (model.isTraining()) TrainingPhase else InferencePhase
     model match {
       case container: MklDnnContainer => container.compile(phase)
@@ -130,28 +135,29 @@ private[bigdl] class ModelBroadcastImp[T: ClassTag](applyProtoBuffer: Boolean = 
   override def broadcast(sc: SparkContext, model: Module[T]): this.type = {
     CachedModels.deleteAll(uuid) // delete the models on driver
 
-    val convertedModel = convertion(model)
-    val modelNew = if (convertedModel != null) convertedModel else model
+    val converted = convertion(model)
 
     if (applyProtoBuffer) {
-      broadcastModel = sc.broadcast(ModelInfo(uuid, modelNew))
+      broadcastModel = sc.broadcast(ModelInfo(uuid, converted))
     } else {
       // broadcast Consts
-      if (modelNew.isInstanceOf[Container[_, _, T]]) {
-        val moduleConsts = getAndClearConsts(modelNew.asInstanceOf[Container[_, _, T]])
+      if (converted.isInstanceOf[Container[_, _, T]]) {
+        val moduleConsts = getAndClearConsts(converted.asInstanceOf[Container[_, _, T]])
         // TODO: broadcast Const, model structure and weight in the same broadcast.
         broadcastConsts = sc.broadcast(moduleConsts)
       }
       // broadcast weight and model
-      val weightsBias = getAndClearWeightBias(modelNew.parameters())
-      broadcastModel = sc.broadcast(ModelInfo[T](uuid, modelNew))
+      val weightsBias = getAndClearWeightBias(converted.parameters())
+
+      broadcastModel = sc.broadcast(ModelInfo[T](uuid, converted))
       broadcastParameters = sc.broadcast(weightsBias)
 
       // For quantized model if we don't clone weightsBias, the original model will be released also
       // when we delete all models used in `ModelBroadcast`.
-      putWeightBias(SerializationUtils.clone(weightsBias), modelNew)
-      initGradWeightBias(weightsBias, modelNew)
+      putWeightBias(SerializationUtils.clone(weightsBias), model)
+      initGradWeightBias(weightsBias, model)
     }
+
     this
   }
 

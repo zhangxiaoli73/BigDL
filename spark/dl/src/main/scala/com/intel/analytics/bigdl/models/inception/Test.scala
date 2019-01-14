@@ -18,8 +18,9 @@ package com.intel.analytics.bigdl.models.inception
 
 import com.intel.analytics.bigdl.dataset.{ByteRecord, DataSet}
 import com.intel.analytics.bigdl.dataset.image._
-import com.intel.analytics.bigdl.nn.Module
+import com.intel.analytics.bigdl.nn.{Module, StaticGraph}
 import com.intel.analytics.bigdl.optim.{Top1Accuracy, Top5Accuracy, Validator}
+import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.utils.Engine
 import org.apache.hadoop.io.Text
 import org.apache.log4j.{Level, Logger}
@@ -54,7 +55,14 @@ object Test {
         HFlip(0.5) -> BGRImgNormalizer(0.485, 0.456, 0.406, 0.229, 0.224, 0.225) -> BGRImgToSample()
       val evaluationSet = transformer(rddData)
 
-      val model = Module.load[Float](param.model)
+      val model = Module.loadModule[Float](param.model)
+//      val modelTmp = model.cloneModule().asInstanceOf[StaticGraph[Float]].toIRgraph()
+//
+//      val in = Tensor[Float]( 1, 3, 224, 224).rand()
+//
+//      val out1 = model.forward(in)
+//      val out2 = modelTmp.forward(in)
+
       val result = model.evaluate(evaluationSet,
         Array(new Top1Accuracy[Float], new Top5Accuracy[Float]), param.batchSize)
 

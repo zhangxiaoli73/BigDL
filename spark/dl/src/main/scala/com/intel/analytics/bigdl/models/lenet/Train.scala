@@ -46,14 +46,14 @@ object Train {
       val validationData = param.folder + "/t10k-images-idx3-ubyte"
       val validationLabel = param.folder + "/t10k-labels-idx1-ubyte"
 
-
-      val m = Module.loadModule("/home/zhangli/workspace/zoo-model/analytics-zoo_inception-v1_imagenet_0.1.0.model")
-
-      val mm = m.asInstanceOf[StaticGraph[Float]].toIRgraph()
-
-      val in = Tensor[Float](1, 3, 224, 224)
-
-      val out = mm.forward(in)
+//      val m = Module.loadModule("
+      // /home/zhangli/workspace/zoo-model/analytics-zoo_inception-v1_imagenet_0.1.0.model")
+//
+//      val mm = m.asInstanceOf[StaticGraph[Float]].toIRgraph()
+//
+//      val in = Tensor[Float](1, 3, 224, 224)
+//
+//      val out = mm.forward(in)
 
       val model = if (param.modelSnapshot.isDefined) {
         Module.load[Float](param.modelSnapshot.get)
