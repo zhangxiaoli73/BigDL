@@ -94,6 +94,10 @@ class ThreadPool(private var poolSize: Int) {
       val tid = Thread.currentThread().getId()
       logger.info(s"Set mkl threads to $size on thread $tid")
     }(context)).foreach(Await.result(_, Duration.Inf))
+
+    invokeAndWait2 ((0 until poolSize).map( _ => () => {
+      ThreadPool.setThreadsOfBackend(size)
+    }))
     this
   }
 

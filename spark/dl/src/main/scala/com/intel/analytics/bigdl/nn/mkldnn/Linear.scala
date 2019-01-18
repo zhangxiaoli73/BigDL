@@ -55,20 +55,15 @@ class Linear(
   override def reset(): Unit = {
     if (initWeight == null) {
       weightInitMethod.init(weight.dense, VariableFormat.OUT_IN)
-      weight.syncToNative()
     } else {
-      weight.copy(initWeight)
+      weight.dense.copy(initWeight)
     }
 
     if (initBias == null) {
       biasInitMethod.init(bias.dense, VariableFormat.ONE_D)
-      bias.syncToNative()
     } else {
-      bias.copy(initBias)
+      bias.dense.copy(initBias)
     }
-
-    gradWeight.zero()
-    gradBias.zero()
   }
 
   override private[mkldnn] def initFwdPrimitives(inputs: Array[MemoryData], phase: Phase) = {
@@ -105,6 +100,12 @@ class Linear(
     require(weight.size().product == realWei.shape.product,
       s"${getName} weight shape is not correct.")
 
+    weight.createNative()
+    bias.createNative()
+
+    weight.syncToNative()
+    bias.syncToNative()
+
     weight.setMemoryData(realWei)
     bias.setMemoryData(bis)
 
@@ -118,7 +119,7 @@ class Linear(
 
     updateOutputMemoryPrimitives = srcs ++ dsts
     updateOutputPrimitives = Array(primitive)
-    output = initTensor(dst)
+    output = initTensor(realDst)
 
     _inputFormats = Array(realSrc)
     _outputFormats = Array(realDst)
@@ -216,8 +217,10 @@ class Linear(
       MemoryData.operationWant(gradWeightPrimDesc, x)
     }
 
-    gradWeight.setMemoryData(realWei)
-    gradBias.setMemoryData(bis)
+    gradWeight.createNative()
+    gradBias.createNative()
+    gradWeight.zero()
+    gradBias.zero()
 
     val srcs = Array(inputFormats()(0).getPrimitive(runtime), realDiffDst.getPrimitive(runtime))
     val indexes = Array.fill(srcs.length)(0)

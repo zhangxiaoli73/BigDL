@@ -73,13 +73,17 @@ object Predictor {
     (implicit ev: TensorNumeric[T]): Array[Activity] = {
     val result = if (shareBuffer) output else output.clone
 
-    val out = if (batchSize == 1) {
+    val out = if (batchSize == 1 && result.size(1) == 1) {
       Array(result.squeeze)
     } else {
       val size = result.size(1)
-      require(batchSize == size,
-        s"The batchSize is required to be $size, while actual is $batchSize")
-      result.split(1)
+//      println("size " + size + " batchSize " + batchSize)
+//      require(batchSize == size,
+//        s"The batchSize is required to be $size, while actual is $batchSize")
+      // if (batchSize < size)
+      if (batchSize == size) result.split(1)
+      else result.narrow(1, 1, batchSize).split(1)
+      // result.split(1)
     }
 
     out.asInstanceOf[Array[Activity]]
@@ -134,6 +138,10 @@ object Predictor {
       val localToBatch = toBatchBroad.value._1.cloneTransformer()
 
       partition.grouped(localBatchPerPartition).flatMap(imageFeatures => {
+//        println("imageFeatures " + imageFeatures.length)
+//        if (imageFeatures.length == 1) {
+//          val tmp = 0
+//        }
         Predictor.predictImageBatch[T](localModel, imageFeatures, outputLayer, predictKey,
           localToBatch, shareBuffer)
         imageFeatures

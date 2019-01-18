@@ -16,6 +16,8 @@
 
 package com.intel.analytics.bigdl.nn.mkldnn
 
+import com.intel.analytics.bigdl.mkl.Memory
+import com.intel.analytics.bigdl.nn.mkldnn.Phase.{InferencePhase, TrainingPhase}
 import com.intel.analytics.bigdl.tensor.{DnnTensor, Tensor}
 
 /**
@@ -34,22 +36,34 @@ import com.intel.analytics.bigdl.tensor.{DnnTensor, Tensor}
  */
 private[mkldnn] class Blob(_size: Array[Int]) extends Serializable {
   val dense: Tensor[Float] = Tensor[Float](_size)
-  val native: DnnTensor[Float] = DnnTensor[Float](_size)
 
+  @transient var native: DnnTensor[Float] = _
+  @transient private var _heapData: HeapData = null
+  @transient private var _nativeData: NativeData = null
+  @transient private var _reorderForward: ReorderMemory = null
+  @transient private var _reorderBackward: ReorderMemory = null
   @transient private var _memoryData: MemoryData = _
 
   /**
    * it will copy the dense tensor to native tensor before `submit` reads the native tensor
    */
   def syncToNative(): Unit = {
-    native.copy(dense)
+    if (_reorderForward == null) {
+      native.copy(dense)
+    } else {
+      _reorderForward.forward(this.dense).asInstanceOf[DnnTensor[Float]]
+    }
   }
 
   /**
    * it will copy the native tensor to dense tensor after `submit` updates the native tensor
    */
   def syncToHeap(): Unit = {
-    dense.copy(native)
+    if (_reorderBackward == null) {
+      dense.copy(native)
+    } else {
+      _reorderBackward.forward(this.native).asInstanceOf[Tensor[Float]]
+    }
   }
 
   /**
@@ -72,7 +86,7 @@ private[mkldnn] class Blob(_size: Array[Int]) extends Serializable {
 
   def memoryData(): MemoryData = {
     require(_memoryData != null, "You should setMemoryData first")
-    _memoryData
+    _heapData
   }
 
   def isMemoryDataSet(): Boolean = {
@@ -83,6 +97,30 @@ private[mkldnn] class Blob(_size: Array[Int]) extends Serializable {
     }
   }
 
+  def setMemoryData(dense: HeapData, native: NativeData, runtime: MklDnnRuntime): Unit = {
+    _heapData = dense
+    _nativeData = native
+
+    _reorderForward = ReorderMemory(_nativeData)
+    _reorderForward.setRuntime(runtime)
+    _reorderForward.initFwdPrimitives(Array(_heapData), InferencePhase)
+
+    this.native = _reorderForward.updateOutput(this.dense).asInstanceOf[DnnTensor[Float]]
+
+    _reorderBackward = ReorderMemory(_heapData)
+    _reorderBackward.setRuntime(runtime)
+    _reorderBackward.initFwdPrimitives(Array(_nativeData), InferencePhase)
+    _reorderBackward.output.toTensor[Float].set(this.dense)
+
+    // TODO delete this
+    _memoryData = native
+
+  }
+
+  def createNative(): Unit = {
+    native = DnnTensor[Float](dense.size())
+  }
+
   def zero(): Unit = {
     dense.zero()
     native.zero()
@@ -90,7 +128,6 @@ private[mkldnn] class Blob(_size: Array[Int]) extends Serializable {
 
   def copy(t: Tensor[Float]): Unit = {
     dense.copy(t)
-    native.copy(t)
   }
 
   def size(): Array[Int] = {
@@ -101,5 +138,9 @@ private[mkldnn] class Blob(_size: Array[Int]) extends Serializable {
     dense.size(index)
   }
 
-  def release(): Unit = native.release()
+  def release(): Unit = {
+    if (native != null) {
+      native.release()
+    }
+  }
 }

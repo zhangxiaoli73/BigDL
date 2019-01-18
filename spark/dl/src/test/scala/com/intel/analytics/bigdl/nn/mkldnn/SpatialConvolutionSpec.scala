@@ -56,10 +56,10 @@ class SpatialConvolutionSpec extends FlatSpec with Matchers {
       conv.gradInputFormats()(0))
     conv.accGradParameters(input, gradOutput)
 
-    val weight1 = Tools.toOIHW(conv.weight.native, conv.parametersWithShape()._1(0))
-    val gradweight1 = Tools.toOIHW(conv.gradWeight.native, conv.parametersWithShape()._2(0))
-    val bias1 = Tools.dense(conv.bias.native).toTensor[Float]
-    val gradbias1 = Tools.dense(conv.gradBias.dense).toTensor
+    val weight1 = conv.weight.dense
+    val gradweight1 = conv.gradWeight.dense
+    val bias1 = conv.bias.dense
+    val gradbias1 = conv.gradBias.dense
 
     val output2 = layer.forward(input)
     val grad2 = layer.updateGradInput(input, gradOutput)
@@ -258,8 +258,7 @@ class SpatialConvolutionSpec extends FlatSpec with Matchers {
 
     model2.compile(TrainingPhase)
 
-    val initWeight = Tools.fromOIHW(weightAll1(0), conv.parametersWithShape()._1(0))
-    conv.weight.copy(initWeight)
+    conv.weight.dense.copy(model1.weight)
     conv.bias.copy(model1.bias)
 
     RNG.setSeed(1)
@@ -288,8 +287,8 @@ class SpatialConvolutionSpec extends FlatSpec with Matchers {
     val gw1 = model1.gradWeight
     val gb1 = model1.gradBias
 
-    val gw2 = Tools.toOIHW(conv.gradWeight.native, conv.parametersWithShape()._2(0))
-    val gb2 = Tools.dense(conv.gradBias.native).toTensor
+    val gw2 = conv.gradWeight.dense
+    val gb2 = conv.gradBias.dense
 
     Equivalent.nearequals(gw1, gw2, 1e-4) should be(true)
     Equivalent.nearequals(gb1, gb2, 1e-3) should be(true)
@@ -565,6 +564,40 @@ class SpatialConvolutionSpec extends FlatSpec with Matchers {
     Tools.dense(conv1.gradInput) should be (Tools.dense(conv2.gradInput))
 
     conv1.parameters()._2.zip(conv2.parameters()._2).foreach(x => x._1 should be (x._2))
+  }
+
+  "lenet conv1" should "work correctly" in {
+    // test the padding tensor
+    val inputShape = Array(4, 1, 28, 28)
+    val outputShape = Array(4, 20, 24, 24)
+    val dnn = SpatialConvolution(1, 20, 5, 5)
+    val blas = com.intel.analytics.bigdl.nn.SpatialConvolution[Float](1, 20, 5, 5)
+
+    val model = Sequential()
+      .add(Input(inputShape, Memory.Format.nchw))
+      .add(dnn)
+      .add(ReorderMemory(HeapData(outputShape, Memory.Format.nchw)))
+
+    model.compile(TrainingPhase)
+
+    val input = Tensor[Float](4, 1, 28, 28).rand(-1, 1)
+    val gradOutput = Tensor[Float](outputShape).rand(-1, 1)
+
+    model.forward(input)
+    model.updateGradInput(input, gradOutput)
+    model.accGradParameters(input, gradOutput)
+
+    blas.getParameters()._1.copy(dnn.getParameters()._1)
+
+    blas.forward(input)
+    blas.updateGradInput(input, gradOutput)
+    blas.accGradParameters(input, gradOutput)
+
+    Equivalent.nearequals(model.output.toTensor, blas.output) should be (true)
+    Equivalent.nearequals(model.gradInput.toTensor, blas.gradInput) should be (true)
+    Equivalent.nearequals(model.getParameters()._1, blas.getParameters()._1) should be (true)
+    // control the epsilon to 1e-4, not 1e-5
+    Equivalent.nearequals(model.getParameters()._2, blas.getParameters()._2, 1e-4) should be (true)
   }
 
   def prototxt(inputShape: Array[Int], name: String,

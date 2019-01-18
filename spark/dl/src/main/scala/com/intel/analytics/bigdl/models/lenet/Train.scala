@@ -19,9 +19,10 @@ package com.intel.analytics.bigdl.models.lenet
 import com.intel.analytics.bigdl._
 import com.intel.analytics.bigdl.dataset.DataSet
 import com.intel.analytics.bigdl.dataset.image.{BytesToGreyImg, GreyImgNormalizer, GreyImgToBatch}
-import com.intel.analytics.bigdl.nn.{ClassNLLCriterion, CrossEntropyCriterion, Module}
+import com.intel.analytics.bigdl.nn.{ClassNLLCriterion, CrossEntropyCriterion, Module, StaticGraph}
 import com.intel.analytics.bigdl.numeric.NumericFloat
 import com.intel.analytics.bigdl.optim._
+import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.utils._
 import org.apache.log4j.{Level, Logger}
 import org.apache.spark.SparkContext
@@ -45,16 +46,27 @@ object Train {
       val validationData = param.folder + "/t10k-images-idx3-ubyte"
       val validationLabel = param.folder + "/t10k-labels-idx1-ubyte"
 
+//      val m = Module.loadModule("
+      // /home/zhangli/workspace/zoo-model/analytics-zoo_inception-v1_imagenet_0.1.0.model")
+//
+//      val mm = m.asInstanceOf[StaticGraph[Float]].toIRgraph()
+//
+//      val in = Tensor[Float](1, 3, 224, 224)
+//
+//      val out = mm.forward(in)
+
       val model = if (param.modelSnapshot.isDefined) {
         Module.load[Float](param.modelSnapshot.get)
       } else {
         if (param.graphModel) {
           LeNet5.graph(classNum = 10)
         } else {
-          Engine.getEngineType() match {
-            case MklBlas => LeNet5(10)
-            case MklDnn => LeNet5.dnnGraph(param.batchSize / Engine.nodeNumber(), 10)
-          }
+          LeNet5.graph(10)
+//
+//          Engine.getEngineType() match {
+//            case MklBlas => LeNet5(10)
+//            case MklDnn => LeNet5.dnnGraph(param.batchSize / Engine.nodeNumber(), 10)
+//          }
         }
       }
       val criterion = Engine.getEngineType() match {

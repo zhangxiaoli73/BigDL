@@ -96,7 +96,6 @@ class ReorderMemory(inputFormat: MemoryData, outputFormat: MemoryData,
   }
   override def updateOutput(input: Activity): Activity = {
     output = super.updateOutput(input)
-    output.toTensor[Float].resize(_outputFormats(0).shape)
     output
   }
 
@@ -145,7 +144,6 @@ class ReorderMemory(inputFormat: MemoryData, outputFormat: MemoryData,
 
   override def updateGradInput(input: Activity, gradOutput: Activity): Activity = {
     gradInput = super.updateGradInput(input, gradOutput)
-    gradInput.toTensor[Float].resize(_gradInputFormats(0).shape)
     gradInput
   }
 

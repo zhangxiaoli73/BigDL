@@ -62,6 +62,10 @@ class SpatialConvolution(
 
   private var weightForBackward: DnnTensor[Float] = _
   private var weightForBackwardMemoryData: MemoryData = _
+
+  private var inputForAcc: DnnTensor[Float] = _
+  private var inputForAccMemoryData: MemoryData = _
+
   @transient private var forwardPrimDesc: Long = 0L
 
   @transient private var updateOutputMemoryPrimitives: Array[Long] = _
@@ -127,20 +131,15 @@ class SpatialConvolution(
       } else {
         VariableFormat.GP_OUT_IN_KW_KH
       })
-      weight.syncToNative()
     } else {
-      weight.copy(initWeight)
+      weight.dense.copy(initWeight)
     }
 
     if (initBias == null) {
       biasInitMethod.init(bias.dense, VariableFormat.ONE_D)
-      bias.syncToNative()
     } else {
-      bias.copy(initBias)
+      bias.dense.copy(initBias)
     }
-
-    gradWeight.zero()
-    gradBias.zero()
   }
 
   override private[mkldnn] def initFwdPrimitives(inputs: Array[MemoryData], phase: Phase) = {
@@ -203,8 +202,17 @@ class SpatialConvolution(
       MemoryData.operationWant(forwardPrimDesc, x)
     }
 
-    weight.setMemoryData(realWei)
-    bias.setMemoryData(bis)
+    // by default, the initial weight is oihw / goihw format.
+    val defaultWeightLayout = if (nGroup == 1) {
+      Memory.Format.oihw
+    } else {
+      Memory.Format.goihw
+    }
+
+    weight.setMemoryData(HeapData(weight.dense.size(), defaultWeightLayout),
+      realWei, runtime)
+    bias.setMemoryData(HeapData(bias.dense.size(), Memory.Format.x),
+      bis, runtime)
 
     val srcs = Array(realSrc.getPrimitive(runtime), realWei.getPrimitive(runtime),
       bis.getPrimitive(runtime))
@@ -216,21 +224,7 @@ class SpatialConvolution(
 
     updateOutputMemoryPrimitives = srcs ++ dsts
     updateOutputPrimitives = Array(primitive)
-    output = initTensor(dst)
-
-    // by default, the initial weight is oihw / goihw format.
-    val defaultWeightLayout = if (nGroup == 1) {
-      Memory.Format.oihw
-    } else {
-      Memory.Format.goihw
-    }
-    if (realWei.layout != defaultWeightLayout) {
-      val srcFormat = HeapData(realWei.shape, defaultWeightLayout)
-      val dstFormat = HeapData(realWei.shape, realWei.layout)
-      reorderManager.register(srcFormat, dstFormat)
-      val result = reorderManager.infer(Array(srcFormat), Array(dstFormat), weight.dense)
-      weight.dense.copy(result.toTensor)
-    }
+    output = initTensor(realDst)
 
     _inputFormats = Array(realSrc)
     _outputFormats = Array(realDst)
@@ -293,8 +287,7 @@ class SpatialConvolution(
 
     reorderManager.register(weight.memoryData(), realWei)
 
-    val srcs = Array(realDiffDst.getPrimitive(runtime), realWei.getPrimitive(runtime),
-      inputFormats()(0).getPrimitive(runtime))
+    val srcs = Array(realDiffDst.getPrimitive(runtime), realWei.getPrimitive(runtime))
     val indexes = Array.fill(srcs.length)(0)
     val dsts = Array(realDiffSrc.getPrimitive(runtime))
 
@@ -303,34 +296,44 @@ class SpatialConvolution(
 
     updateGradInputMemoryPrimitives = srcs ++ dsts
     updateGradInputPrimitives = Array(primitive)
-    gradInput = initTensor(realDiffSrc)
+     gradInput = initTensor(realDiffSrc)
+//    gradInput = DnnTensor[Float](100, 100, 100, 100)
 
     _gradInputFormats = Array(realDiffSrc)
     _gradOutputFormats = Array(realDiffDst)
     (_gradOutputFormats, _gradInputFormats)
   }
 
+//  val tmp = DnnTensor[Float](200, 100, 100, 100)
   override def updateGradInput(input: Activity, gradOutput: Activity): Activity = {
     weightForBackward = reorderManager.infer(Array(weight.memoryData()),
-      Array(weightForBackwardMemoryData), weight.native).asInstanceOf[DnnTensor[Float]]
+      Array(weightForBackwardMemoryData), weight.dense).asInstanceOf[DnnTensor[Float]]
+
+//    if (weightForBackward == null) {
+//      val tensor = Tensor[Float](Array(100, 100, 100, 100)).fill(1.0f)
+//      weightForBackward = DnnTensor[Float](Array(100, 100, 100, 100))
+//      weightForBackward.copy(tensor)
+//    }
+
+//    println(weightForBackward.storageAddress())
 
     if (updateGradInputTensors == null) {
       val buffer = new ArrayBuffer[Tensor[Float]]()
       buffer.append(gradOutput.asInstanceOf[Tensor[Float]])
       buffer.append(weightForBackward)
-      buffer.append(input.asInstanceOf[Tensor[Float]])
       buffer.append(gradInput.asInstanceOf[Tensor[Float]])
       updateGradInputTensors = buffer.toArray
     }
 
-    updateWithNewTensor(updateGradInputTensors, 2, input)
     updateWithNewTensor(updateGradInputTensors, 0, gradOutput)
+    updateWithNewTensor(updateGradInputTensors, 1, weightForBackward)
 
     MklDnnOps.streamSubmit(runtime.stream, 1, updateGradInputPrimitives,
       updateGradInputPrimitives.length, updateGradInputMemoryPrimitives, updateGradInputTensors)
 
     gradInput
   }
+
   override private[mkldnn] def initGradWPrimitives(grad: Array[MemoryData],
     phase: Phase): Array[MemoryData] = {
     val inputShape = inputFormats()(0).shape
@@ -355,11 +358,20 @@ class SpatialConvolution(
         MemoryData.operationWant(gradWeightPrimDesc, x)
       }
 
-    gradWeight.setMemoryData(realWei)
-    gradBias.setMemoryData(bis)
+    // by default, the initial weight is oihw / goihw format.
+    val defaultWeightLayout = if (nGroup == 1) {
+      Memory.Format.oihw
+    } else {
+      Memory.Format.goihw
+    }
 
-    require(weight.memoryData().layout == gradWeight.memoryData().layout,
-      s"layout should be the same")
+    gradWeight.setMemoryData(
+      HeapData(gradWeight.dense.size(), defaultWeightLayout), realWei, runtime)
+    gradBias.setMemoryData(
+      HeapData(gradBias.dense.size(), Memory.Format.x), bis, runtime)
+
+    inputForAccMemoryData = realSrc
+    reorderManager.register(inputFormats()(0), realSrc)
 
     val srcs = Array(realSrc.getPrimitive(runtime), realDiffDst.getPrimitive(runtime))
     val indexes = Array.fill(srcs.length)(0)
@@ -376,16 +388,18 @@ class SpatialConvolution(
   }
 
   override def accGradParameters(input: Activity, gradOutput: Activity): Unit = {
+    inputForAcc = reorderManager.infer(Array(inputFormats()(0)),
+      Array(inputForAccMemoryData), input).asInstanceOf[DnnTensor[Float]]
     if (updateGradWTensors == null) {
       val buffer = new ArrayBuffer[Tensor[Float]]()
-      buffer.append(input.asInstanceOf[Tensor[Float]])
+      buffer.append(inputForAcc.asInstanceOf[Tensor[Float]])
       buffer.append(gradOutput.asInstanceOf[Tensor[Float]])
       buffer.append(gradWeight.native)
       buffer.append(gradBias.native)
       updateGradWTensors = buffer.toArray
     }
 
-    updateWithNewTensor(updateGradWTensors, 0, input)
+    updateWithNewTensor(updateGradWTensors, 0, inputForAcc)
     updateWithNewTensor(updateGradWTensors, 1, gradOutput)
 
     MklDnnOps.streamSubmit(runtime.stream, 1, accGradientPrimitives,
@@ -420,20 +434,6 @@ class SpatialConvolution(
     super.release()
     List(weight, bias, gradWeight, gradBias).foreach(_.release())
     if (weightForBackward != null) { weightForBackward.release() }
-  }
-
-  @throws(classOf[IOException])
-  private def writeObject(out: ObjectOutputStream): Unit = {
-    if (weight.isMemoryDataSet() && weight.memoryData().layout != Memory.Format.oihw) {
-      val srcFormat = HeapData(weight.memoryData().shape, weight.memoryData().layout)
-      val dstFormat = HeapData(weight.memoryData().shape, Memory.Format.oihw)
-
-      reorderManager.register(srcFormat, dstFormat)
-      val result = reorderManager.infer(Array(srcFormat), Array(dstFormat), weight.dense)
-      weight.dense.copy(result.toTensor)
-    }
-
-    out.defaultWriteObject()
   }
 }
 

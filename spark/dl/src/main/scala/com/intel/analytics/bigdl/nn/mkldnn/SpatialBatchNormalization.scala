@@ -86,16 +86,11 @@ class SpatialBatchNormalization(
       biasInitMethod.init(bias, VariableFormat.ONE_D)
     }
 
-    weightAndBias.copy(init.view(2 * nOutput))
+    weightAndBias.dense.copy(init.view(2 * nOutput))
 
     val zeros = Tensor[Float](Array(nOutput)).fill(0)
     mean.copy(zeros)
     variance.copy(zeros)
-
-    runningMean.zero()
-    runningVariance.zero()
-
-    gradWeightAndBias.zero()
   }
 
   private object Index extends Serializable {
@@ -196,6 +191,21 @@ class SpatialBatchNormalization(
       updateOutputTensors = null
     }
 
+    if (this.weightAndBias.native == null) {
+      this.weightAndBias.createNative()
+      this.weightAndBias.syncToNative()
+      this.runningMean.createNative()
+      this.runningVariance.createNative()
+      this.runningMean.zero()
+      this.runningVariance.zero()
+    }
+
+    (isTraining(), phase) match {
+      case (true, InferencePhase) => train = false
+      case (false, TrainingPhase) => train = true
+      case _ =>
+    }
+
     (inputFormats(), outputFormats())
   }
 
@@ -285,6 +295,9 @@ class SpatialBatchNormalization(
     updateGradInputMemoryPrimitives = srcs ++ dsts
     updateGradInputPrimitives = Array(primitive)
     gradInput = initTensor(gradInputFormats()(0))
+
+    this.gradWeightAndBias.createNative()
+    this.gradWeightAndBias.zero()
 
     (_gradOutputFormats, gradInputFormats())
   }

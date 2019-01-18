@@ -61,14 +61,20 @@ private[bigdl] class IRGraph[T: ClassTag](
   require(outputFormats.length == outputs.length, s"IRGraph: outputFormats" +
     s"length ${inputFormats.length} should be same with input nodes length ${outputs.length}")
 
-  private var graph: Graph[T] = null
+  private[bigdl] var graph: Graph[T] = null
 
   override def updateOutput(input: Activity): Activity = {
     if (graph == null) {
       throw new UnsupportedOperationException("forward not supported, Please build graph first")
     }
+//    val poolSize = 1
+//    Engine.default.invokeAndWait2((0 until poolSize).map( _ => () => {
+//      initFwdPrimitives(input)
+//      output = graph.updateOutput(input)
+//    }))
     initFwdPrimitives(input)
     output = graph.updateOutput(input)
+
     output
   }
 
@@ -89,8 +95,9 @@ private[bigdl] class IRGraph[T: ClassTag](
     graph.accGradParameters(input, gradOutput)
   }
 
-  def build(dnnMode: Boolean = false): Unit = {
-    graph = new IRConverter[T](this).toGraph(dnnMode)
+  def build(): this.type = {
+    graph = new IRConverter[T](this).toGraph()
+    this
   }
 
   override def parameters(): (Array[Tensor[T]], Array[Tensor[T]]) = {
@@ -117,7 +124,10 @@ private[bigdl] class IRGraph[T: ClassTag](
     if (!initFwd && graph.isInstanceOf[DnnGraph]) {
       val inputMemory = new Array[MemoryData](inputFormats.length)
       if (input.isInstanceOf[Tensor[T]]) {
-        inputMemory(0) = HeapData(input.toTensor[T].size(), inputFormats(0))
+        // todo: handle for 3 dimensions, expand 3 dims to 4 dims
+        val size = input.toTensor[T].size()
+        val sizeNew = if (size.length == 3)  Array(size(0), 1, size(1), size(2)) else size
+        inputMemory(0) = HeapData(sizeNew, inputFormats(0))
       } else {
         val tensors = input.toTable
         require(tensors.length() == inputFormats.length, s"table input length " +
