@@ -160,6 +160,9 @@ class LookupTableSparse[T: ClassTag](
 
   override def updateGradInput(input: Activity, gradOutput: Tensor[T]): Activity = {
     // Input is not derivable
+    // gradInput = input
+    // if (gradInput == null) gradInput = Tensor[T]()
+    // gradInput.asInstanceOf[Tensor[T]].resizeAs(input.toTensor[T]).zero()
     gradInput
   }
 

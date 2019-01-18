@@ -90,15 +90,15 @@ class MapTable[T: ClassTag](
     gradInput
   }
 
-  override def accGradParameters(input: Table, gradOutput: Table): Unit = {
-    require(module != null, "Single module required")
-    extend(input.length())
-    var i = 0
-    while (i < input.length()) {
-      modules(i).accGradParameters(input(i + 1), gradOutput(i + 1))
-      i += 1
-    }
-  }
+//  override def accGradParameters(input: Table, gradOutput: Table): Unit = {
+//    require(module != null, "Single module required")
+//    extend(input.length())
+//    var i = 0
+//    while (i < input.length()) {
+//      modules(i).accGradParameters(input(i + 1), gradOutput(i + 1))
+//      i += 1
+//    }
+//  }
 
   override def getEndNodes(startNodes: Array[ModuleNode[T]]): Array[ModuleNode[T]] = {
     throw new IllegalArgumentException("Can not transform Container MapTable to graph")
