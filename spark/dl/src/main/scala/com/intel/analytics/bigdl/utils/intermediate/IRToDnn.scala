@@ -109,8 +109,8 @@ private[bigdl] class IRToDnn extends ConvertBase[IRElement[Float], Module[Float]
 
   private def fromSpatialConvolution(node: IRElement[Float]) : Module[Float] = {
     val t = node.getOp().asInstanceOf[IRSpatialConvolution[Float]]
-    require(t.wRegularizer == null && t.bRegularizer == null,
-      "Dnn SpatialConvolution can not support Regularizer")
+//    require(t.wRegularizer == null && t.bRegularizer == null,
+//      "Dnn SpatialConvolution can not support Regularizer")
     require(t.format == DataFormat.NCHW, "Dnn SpatialConvolution only supports NCHW")
     ReflectionUtils.reflectFromIR(node, Class.forName(prefix + "SpatialConvolution"))
   }
@@ -173,8 +173,8 @@ private[bigdl] class IRToDnn extends ConvertBase[IRElement[Float], Module[Float]
 
   private def fromLinear(node: IRElement[Float]) : Module[Float] = {
     val t = node.getOp().asInstanceOf[IRLinear[Float]]
-    require(t.wRegularizer == null && t.bRegularizer == null,
-      "Dnn Linear can not support Regularizer")
+//    require(t.wRegularizer == null && t.bRegularizer == null,
+//      "Dnn Linear can not support Regularizer")
     ReflectionUtils.reflectFromIR(node, Class.forName(prefix + "Linear"))
   }
 
@@ -190,8 +190,8 @@ private[bigdl] class IRToDnn extends ConvertBase[IRElement[Float], Module[Float]
     try {
       layer.getOp() match {
         case conv: IRSpatialConvolution[Float] =>
-          require(conv.wRegularizer == null
-            && conv.bRegularizer == null && conv.format == DataFormat.NCHW)
+//          require(conv.wRegularizer == null
+//            && conv.bRegularizer == null && conv.format == DataFormat.NCHW)
         case maxPool: IRSpatialMaxPooling[Float] =>
           require(maxPool.format == DataFormat.NCHW)
         case avgPool: IRSpatialAveragePooling[Float] =>
@@ -201,7 +201,7 @@ private[bigdl] class IRToDnn extends ConvertBase[IRElement[Float], Module[Float]
         case lrn: IRSpatialCrossMapLRN[Float] =>
           require(lrn.format == DataFormat.NCHW)
         case linear: IRLinear[Float] =>
-          require(linear.wRegularizer == null && linear.bRegularizer == null)
+//          require(linear.wRegularizer == null && linear.bRegularizer == null)
         case join: IRJoinTable[Float] =>
           require(join.nInputDims == 0)
         case _ => null
