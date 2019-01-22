@@ -157,8 +157,8 @@ private[bigdl] class ModelBroadcastImp[T: ClassTag](applyProtoBuffer: Boolean = 
 
       // For quantized model if we don't clone weightsBias, the original model will be released also
       // when we delete all models used in `ModelBroadcast`.
-      putWeightBias(SerializationUtils.clone(weightsBias), model)
-      initGradWeightBias(weightsBias, model)
+      putWeightBias(SerializationUtils.clone(weightsBias), converted)
+      initGradWeightBias(weightsBias, converted)
     }
 
     this

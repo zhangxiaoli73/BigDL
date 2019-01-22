@@ -120,6 +120,14 @@ private[bigdl] class IRGraph[T: ClassTag](
     this
   }
 
+  override def getTimes(): Array[(AbstractModule[_ <: Activity, _ <: Activity, T], Long, Long)] = {
+    graph.getTimes()
+  }
+
+  override def resetTimes(): Unit = {
+    graph.resetTimes()
+  }
+
   private def initFwdPrimitives(input: Activity): Unit = {
     if (!initFwd && graph.isInstanceOf[DnnGraph]) {
       val inputMemory = new Array[MemoryData](inputFormats.length)

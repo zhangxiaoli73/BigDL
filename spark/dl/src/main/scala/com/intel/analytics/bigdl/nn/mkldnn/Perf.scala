@@ -135,7 +135,7 @@ case class ResNet50PerfParams (
   batchSize: Int = 16,
   iteration: Int = 50,
   training: Boolean = true,
-  model: String = "vgg16"
+  model: String = "resnet50"
 )
 
 object ResNet {

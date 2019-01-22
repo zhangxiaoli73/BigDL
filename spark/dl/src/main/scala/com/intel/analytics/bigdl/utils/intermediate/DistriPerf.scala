@@ -28,7 +28,7 @@ import com.intel.analytics.bigdl.models.resnet.ResNet
 import com.intel.analytics.bigdl.models.resnet.ResNet.{DatasetType, ShortcutType}
 import com.intel.analytics.bigdl.models.utils.ModelBroadcast
 import com.intel.analytics.bigdl.nn.{Graph, Module, StaticGraph}
-import com.intel.analytics.bigdl.nn.abstractnn.Activity
+import com.intel.analytics.bigdl.nn.abstractnn.{AbstractModule, Activity}
 import com.intel.analytics.bigdl.nn.mkldnn.{DnnGraph, Phase}
 import com.intel.analytics.bigdl.nn.mkldnn.Phase.InferencePhase
 import com.intel.analytics.bigdl.nn.mkldnn.models.Vgg_16
@@ -74,6 +74,29 @@ object DistriPerf {
     val conv = mkldnn.SpatialConvolution(512, 126, 3, 3, 1, 1).inputs(input)
     val out = mkldnn.Output(Memory.Format.nchw).inputs(conv)
     DnnGraph(Array(input), Array(out))
+  }
+
+  def getTopTimes(times: Array[(AbstractModule[_ <: Activity, _ <: Activity, Float],
+    Long, Long)], allSum: Long): Unit = {
+    var forwardSum = 0L
+    var backwardSum = 0L
+    times.foreach(x => {
+      forwardSum += x._2
+      backwardSum += x._3
+    })
+    println(s"forwardSum = ${forwardSum}", s"backwardSum = ${backwardSum}")
+
+    val timeBuffer = new ArrayBuffer[(AbstractModule[_ <: Activity,
+      _ <: Activity, Float], Long)]
+    var i = 0
+    while (i < times.length) {
+      val rate = times(i)._2.toDouble/ allSum
+      timeBuffer.append((times(i)._1, times(i)._2))
+      i += 1
+    }
+    val sortData = timeBuffer.sortBy(a => a._2)
+    println("111111111111111111        ")
+    sortData.foreach(println)
   }
 
   def predict(model: Module[Float], input: MiniBatch[Float],
@@ -139,7 +162,12 @@ object DistriPerf {
           localModel.evaluate()
         }
         for (i <- 0 to params.iteration) {
+          val s1 = System.nanoTime()
           val output = localModel.forward(data.getInput()).toTensor[Float]
+          val e1 = System.nanoTime() - s1
+          getTopTimes(localModel.getTimes(), e1)
+          localModel.resetTimes()
+          println(s"iteration time ${e1}")
         }
         1
       }))
