@@ -52,14 +52,18 @@ class SpatialBatchNormalization(
   private val mean: DnnTensor[Float] = DnnTensor[Float](nOutput)
   private val variance: DnnTensor[Float] = DnnTensor[Float](nOutput)
 
+
+  private var meanDense: Tensor[Float] = null
+  private var varianceDense: Tensor[Float] = null
+
   private[mkldnn] val runningMean = new Blob(Array(nOutput))
   private[mkldnn] val runningVariance = new Blob(Array(nOutput))
   // TODO we should make it private. Currently, ResNet50 will use it out of this scope.
   val weightAndBias = new Blob(Array(nOutput * 2))
   val gradWeightAndBias = new Blob(Array(nOutput * 2))
 
-  var scaleFactor: Float = 0.0f
-  var biasFactor: Float = 0.0f
+  var scaleFactor: Float = 1.0f
+  var biasFactor: Float = 1.0f
 
   {
     val wInit = Ones // RandomUniform(0, 1)
@@ -196,8 +200,8 @@ class SpatialBatchNormalization(
       this.weightAndBias.syncToNative()
       this.runningMean.createNative()
       this.runningVariance.createNative()
-      this.runningMean.zero()
-      this.runningVariance.zero()
+//      this.runningMean.zero()
+//      this.runningVariance.zero()
     }
 
     (isTraining(), phase) match {
@@ -235,6 +239,8 @@ class SpatialBatchNormalization(
     } else {
       // we should re-computing the running mean and running variance.
       // FIXME should do it at `initFwdPrimitives`
+      runningMean.syncToNative()
+      runningVariance.syncToNative()
       mean.scale(runningMean.native, 1 / scaleFactor)
       variance.scale(runningVariance.native, 1 / scaleFactor)
     }

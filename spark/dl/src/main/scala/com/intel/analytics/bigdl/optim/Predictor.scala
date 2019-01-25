@@ -23,7 +23,7 @@ import com.intel.analytics.bigdl.nn.abstractnn.Activity
 import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
 import com.intel.analytics.bigdl.transform.vision.image.{DistributedImageFrame, ImageFeature, ImageFrame}
-import com.intel.analytics.bigdl.utils.{T, Table}
+import com.intel.analytics.bigdl.utils.{Engine, MklDnn, T, Table}
 import org.apache.spark.rdd.RDD
 
 import scala.reflect.ClassTag
@@ -125,7 +125,6 @@ object Predictor {
     featurePaddingParam: Option[PaddingParam[T]])(
     implicit ev: TensorNumeric[T]): DistributedImageFrame = {
     val localBatchPerPartition = batchPerPartition
-
     val rdd = imageFrame.asInstanceOf[DistributedImageFrame].rdd
     val modelBroad = ModelBroadcast[T]().broadcast(rdd.sparkContext, model.evaluate())
     val partitionNum = rdd.partitions.length
@@ -133,15 +132,26 @@ object Predictor {
       batchSize = partitionNum * batchPerPartition,
       partitionNum = Some(partitionNum),
       featurePaddingParam = featurePaddingParam), shareBuffer)
+
+    // test code
+    if (Engine.getEngineType() == MklDnn) {
+      rdd.repartition(1)
+    }
     val result = rdd.mapPartitions(partition => {
       val localModel = modelBroad.value()
       val localToBatch = toBatchBroad.value._1.cloneTransformer()
 
+//      val data = partition.grouped(localBatchPerPartition).toArray[ImageFeature]
+//      val result = Predictor.predictImageBatch[T](localModel, data, outputLayer, predictKey,
+//        localToBatch, shareBuffer)
+//      result.toIterator
+
       partition.grouped(localBatchPerPartition).flatMap(imageFeatures => {
-//        println("imageFeatures " + imageFeatures.length)
-//        if (imageFeatures.length == 1) {
-//          val tmp = 0
-//        }
+//        val poolSize = 1
+//        Engine.default.invokeAndWait2((0 until poolSize).map( _ => () => {
+//          Predictor.predictImageBatch[T](localModel, imageFeatures, outputLayer, predictKey,
+//            localToBatch, shareBuffer)
+//        }))
         Predictor.predictImageBatch[T](localModel, imageFeatures, outputLayer, predictKey,
           localToBatch, shareBuffer)
         imageFeatures

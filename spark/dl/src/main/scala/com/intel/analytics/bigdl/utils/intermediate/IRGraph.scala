@@ -120,6 +120,10 @@ private[bigdl] class IRGraph[T: ClassTag](
     this
   }
 
+  override def getExtraParameter(): Array[Tensor[T]] = {
+    graph.getExtraParameter()
+  }
+
   override def getTimes(): Array[(AbstractModule[_ <: Activity, _ <: Activity, T], Long, Long)] = {
     graph.getTimes()
   }
@@ -150,7 +154,8 @@ private[bigdl] class IRGraph[T: ClassTag](
       }
       val dnnGraph = graph.asInstanceOf[DnnGraph]
       dnnGraph.setRuntime(new MklDnnRuntime())
-      dnnGraph.initFwdPrimitives(inputMemory)
+      val phase = if (isTraining()) Phase.TrainingPhase else Phase.InferencePhase
+      dnnGraph.initFwdPrimitives(inputMemory, phase)
       initFwd = true
     }
   }

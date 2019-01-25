@@ -324,7 +324,7 @@ class DnnGraph(
   }
 
   // init forward primitives
-  override private[mkldnn] def initFwdPrimitives(inputs: Array[MemoryData], phase: Phase)
+  override private[bigdl] def initFwdPrimitives(inputs: Array[MemoryData], phase: Phase)
     : (Array[MemoryData], Array[MemoryData]) = {
     var lastOutputFormats = inputs
     var firstRealInputFormats: Array[MemoryData] = null

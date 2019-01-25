@@ -56,7 +56,8 @@ class Evaluator[T: ClassTag] private[optim](model: Module[T])(implicit ev: Tenso
     val otherBroad = dataset.sparkContext.broadcast(vMethods, SampleToMiniBatch(
       batchSize = totalBatch, partitionNum = Some(partitionNum)))
 
-    dataset.mapPartitions(partition => {
+    val s1 = System.nanoTime()
+    val d = dataset.mapPartitions(partition => {
       val localModel = modelBroad.value()
       val localMethod = otherBroad.value._1.map(_.clone())
       val localTransformer = otherBroad.value._2.cloneTransformer()
@@ -70,5 +71,8 @@ class Evaluator[T: ClassTag] private[optim](model: Module[T])(implicit ev: Tenso
     }).reduce((left, right) => {
         left.zip(right).map { case (l, r) => l + r }
     }).zip(vMethods)
+    val s2 = (System.nanoTime() - s1)/1e9
+    println(s"all time $s2")
+    d
   }
 }

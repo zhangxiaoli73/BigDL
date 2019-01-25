@@ -142,9 +142,9 @@ object DistriPerf {
       () => {
         val localModel = workingModels(i)
         val data = inputBuffer(i)
-        if (params.modelType != "resnet50") {
-          localModel.evaluate()
-        }
+//        if (params.modelType != "resnet50") {
+//          localModel.evaluate()
+//        }
         for (i <- 0 to warmup) {
           val output = localModel.forward(data.getInput()).toTensor[Float]
         }
@@ -158,16 +158,16 @@ object DistriPerf {
       () => {
         val localModel = workingModels(i)
         val data = inputBuffer(i)
-        if (params.modelType != "resnet50") {
-          localModel.evaluate()
-        }
+//        if (params.modelType != "resnet50") {
+//          localModel.evaluate()
+//        }
         for (i <- 0 to params.iteration) {
-          val s1 = System.nanoTime()
+//          val s1 = System.nanoTime()
           val output = localModel.forward(data.getInput()).toTensor[Float]
-          val e1 = System.nanoTime() - s1
-          getTopTimes(localModel.getTimes(), e1)
-          localModel.resetTimes()
-          println(s"iteration time ${e1}")
+//          val e1 = System.nanoTime() - s1
+//          getTopTimes(localModel.getTimes(), e1)
+//          localModel.resetTimes()
+//          println(s"iteration time ${e1}")
         }
         1
       }))
