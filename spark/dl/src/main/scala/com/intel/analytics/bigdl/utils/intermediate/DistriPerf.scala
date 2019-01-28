@@ -18,6 +18,7 @@ package com.intel.analytics.bigdl.utils.intermediate
 
 import java.util.concurrent.atomic.AtomicInteger
 
+import breeze.linalg.*
 import com.intel.analytics.bigdl.{Module, utils}
 import com.intel.analytics.bigdl.dataset.{LocalDataSet, MiniBatch, Sample, SampleToMiniBatch}
 import com.intel.analytics.bigdl.example.loadmodel.AlexNet
@@ -66,6 +67,9 @@ object DistriPerf {
     opt[Int]('i', "iteration")
       .text("Iteration of perf test. The result will be average of each iteration time cost")
       .action((v, p) => p.copy(iteration = v))
+    opt[Boolean]('t', "threadPredict")
+      .text("Whether thread predict")
+      .action((v, p) => p.copy(threadPredict = v))
   }
 
   def testConv(shape: Array[Int]) : Module[Float] = {
@@ -174,12 +178,119 @@ object DistriPerf {
     Engine.default.sync(results)
 
     val end = System.nanoTime()
-    logger.info(s"${params.modelPath} isGraph ${model.isInstanceOf[DnnGraph]} " +
+    logger.info(s"Use java thread ${params.modelPath} isGraph ${model.isInstanceOf[DnnGraph]} " +
       s"isIR ${model.isInstanceOf[IRGraph[Float]]} engineType ${Engine.getEngineType()} " +
       s"batchSize ${params.batchSize} " + s"Average Throughput" +
       s"is ${params.batchSize.toDouble * params.iteration / (end - start) * 1e9} record / second."
     )
   }
+
+  def predictMap(model: Module[Float], input: MiniBatch[Float],
+              params: DistriPerfParams, sc: SparkContext, batch: Int): Unit = {
+
+    val subModelNumber = Engine.getEngineType() match {
+      case MklBlas => Engine.coreNumber()
+      case MklDnn => 1
+    }
+
+    val data = new Array[MiniBatch[Float]](params.iteration * subModelNumber)
+
+    var i = 0
+    while (i < params.iteration * subModelNumber) {
+      data(i) = input
+      i += 1
+    }
+
+    val dataset = sc.parallelize(data, subModelNumber).coalesce(subModelNumber)
+
+    val modelBroad = ModelBroadcast[Float]().broadcast(sc, model.evaluate())
+
+    println("start predict throughput test")
+    val start = System.nanoTime()
+    val res = dataset.mapPartitions(partition => {
+      val localModel = modelBroad.value()
+      partition.map(batch => {
+        val output = localModel.forward(batch.getInput())
+      })
+    })
+
+    res.count()
+    val end = System.nanoTime()
+    logger.info(s"Use mappartition ${params.modelPath} isGraph ${model.isInstanceOf[DnnGraph]} " +
+      s"isIR ${model.isInstanceOf[IRGraph[Float]]} engineType ${Engine.getEngineType()} " +
+      s"batchSize ${params.batchSize} " + s"Average Throughput" +
+      s"is ${params.batchSize.toDouble * params.iteration / (end - start) * 1e9} record / second."
+    )
+  }
+
+
+  def threadPredict(params: DistriPerfParams, sc: SparkContext, modelLoad: Module[Float]): Unit = {
+    val batchSize = params.batchSize
+    val iterations = params.iteration
+
+    val graph = if (!modelLoad.isInstanceOf[Graph[Float]]) modelLoad.toGraph() else modelLoad
+    val model = if (Engine.getEngineType() == MklDnn) {
+      val m = graph.asInstanceOf[StaticGraph[Float]].toIRgraph()
+      m.build()
+      println("graph_type: dnn graph")
+      m
+    } else {
+      graph
+    }
+
+    var inputShape: Array[Int] = null
+    var outputShape: Array[Int] = null
+    params.dataType match {
+      case "imagenet" =>
+        inputShape = Array(batchSize, 3, 224, 224)
+        outputShape = Array(batchSize)
+      case "ssd" =>
+        inputShape = Array(batchSize, 3, 300, 300)
+        outputShape = Array(batchSize)
+      case "lenet" =>
+        inputShape = Array(batchSize, 1, 28, 28)
+        outputShape = Array(batchSize)
+      case "conv" =>
+        inputShape = Array(batchSize, 512, 10, 10)
+        outputShape = Array(batchSize)
+      case _ => throw new UnsupportedOperationException(s"Unkown model ${params.dataType}")
+    }
+
+    val miniBatch = MiniBatch(Tensor(inputShape).rand(), Tensor(outputShape).rand())
+    predict(model, miniBatch, params)
+  }
+
+  def mapPredict(params: DistriPerfParams, sc: SparkContext, model: Module[Float]): Unit = {
+    val subModelNumber = Engine.getEngineType() match {
+      case MklBlas => Engine.coreNumber()
+      case MklDnn => 1
+    }
+
+    val batchSize = params.batchSize / subModelNumber
+    val iterations = params.iteration
+
+    var inputShape: Array[Int] = null
+    var outputShape: Array[Int] = null
+    params.dataType match {
+      case "imagenet" =>
+        inputShape = Array(batchSize, 3, 224, 224)
+        outputShape = Array(batchSize)
+      case "ssd" =>
+        inputShape = Array(batchSize, 3, 300, 300)
+        outputShape = Array(batchSize)
+      case "lenet" =>
+        inputShape = Array(batchSize, 1, 28, 28)
+        outputShape = Array(batchSize)
+      case "conv" =>
+        inputShape = Array(batchSize, 512, 10, 10)
+        outputShape = Array(batchSize)
+      case _ => throw new UnsupportedOperationException(s"Unkown model ${params.dataType}")
+    }
+
+    val miniBatch = MiniBatch(Tensor(inputShape).rand(), Tensor(outputShape).rand())
+    predictMap(model, miniBatch, params, sc, batchSize)
+  }
+
 
   def main(argv: Array[String]): Unit = {
     parser.parse(argv, new DistriPerfParams()).foreach { params =>
@@ -188,13 +299,6 @@ object DistriPerf {
         .set("spark.task.maxFailures", "1")
       val sc = new SparkContext(conf)
       Engine.init
-
-      val batchSize = params.batchSize
-      val iterations = params.iteration
-
-      val inputFormat = Memory.Format.nchw
-      var input : Tensor[Float] = null
-      var label : Tensor[Float] = null
 
       val modelLoad = if (params.modelPath == "vgg16") {
         import com.intel.analytics.bigdl.models.vgg
@@ -209,36 +313,11 @@ object DistriPerf {
         Module.loadModule[Float](params.modelPath)
       }
 
-      val graph = if (!modelLoad.isInstanceOf[Graph[Float]]) modelLoad.toGraph() else modelLoad
-      val model = if (Engine.getEngineType() == MklDnn) {
-        val m = graph.asInstanceOf[StaticGraph[Float]].toIRgraph()
-        m.build()
-        println("graph_type: dnn graph")
-        m
+      if (params.threadPredict) {
+        threadPredict(params, sc, modelLoad)
       } else {
-        graph
+        mapPredict(params, sc, modelLoad)
       }
-
-      var inputShape: Array[Int] = null
-      var outputShape: Array[Int] = null
-      params.dataType match {
-        case "imagenet" =>
-          inputShape = Array(batchSize, 3, 224, 224)
-          outputShape = Array(batchSize)
-        case "ssd" =>
-          inputShape = Array(batchSize, 3, 300, 300)
-          outputShape = Array(batchSize)
-        case "lenet" =>
-          inputShape = Array(batchSize, 1, 28, 28)
-          outputShape = Array(batchSize)
-        case "conv" =>
-          inputShape = Array(batchSize, 512, 10, 10)
-          outputShape = Array(batchSize)
-        case _ => throw new UnsupportedOperationException(s"Unkown model ${params.dataType}")
-      }
-
-      val miniBatch = MiniBatch(Tensor(inputShape).rand(), Tensor(outputShape).rand())
-      predict(model, miniBatch, params)
     }
   }
 }
@@ -248,5 +327,6 @@ case class DistriPerfParams (
       iteration: Int = 80,
       dataType: String = "imagenet",
       modelPath: String = "inception_v1",
-      modelType: String = "mkldnn"
+      modelType: String = "mkldnn",
+      threadPredict: Boolean = true
       )

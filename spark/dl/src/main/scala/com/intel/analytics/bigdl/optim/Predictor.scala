@@ -63,7 +63,12 @@ object Predictor {
       ol.get
     }
     localToBatch(samples.toIterator).flatMap(batch => {
+      val s1 = System.nanoTime()
       localModel.forward(batch.getInput())
+      val s2 = (System.nanoTime() - s1)/1e9
+      if (System.getProperty("debug") == "true") {
+        println(s"model forward times ${s2}")
+      }
       splitBatch[T](layer.output, shareBuffer, batch.size())
     })
   }
