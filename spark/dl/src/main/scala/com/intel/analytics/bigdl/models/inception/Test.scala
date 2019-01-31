@@ -56,15 +56,15 @@ object Test {
       val evaluationSet = transformer(rddData)
 
       val model = Module.loadModule[Float](param.model)
-//      val ir = model.cloneModule().toGraph().asInstanceOf[StaticGraph[Float]].toIRgraph()
+      val ir = model.cloneModule().toGraph().asInstanceOf[StaticGraph[Float]].toIRgraph()
 
-//      model.evaluate()
-//      ir.evaluate()
+      model.evaluate()
+      ir.evaluate()
 
-//      val in = Tensor[Float](2, 3, 224, 224).rand()
-//
-//      val out1 = model.forward(in)
-//      val out2 = ir.forward(in)
+      val in = Tensor[Float](2, 3, 224, 224).rand()
+
+      val out1 = model.forward(in)
+      val out2 = ir.forward(in)
 
       evaluationSet.cache().count()
       val result = model.evaluate(evaluationSet,
