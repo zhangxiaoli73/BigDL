@@ -68,7 +68,7 @@ object Test {
 
       evaluationSet.cache().count()
       val result = model.evaluate(evaluationSet,
-        Array(new Top1Accuracy[Float], new Top5Accuracy[Float]), param.batchSize)
+        Array(new Top1Accuracy[Float], new Top5Accuracy[Float]))
 
       result.foreach(r => println(s"${r._2} is ${r._1}"))
       sc.stop()

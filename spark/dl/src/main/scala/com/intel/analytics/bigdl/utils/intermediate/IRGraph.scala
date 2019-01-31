@@ -67,14 +67,10 @@ private[bigdl] class IRGraph[T: ClassTag](
     if (graph == null) {
       throw new UnsupportedOperationException("forward not supported, Please build graph first")
     }
-//    val poolSize = 1
-//    Engine.default.invokeAndWait2((0 until poolSize).map( _ => () => {
-//      initFwdPrimitives(input)
-//      output = graph.updateOutput(input)
-//    }))
-    initFwdPrimitives(input)
-    output = graph.updateOutput(input)
-
+    Engine.computing.invokeAndWait2(Array(0).map(_ => () => {
+      initFwdPrimitives(input)
+      output = graph.updateOutput(input)
+    }))
     output
   }
 
@@ -82,8 +78,10 @@ private[bigdl] class IRGraph[T: ClassTag](
     if (graph == null) {
       throw new UnsupportedOperationException("backward not supported, Please build graph first")
     }
-    initBwdPrimitives()
-    gradInput = graph.updateGradInput(input, gradOutput)
+    Engine.computing.invokeAndWait2(Array(0).map(_ => () => {
+      initBwdPrimitives()
+      gradInput = graph.updateGradInput(input, gradOutput)
+    }))
     gradInput
   }
 
@@ -91,8 +89,10 @@ private[bigdl] class IRGraph[T: ClassTag](
     if (graph == null) {
       throw new UnsupportedOperationException("backward not supported, Please build graph first")
     }
-    initGradWPrimitives()
-    graph.accGradParameters(input, gradOutput)
+    Engine.computing.invokeAndWait2(Array(0).map(_ => () => {
+      initGradWPrimitives()
+      graph.accGradParameters(input, gradOutput)
+    }))
   }
 
   def build(): this.type = {

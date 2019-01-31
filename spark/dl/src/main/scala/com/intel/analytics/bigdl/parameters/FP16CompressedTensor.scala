@@ -130,7 +130,7 @@ object FP16CompressedTensor {
     val taskSize = elementSize / Engine.coreNumber()
     val extraSize = elementSize % Engine.coreNumber()
     val availableTask = if (taskSize == 0) extraSize else Engine.coreNumber()
-    Engine.io.invokeAndWait(
+    Engine.default.invokeAndWait(
       (0 until availableTask).map(tid => () => {
         val start = tid * taskSize * 2 + math.min(extraSize, tid) * 2
         val end = (tid + 1) * taskSize * 2 + math.min(extraSize, tid + 1) * 2
@@ -178,7 +178,7 @@ object FP16CompressedTensor {
     val taskSize = length / Engine.coreNumber()
     val extraSize = length % Engine.coreNumber()
     val availableTask = if (taskSize == 0) extraSize else Engine.coreNumber()
-    Engine.io.invokeAndWait(
+    Engine.default.invokeAndWait(
       (0 until availableTask).map(tid => () => {
         val start = tid * taskSize + math.min(extraSize, tid)
         val end = (tid + 1) * taskSize + math.min(extraSize, tid + 1)
@@ -204,7 +204,7 @@ object FP16CompressedTensor {
     val taskSize = length / Engine.coreNumber()
     val extraSize = length % Engine.coreNumber()
     val availableTask = if (taskSize == 0) extraSize else Engine.coreNumber()
-    Engine.io.invokeAndWait(
+    Engine.default.invokeAndWait(
       (0 until availableTask).map(tid => () => {
         val start = tid * taskSize + math.min(extraSize, tid)
         val end = (tid + 1) * taskSize + math.min(extraSize, tid + 1)
@@ -231,7 +231,7 @@ object FP16CompressedTensor {
     val taskSize = targetLength / Engine.coreNumber()
     val extraSize = targetLength % Engine.coreNumber()
     val availableTask = if (taskSize == 0) extraSize else Engine.coreNumber()
-    Engine.io.invokeAndWait(
+    Engine.default.invokeAndWait(
       (0 until availableTask).map(tid => () => {
         val start = tid * taskSize * 2 + math.min(extraSize, tid) * 2
         val end = (tid + 1) * taskSize * 2 + math.min(extraSize, tid + 1) * 2
@@ -254,7 +254,7 @@ object FP16CompressedTensor {
     val taskSize = targetLength / Engine.coreNumber()
     val extraSize = targetLength % Engine.coreNumber()
     val availableTask = if (taskSize == 0) extraSize else Engine.coreNumber()
-    Engine.io.invokeAndWait(
+    Engine.default.invokeAndWait(
       (0 until availableTask).map(tid => () => {
         val start = tid * taskSize * 2 + math.min(extraSize, tid) * 2
         val end = (tid + 1) * taskSize * 2 + math.min(extraSize, tid + 1) * 2

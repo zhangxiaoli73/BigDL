@@ -94,6 +94,10 @@ class IRGraphSpec extends BigDLSpecHelper {
     val irBlas = modelIR()
     irBlas.build()
     val outBlas = irBlas.forward(input)
+
+    val out2 = irBlas.forward(Tensor[Float](1, 1, 28, 28).rand()).toTensor[Float]
+    val tmp = out2.squeeze()
+
     val gradInputBlas = irBlas.backward(input, gradOutput)
 
     RandomGenerator.RNG.setSeed(1000)
