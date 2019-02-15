@@ -28,7 +28,8 @@ import com.intel.analytics.bigdl.nn
 import com.intel.analytics.bigdl.nn.mkldnn.Equivalent
 import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.numeric.NumericFloat
-import com.intel.analytics.bigdl.utils.{BigDLSpecHelper, RandomGenerator, T}
+import com.intel.analytics.bigdl.utils.RandomGenerator._
+import com.intel.analytics.bigdl.utils._
 
 import scala.util.Random
 
@@ -81,5 +82,45 @@ class BlasToDnnSpec extends BigDLSpecHelper {
 
     Equivalent.nearequals(outDnn, outBlas, 1e-6) should be(true)
     Equivalent.nearequals(gradInputDnn, gradInputBlas, 1e-6) should be(true)
+  }
+
+  "ResNet-50 blas to dnn" should "work properly" in {
+    Engine.setEngineType(MklDnn)
+    val batchSize = 4
+    val classNum = 1000
+    val depth = 50
+    RNG.setSeed(1000)
+    val input = Tensor[Float](batchSize, 3, 224, 224).rand(-1, 1)
+    val gradOutput = Tensor[Float](batchSize, 1000).rand()
+
+    RNG.setSeed(1000)
+    val model = ResNet(classNum, T("shortcutType" -> ShortcutType.B,
+      "depth" -> depth, "dataSet" -> DatasetType.ImageNet))
+
+    val graphModel = model.toGraph().cloneModule().asInstanceOf[StaticGraph[Float]].toIRgraph()
+
+    var output1: Tensor[Float] = null
+    var output2: Tensor[Float] = null
+    var gradInput1: Tensor[Float] = null
+    var gradInput2: Tensor[Float] = null
+
+    for (i <- 1 to 1) {
+      model.zeroGradParameters()
+      graphModel.zeroGradParameters()
+      output1 = graphModel.forward(input).toTensor[Float]
+      gradInput1 = graphModel.backward(input, gradOutput).toTensor[Float]
+
+      output2 = model.forward(input).toTensor[Float]
+      gradInput2 = model.backward(input, gradOutput).toTensor[Float]
+    }
+
+    val (weight1, gradweight1) = model.getParameters()
+    val (weight2, gradweight2) = graphModel.getParameters()
+
+    Equivalent.nearequals(weight1, weight2) should be(true)
+    Equivalent.nearequals(gradweight1, gradweight2) should be(true)
+
+    Equivalent.nearequals(output1, output2) should be(true)
+    Equivalent.nearequals(gradInput1, gradInput2) should be(true)
   }
 }

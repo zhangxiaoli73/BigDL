@@ -21,6 +21,7 @@ import com.intel.analytics.bigdl.mkl._
 import com.intel.analytics.bigdl.nn.mkldnn.Phase.TrainingPhase
 import com.intel.analytics.bigdl.nn.{Xavier, Zeros}
 import com.intel.analytics.bigdl.numeric.NumericFloat
+import com.intel.analytics.bigdl.optim.L2Regularizer
 import com.intel.analytics.bigdl.tensor.{DnnStorage, Tensor}
 import com.intel.analytics.bigdl.utils.RandomGenerator._
 import org.apache.commons.lang3.SerializationUtils
@@ -77,6 +78,58 @@ class SpatialConvolutionSpec extends FlatSpec with Matchers {
     Equivalent.nearequals(output.toTensor, output2) should be(true)
     Equivalent.nearequals(grad1.toTensor, grad2) should be(true)
   }
+
+  "Dnn Convolution with regularizer" should "work correctly" in {
+    val nInputPlane = 3
+    val nOutputPlane = 64
+    val kW = 7
+    val kH = 7
+    val dW = 2
+    val dH = 2
+    val padW = 3
+    val padH = 3
+
+    val inputShape = Array(2, 3, 224, 224)
+    val input = Tensor[Float](2, 3, 224, 224).apply1( e => Random.nextFloat())
+    val gradOutput = Tensor[Float](2, 64, 112, 112).apply1(e => Random.nextFloat())
+
+    val wRegularizer = L2Regularizer(0.1)
+    val bRegularizer = L2Regularizer(0.1)
+
+    RNG.setSeed(100)
+    val inNode = Input(inputShape, Memory.Format.nchw).inputs()
+    val convNode = SpatialConvolution(nInputPlane, nOutputPlane, kW, kH, dW, dH, padW, padH,
+      wRegularizer = wRegularizer, bRegularizer = bRegularizer).inputs(inNode)
+    val outNode = Output(Memory.Format.nchw).inputs(convNode)
+    val conv = DnnGraph(Seq(inNode), Seq(outNode))
+    RNG.setSeed(100)
+    val layer = nn.SpatialConvolution[Float](nInputPlane, nOutputPlane, kW, kH, dW, dH, padW,
+      padH, wRegularizer = wRegularizer, bRegularizer = bRegularizer)
+
+    conv.compile(TrainingPhase)
+
+    for (i <- 0 to 3) {
+      conv.zeroGradParameters()
+      layer.zeroGradParameters()
+
+      val output = conv.forward(input).toTensor
+      val grad1 = conv.updateGradInput(input, gradOutput).toTensor
+      conv.accGradParameters(input, gradOutput)
+
+      val output2 = layer.forward(input)
+      val grad2 = layer.updateGradInput(input, gradOutput)
+      layer.accGradParameters(input, gradOutput)
+    }
+
+    val (weight1, gradweight1) = conv.getParameters()
+    val (weight2, gradweight2) = layer.getParameters()
+
+    Equivalent.nearequals(weight1, weight2.resizeAs(weight1)) should be(true)
+    Equivalent.nearequals(gradweight1, gradweight2.resizeAs(gradweight1)) should be(true)
+    Equivalent.nearequals(conv.output.toTensor, layer.output) should be(true)
+    Equivalent.nearequals(conv.gradInput.toTensor, layer.gradInput) should be(true)
+  }
+
 
   "ConvolutionDnn with same padding" should "work correctly" in {
     val nInputPlane = 2
