@@ -52,8 +52,8 @@ class DnnGraph(
     if (input.isTensor && output.isTensor) {
       val in = input.toTensor[Float]
       val out = output.toTensor[Float]
-      require(in.nDimension() == 4,
-        s"only support input with 4 dimension, but get ${in.nDimension()}")
+//      require(in.nDimension() == 4,
+//        s"only support input with 4 dimension, but get ${in.nDimension()}")
       if (in.size(1) != out.size(1)) out.narrow(1, 1, in.size(1)) else output
     } else output
   }

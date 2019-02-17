@@ -19,10 +19,14 @@ package com.intel.analytics.bigdl.models.lenet
 import com.intel.analytics.bigdl._
 import com.intel.analytics.bigdl.dataset.DataSet
 import com.intel.analytics.bigdl.dataset.image.{BytesToGreyImg, GreyImgNormalizer, GreyImgToBatch}
-import com.intel.analytics.bigdl.nn.{ClassNLLCriterion, CrossEntropyCriterion, Module}
+import com.intel.analytics.bigdl.nn.mkldnn.{DnnGraph, MklDnnLayer}
+import com.intel.analytics.bigdl.nn.{ClassNLLCriterion, CrossEntropyCriterion, Module, StaticGraph}
 import com.intel.analytics.bigdl.numeric.NumericFloat
 import com.intel.analytics.bigdl.optim._
+import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.utils._
+import com.intel.analytics.bigdl.utils.intermediate.IRGraph
+import org.apache.hadoop.mapred.TaskStatus.Phase
 import org.apache.log4j.{Level, Logger}
 import org.apache.spark.SparkContext
 
@@ -45,22 +49,33 @@ object Train {
       val validationData = param.folder + "/t10k-images-idx3-ubyte"
       val validationLabel = param.folder + "/t10k-labels-idx1-ubyte"
 
-      val model = if (param.modelSnapshot.isDefined) {
-        Module.load[Float](param.modelSnapshot.get)
-      } else {
-        if (param.graphModel) {
-          LeNet5.graph(classNum = 10)
-        } else {
-          Engine.getEngineType() match {
-            case MklBlas => LeNet5(10)
-            case MklDnn => LeNet5.dnnGraph(param.batchSize / Engine.nodeNumber(), 10)
-          }
-        }
-      }
-      val criterion = Engine.getEngineType() match {
-        case MklBlas => ClassNLLCriterion()
-        case MklDnn => CrossEntropyCriterion()
-      }
+//      val model = if (param.modelSnapshot.isDefined) {
+//        Module.load[Float](param.modelSnapshot.get)
+//      } else {
+//        if (param.graphModel) {
+//          LeNet5.graph(classNum = 10)
+//        } else {
+//          Engine.getEngineType() match {
+//            case MklBlas => LeNet5(10)
+//            case MklDnn => LeNet5.dnnGraph(param.batchSize / Engine.nodeNumber(), 10)
+//          }
+//        }
+//      }
+
+      val modelLoad = LeNet5.graph(10)
+      val ir = modelLoad.asInstanceOf[StaticGraph[Float]].toIRgraph()
+      val model = ir // .asInstanceOf[IRGraph[Float]].graph
+      val criterion = ClassNLLCriterion()
+//
+//      import com.intel.analytics.bigdl.nn.mkldnn
+//      modelLoad.asInstanceOf[DnnGraph].compile(mkldnn.Phase.TrainingPhase)
+//      val in = Tensor[Float](128, 28, 28).rand()
+//      val out = model.forward(in).toTensor[Float]
+
+//      val criterion = Engine.getEngineType() match {
+//        case MklBlas => ClassNLLCriterion()
+//        case MklDnn => CrossEntropyCriterion()
+//      }
 
       val optimMethod = if (param.stateSnapshot.isDefined) {
         OptimMethod.load[Float](param.stateSnapshot.get)

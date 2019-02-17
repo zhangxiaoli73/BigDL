@@ -21,8 +21,9 @@ import com.intel.analytics.bigdl.models.inception.{ImageNet2012, ImageNet2012Val
 import com.intel.analytics.bigdl.models.resnet.ResNet.{DatasetType, ShortcutType}
 import com.intel.analytics.bigdl.nn.abstractnn.AbstractModule
 import com.intel.analytics.bigdl.nn.mkldnn.ResNet.DatasetType.ImageNet
-import com.intel.analytics.bigdl.nn.{BatchNormalization, Container, CrossEntropyCriterion, Module}
+import com.intel.analytics.bigdl.nn.{Module, _}
 import com.intel.analytics.bigdl.optim._
+import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric._
 import com.intel.analytics.bigdl.utils._
 import com.intel.analytics.bigdl.visualization.{TrainSummary, ValidationSummary}
@@ -59,43 +60,76 @@ object TrainImageNet {
       val (imageSize, dataSetType, maxEpoch, dataSet) =
         (224, DatasetType.ImageNet, param.nepochs, ImageNetDataSet)
 
-      val trainDataSet = dataSet.trainDataSet(param.folder + "/train", sc, imageSize, batchSize)
-
-      val validateSet = dataSet.valDataSet(param.folder + "/val", sc, imageSize, batchSize)
-
       val shortcut: ShortcutType = ShortcutType.B
 
-      val model = if (param.modelSnapshot.isDefined) {
+      val modelLoad = if (param.modelSnapshot.isDefined) {
         Module.load[Float](param.modelSnapshot.get)
       } else {
-        Engine.getEngineType() match {
-          case MklBlas =>
-            val curModel =
-              ResNet(classNum = param.classes, T("shortcutType" -> shortcut, "depth" -> param.depth,
-                "optnet" -> param.optnet, "dataSet" -> dataSetType))
-            if (param.optnet) {
-              ResNet.shareGradInput(curModel)
-            }
-            ResNet.modelInit(curModel)
+        val curModel =
+          ResNet(classNum = param.classes, T("shortcutType" -> shortcut, "depth" -> param.depth,
+            "optnet" -> param.optnet, "dataSet" -> dataSetType))
+        if (param.optnet) {
+          ResNet.shareGradInput(curModel)
+        }
+        ResNet.modelInit(curModel)
 
-            /* Here we set parallism specificall for BatchNormalization and its Sub Layers, this is
-            very useful especially when you want to leverage more computing resources like you want
-            to use as many cores as possible but you cannot set batch size too big for each core due
-            to the memory limitation, so you can set batch size per core smaller, but the smaller
-            batch size will increase the instability of convergence, the synchronization among BN
-            layers basically do the parameters synchronization among cores and thus will avoid the
-            instability while improves the performance a lot. */
-            val parallisim = Engine.coreNumber
-            setParallism(curModel, parallisim)
+        /* Here we set parallism specificall for BatchNormalization and its Sub Layers, this is
+        very useful especially when you want to leverage more computing resources like you want
+        to use as many cores as possible but you cannot set batch size too big for each core due
+        to the memory limitation, so you can set batch size per core smaller, but the smaller
+        batch size will increase the instability of convergence, the synchronization among BN
+        layers basically do the parameters synchronization among cores and thus will avoid the
+        instability while improves the performance a lot. */
+        val parallisim = Engine.coreNumber
+        setParallism(curModel, parallisim)
 
-            curModel
-          case MklDnn =>
-            nn.mkldnn.ResNet.graph(param.batchSize / Engine.nodeNumber(), param.classes,
-              T("depth" -> 50, "dataSet" -> ImageNet))
+        curModel
+
+//        Engine.getEngineType() match {
+//          case MklBlas =>
+//            val curModel =
+//              ResNet(classNum = param.classes, T("shortcutType" -> shortcut, "depth" -> param.depth,
+//                "optnet" -> param.optnet, "dataSet" -> dataSetType))
+//            if (param.optnet) {
+//              ResNet.shareGradInput(curModel)
+//            }
+//            ResNet.modelInit(curModel)
+//
+//            /* Here we set parallism specificall for BatchNormalization and its Sub Layers, this is
+//            very useful especially when you want to leverage more computing resources like you want
+//            to use as many cores as possible but you cannot set batch size too big for each core due
+//            to the memory limitation, so you can set batch size per core smaller, but the smaller
+//            batch size will increase the instability of convergence, the synchronization among BN
+//            layers basically do the parameters synchronization among cores and thus will avoid the
+//            instability while improves the performance a lot. */
+//            val parallisim = Engine.coreNumber
+//            setParallism(curModel, parallisim)
+//
+//            curModel
+//          case MklDnn =>
+//            nn.mkldnn.ResNet.graph(param.batchSize / Engine.nodeNumber(), param.classes,
+//              T("depth" -> 50, "dataSet" -> ImageNet))
+//        }
+      }
+
+      val t = System.getProperty("ir", "false")
+      val model = if (Engine.getEngineType() == MklBlas) {
+        println("blas graph")
+        modelLoad
+      } else {
+        if (t == "false") {
+          println("ir graph")
+          modelLoad.toGraph().asInstanceOf[StaticGraph[Float]].toIRgraph()
+        } else {
+          println("dnn graph")
+          nn.mkldnn.ResNet.graph(
+            param.batchSize / Engine.nodeNumber(), param.classes, T("depth" -> 50, "dataSet" -> ImageNet))
         }
       }
 
-      println(model)
+      val trainDataSet = dataSet.trainDataSet(param.folder + "/train", sc, imageSize, batchSize)
+
+      val validateSet = dataSet.valDataSet(param.folder + "/val", sc, imageSize, batchSize)
 
       val optimMethod = if (param.stateSnapshot.isDefined) {
         val optim = OptimMethod.load[Float](param.stateSnapshot.get).asInstanceOf[SGD[Float]]
