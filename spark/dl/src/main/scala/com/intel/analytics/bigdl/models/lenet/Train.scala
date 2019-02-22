@@ -48,19 +48,10 @@ object Train {
       val model = if (param.modelSnapshot.isDefined) {
         Module.load[Float](param.modelSnapshot.get)
       } else {
-        if (param.graphModel) {
-          LeNet5.graph(classNum = 10)
-        } else {
-          Engine.getEngineType() match {
-            case MklBlas => LeNet5(10)
-            case MklDnn => LeNet5.dnnGraph(param.batchSize / Engine.nodeNumber(), 10)
-          }
-        }
+        LeNet5.graph(classNum = 10)
       }
-      val criterion = Engine.getEngineType() match {
-        case MklBlas => ClassNLLCriterion()
-        case MklDnn => CrossEntropyCriterion()
-      }
+
+      val criterion = ClassNLLCriterion()
 
       val optimMethod = if (param.stateSnapshot.isDefined) {
         OptimMethod.load[Float](param.stateSnapshot.get)

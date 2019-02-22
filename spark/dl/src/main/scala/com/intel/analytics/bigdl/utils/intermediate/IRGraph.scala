@@ -55,6 +55,8 @@ private[bigdl] class IRGraph[T: ClassTag](
 
   private var graph: Graph[T] = null
 
+  private[bigdl] def isBuild(): Boolean = if (graph == null) false else true
+
   override def updateOutput(input: Activity): Activity = {
     if (graph == null) {
       throw new UnsupportedOperationException("forward not supported, Please build graph first")
@@ -146,6 +148,9 @@ private[bigdl] class IRGraph[T: ClassTag](
       initPrim = true
     }
   }
+
+  override def release(): Unit = graph.release()
+
 }
 
 object IRGraph {
