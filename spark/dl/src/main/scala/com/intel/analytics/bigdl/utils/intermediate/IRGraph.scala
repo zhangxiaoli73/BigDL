@@ -166,6 +166,9 @@ private[bigdl] class IRGraph[T: ClassTag](
       initPrim = true
     }
   }
+
+  override def release(): Unit = graph.release()
+
 }
 
 object IRGraph {

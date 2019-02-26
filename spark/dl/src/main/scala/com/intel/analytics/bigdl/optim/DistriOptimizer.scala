@@ -33,7 +33,7 @@ import com.intel.analytics.bigdl.models.utils.{CachedModels, ModelBroadcast}
 import com.intel.analytics.bigdl.nn.abstractnn.Activity
 import com.intel.analytics.bigdl.nn.mkldnn.{DnnGraph, MklDnnContainer}
 import com.intel.analytics.bigdl.nn.mkldnn.Phase.{InferencePhase, TrainingPhase}
-import com.intel.analytics.bigdl.utils.intermediate.IRGraph
+import com.intel.analytics.bigdl.utils.intermediate.{ConversionUtils, IRGraph}
 import org.apache.commons.lang.exception.ExceptionUtils
 import com.intel.analytics.bigdl.visualization.{TrainSummary, ValidationSummary}
 import org.apache.log4j.Logger
@@ -546,7 +546,7 @@ object DistriOptimizer extends AbstractOptimizer {
     // ModelBroadcast to clone model here.
     // Notes: All models returned by modelBroadcast.value() share the same weight&bias, while
     // gradWeight&gradBias is unshared.
-    val modelBroadcast = ModelBroadcast[T]().broadcast(sc, model)
+    val modelBroadcast = ModelBroadcast[T]().broadcast(sc, ConversionUtils.convert(model))
     val _subModelNumber = Engine.getEngineType match {
       case MklBlas => coresPerNode
       case MklDnn => 1
