@@ -64,6 +64,12 @@ class SpatialConvolution(
   private[mkldnn] val gradWeight = new TensorMMap(weightShape)
   private[mkldnn] val gradBias = new TensorMMap(Array(nOutputPlane))
 
+  private[mkldnn] var weightAcc = Tensor[Float](weightShape)
+  private[mkldnn] var biasAcc = Tensor[Float](Array(nOutputPlane))
+  private[mkldnn] var gradWeightAcc = Tensor[Float](weightShape)
+  private[mkldnn] var gradBiasAcc = Tensor[Float](Array(nOutputPlane))
+
+
   // The weight maybe have different format between updateOutput and updateGradInput
   private var weightForBackward: DnnTensor[Float] = _
   private var weightForBackwardMemoryData: MemoryData = _
@@ -440,11 +446,19 @@ class SpatialConvolution(
     gradWeight.sync()
     gradBias.sync()
 
-    if (null != wRegularizer) {
-      wRegularizer.accRegularization(weight.dense, gradWeight.dense, scaleW)
-    }
-    if (withBias && null != bRegularizer) {
-      bRegularizer.accRegularization(bias.dense, gradBias.dense, scaleB)
+    if (System.getProperty("reguFor", "false") == "true") {
+      weightAcc.resizeAs(weight.dense).copy(weight.dense)
+      biasAcc.resizeAs(bias.dense).copy(bias.dense)
+      gradWeightAcc.resizeAs(gradWeight.dense).copy(gradWeight.dense)
+      gradBiasAcc.resizeAs(gradBias.dense).copy(gradBias.dense)
+      if (null != wRegularizer) {
+        wRegularizer.accRegularization(weightAcc, gradWeightAcc, scaleW)
+        gradWeight.dense.copy(gradWeightAcc)
+      }
+      if (withBias && null != bRegularizer) {
+        bRegularizer.accRegularization(biasAcc, gradBiasAcc, scaleB)
+        gradBias.dense.copy(gradBiasAcc)
+      }
     }
   }
 
@@ -454,7 +468,6 @@ class SpatialConvolution(
     } else {
       (Array(weight.dense), Array(gradWeight.dense))
     }
-
   }
 
   // we need not implement it, because the grad parameters will clean by mkldnn

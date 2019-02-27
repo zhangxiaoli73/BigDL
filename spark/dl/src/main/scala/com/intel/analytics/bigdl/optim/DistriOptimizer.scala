@@ -33,6 +33,7 @@ import com.intel.analytics.bigdl.models.utils.{CachedModels, ModelBroadcast}
 import com.intel.analytics.bigdl.nn.abstractnn.Activity
 import com.intel.analytics.bigdl.nn.mkldnn.{DnnGraph, MklDnnContainer}
 import com.intel.analytics.bigdl.nn.mkldnn.Phase.{InferencePhase, TrainingPhase}
+import com.intel.analytics.bigdl.utils.intermediate.{ConversionUtils, IRGraph}
 import org.apache.commons.lang.exception.ExceptionUtils
 import com.intel.analytics.bigdl.visualization.{TrainSummary, ValidationSummary}
 import org.apache.log4j.Logger
@@ -404,7 +405,10 @@ object DistriOptimizer extends AbstractOptimizer {
         logger.info(s"${_header} Trained ${recordsNum.value} records in ${(end - start) / 1e9} " +
           s"seconds. Throughput is ${driverState("Throughput")} records/second. Loss is ${
             driverState("Loss")}. ${getHyperParameterLog(optimMethods)}")
-        logger.debug("\n" + metrics.summary())
+//        logger.debug("\n" + metrics.summary())
+        if (System.getProperty("debugMetric", "false") == "true") {
+          logger.info("\n" + metrics.summary())
+        }
         logger.debug("Dropped modules: " + (driverSubModelNum - numFinishedModelUpdates))
         lossArray = new Array[Double](_subModelNumber)
 
@@ -545,7 +549,7 @@ object DistriOptimizer extends AbstractOptimizer {
     // ModelBroadcast to clone model here.
     // Notes: All models returned by modelBroadcast.value() share the same weight&bias, while
     // gradWeight&gradBias is unshared.
-    val modelBroadcast = ModelBroadcast[T]().broadcast(sc, model)
+    val modelBroadcast = ModelBroadcast[T]().broadcast(sc, ConversionUtils.convert(model))
     val _subModelNumber = Engine.getEngineType match {
       case MklBlas => coresPerNode
       case MklDnn => 1
@@ -830,11 +834,12 @@ class DistriOptimizer[T: ClassTag] (
         s"have corresponding OptimMethod")
     }
 
-    prepareInput()
 
     val modelsAndBroadcast = DistriOptimizer.initThreadModels(model, distDataset, criterion, state,
       nodeNumber, coresPerNode, checkSingleton, parameters, validationMethods,
       optimMethods, parameterProcessors)
+
+    prepareInput()
 
     models = if (reserveOptimMethod && previousOptim != null) {
       // replace optimMethods with previous ones
