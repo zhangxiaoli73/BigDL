@@ -167,6 +167,9 @@ class LocalPredictor[T: ClassTag] private[optim](model: Module[T],
 
     val dataIter = imageFrame.array.grouped(batchPerModel * subModelNumber)
 
+    if (System.getProperty("debug", "false") == "true") {
+      println(s"batchPerModel $batchPerModel")
+    }
     val result = dataIter.map(batch => {
       val groupedImages = batch.grouped(batchPerModel).toArray
       Engine.default.invokeAndWait(

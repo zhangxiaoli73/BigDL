@@ -67,6 +67,10 @@ object Predictor {
       ol.get
     }
     localToBatch(samples.toIterator).flatMap(batch => {
+      if (System.getProperty("debug", "false") == "true") {
+        val tmp = batch.getInput().toTensor[T].size(1)
+        print(s"rdd partition ${tmp}")
+      }
       localModel.forward(batch.getInput())
       splitBatch[T](layer.output, shareBuffer, batch.size())
     })
@@ -125,10 +129,15 @@ object Predictor {
     featurePaddingParam: Option[PaddingParam[T]])(
     implicit ev: TensorNumeric[T]): DistributedImageFrame = {
 
-    val rdd = ConversionUtils.coalesce(imageFrame.asInstanceOf[DistributedImageFrame].rdd)
-    val modelBroad = ModelBroadcast[T]().broadcast(rdd.sparkContext,
+    val data = imageFrame.asInstanceOf[DistributedImageFrame].rdd
+    val rdd = if (System.getProperty("noRepartition", "false") == "true") {
+      data
+    } else {
+      ConversionUtils.coalesce(data)
+    }
+    val modelBroad = ModelBroadcast[T].broadcast(rdd.sparkContext,
       ConversionUtils.convert(model.evaluate()))
-    val totalBatch = imageFrame.rdd.partitions.length * batchPerPartition
+    val totalBatch = data.getNumPartitions* batchPerPartition
 
 
     val toBatchBroad = rdd.sparkContext.broadcast(SampleToMiniBatch(
@@ -137,6 +146,7 @@ object Predictor {
       featurePaddingParam = featurePaddingParam), shareBuffer)
 
     val localBatchPerPartition = totalBatch / rdd.getNumPartitions
+    println(s"localBatchPerPartition ${localBatchPerPartition} ${rdd.getNumPartitions}")
 
     val result = rdd.mapPartitions(partition => {
       val localModel = modelBroad.value()
