@@ -219,6 +219,7 @@ class SpatialBatchNormalization(
   }
 
   override def updateOutput(input: Activity): Activity = {
+    val s1 = System.nanoTime()
     if (updateOutputTensors == null) {
       if (this.isTraining()) {
         val buffer = new ArrayBuffer[Tensor[Float]]()
@@ -264,6 +265,10 @@ class SpatialBatchNormalization(
       runningVariance.sync()
     }
 
+    val end1 = (System.nanoTime() - s1)/1e9
+    if (System.getProperty("debug", "false") == "true") {
+      println(s"layer_time_fwd $end1 $this")
+    }
     output
   }
 
@@ -313,6 +318,7 @@ class SpatialBatchNormalization(
   }
 
   override def updateGradInput(input: Activity, gradOutput: Activity): Activity = {
+    val s1 = System.nanoTime()
     if (updateGradInputTensors == null) {
       val buffer = new ArrayBuffer[Tensor[Float]]()
       buffer.append(input.asInstanceOf[Tensor[Float]])
@@ -333,6 +339,10 @@ class SpatialBatchNormalization(
 
     gradWeightAndBias.sync()
 
+    val end1 = (System.nanoTime() - s1)/1e9
+    if (System.getProperty("debug", "false") == "true") {
+      println(s"layer_time_bwd $end1 $this")
+    }
     gradInput
   }
 

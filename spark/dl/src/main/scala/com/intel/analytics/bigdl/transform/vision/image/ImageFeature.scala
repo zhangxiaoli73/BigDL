@@ -330,8 +330,8 @@ class ImageFeature extends Serializable {
       (floats(floatKey),
         Array(getHeight(), getWidth(), 3))
     } else {
-      logger.warn(s"please add MatToFloats(out_key = $floatKey) in the end of pipeline if you" +
-        s" are transforming an rdd")
+//      logger.warn(s"please add MatToFloats(out_key = $floatKey) in the end of pipeline if you" +
+//        s" are transforming an rdd")
       val mat = opencvMat()
       val floats = new Array[Float](mat.height() * mat.width() * 3)
       OpenCVMat.toFloatPixels(mat, floats)

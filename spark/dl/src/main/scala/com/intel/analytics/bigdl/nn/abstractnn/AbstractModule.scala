@@ -19,13 +19,13 @@ package com.intel.analytics.bigdl.nn.abstractnn
 import java.nio.ByteOrder
 
 import com.intel.analytics.bigdl._
-import com.intel.analytics.bigdl.dataset._
+import com.intel.analytics.bigdl.dataset.{LocalDataSet, MiniBatch, PaddingParam, Sample}
 import com.intel.analytics.bigdl.nn.Graph.ModuleNode
 import com.intel.analytics.bigdl.nn.quantized.Quantization
 import com.intel.analytics.bigdl.nn.{Module, _}
 import com.intel.analytics.bigdl.optim._
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
-import com.intel.analytics.bigdl.tensor.{QuantizedTensor, Tensor, TensorDataType}
+import com.intel.analytics.bigdl.tensor.{DnnTensor, QuantizedTensor, Tensor, TensorDataType}
 import com.intel.analytics.bigdl.transform.vision.image.{DistributedImageFrame, ImageFeature, ImageFrame, LocalImageFrame}
 import com.intel.analytics.bigdl.utils.TorchObject.TYPE_MODULE
 import com.intel.analytics.bigdl.utils._
@@ -118,11 +118,17 @@ abstract class AbstractModule[A <: Activity: ClassTag, B <: Activity: ClassTag, 
    */
   def clearState() : this.type = {
     if (output.isInstanceOf[Tensor[_]]) {
-      output.asInstanceOf[Tensor[_]].set()
+      val tmp = output.asInstanceOf[Tensor[T]]
+      if (!tmp.isInstanceOf[DnnTensor[T]]) {
+        output.asInstanceOf[Tensor[_]].set()
+      }
     }
 
     if (gradInput.isInstanceOf[Tensor[_]]) {
-      gradInput.asInstanceOf[Tensor[_]].set()
+      val tmp = gradInput.asInstanceOf[Tensor[T]]
+      if (!tmp.isInstanceOf[DnnTensor[T]]) {
+        gradInput.asInstanceOf[Tensor[_]].set()
+      }
     }
 
     this
