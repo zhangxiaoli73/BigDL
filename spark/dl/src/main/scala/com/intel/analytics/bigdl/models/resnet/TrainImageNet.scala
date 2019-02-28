@@ -85,43 +85,13 @@ object TrainImageNet {
         batch size will increase the instability of convergence, the synchronization among BN
         layers basically do the parameters synchronization among cores and thus will avoid the
         instability while improves the performance a lot. */
-        val parallisim = Engine.coreNumber
-        setParallism(curModel, parallisim)
-
+//        val parallisim = Engine.coreNumber
+//        setParallism(curModel, parallisim)
         curModel
-
-//        Engine.getEngineType() match {
-//          case MklBlas =>
-//            val curModel =
-//              ResNet(classNum = param.classes, T("shortcutType" -> shortcut, "depth" -> param.depth,
-//                "optnet" -> param.optnet, "dataSet" -> dataSetType))
-//            if (param.optnet) {
-//              ResNet.shareGradInput(curModel)
-//            }
-//            ResNet.modelInit(curModel)
-//
-//            /* Here we set parallism specificall for BatchNormalization and its Sub Layers, this is
-//            very useful especially when you want to leverage more computing resources like you want
-//            to use as many cores as possible but you cannot set batch size too big for each core due
-//            to the memory limitation, so you can set batch size per core smaller, but the smaller
-//            batch size will increase the instability of convergence, the synchronization among BN
-//            layers basically do the parameters synchronization among cores and thus will avoid the
-//            instability while improves the performance a lot. */
-//            val parallisim = Engine.coreNumber
-//            setParallism(curModel, parallisim)
-//
-//            curModel
-//          case MklDnn =>
-//            nn.mkldnn.ResNet.graph(param.batchSize / Engine.nodeNumber(), param.classes,
-//              T("depth" -> 50, "dataSet" -> ImageNet))
-//        }
       }
 
       val model = if (System.getProperty("ir", "false") == "true") {
         modelDefined.toGraph().asInstanceOf[StaticGraph[Float]].toIRgraph()
-      } else if (System.getProperty("dnn", "false") == "true") {
-        val tmp = modelDefined.toGraph().asInstanceOf[StaticGraph[Float]].toIRgraph()
-        tmp.graph
       } else if (System.getProperty("dnnGraph", "false") == "true") {
         nn.mkldnn.ResNet.graph(param.batchSize / Engine.nodeNumber(), param.classes,
           T("depth" -> 50, "dataSet" -> ImageNet))

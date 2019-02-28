@@ -15,20 +15,15 @@
  */
 package com.intel.analytics.bigdl.nn.mkldnn
 
-import com.intel.analytics.bigdl.mkl.Memory
 import com.intel.analytics.bigdl.nn.abstractnn.Activity
 
 private[bigdl] class InputWrapper extends MklDnnLayer {
 
-  private var inputLayer : Input = if (System.getProperty("dnn", "false") == "true") {
-    Input(Array(128, 3, 224, 224), Memory.Format.nchw)
-  } else null
+  private var inputLayer : Input = null
 
   override private[bigdl] def initFwdPrimitives(inputs: Array[MemoryData], phase: Phase) = {
-    // require(inputs.length == 1, "Only accept one tensor as input")
-    if (inputLayer == null) {
-      inputLayer = Input(inputs(0).shape, inputs(0).layout)
-    }
+    require(inputs.length == 1, "Only accept one tensor as input")
+    inputLayer = Input(inputs(0).shape, inputs(0).layout)
     inputLayer.setRuntime(this.runtime)
     inputLayer.initFwdPrimitives(inputs, phase)
     _inputFormats = inputLayer.inputFormats()

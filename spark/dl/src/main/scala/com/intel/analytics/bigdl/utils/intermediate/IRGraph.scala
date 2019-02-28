@@ -54,7 +54,7 @@ private[bigdl] class IRGraph[T: ClassTag](
   require(outputFormats.length == outputs.length, s"IRGraph: outputFormats" +
     s"length ${inputFormats.length} should be same with input nodes length ${outputs.length}")
 
-  private[bigdl] var graph: Graph[T] = null
+  private var graph: Graph[T] = null
 
   private[bigdl] def isBuild(): Boolean = graph != null
 
