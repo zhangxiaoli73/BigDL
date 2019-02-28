@@ -541,7 +541,7 @@ object Utils {
     var owidth = 0
     var odepth = 0
 
-    if (ceilMode) {
+    if (false) {
       oheight = math.ceil(1.0 * (inputHeight - kH + 2 * padH) / dH).toInt + 1
       owidth = math.ceil(1.0 * (inputWidth - kW + 2 * padW) / dW).toInt + 1
     } else {

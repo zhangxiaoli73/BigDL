@@ -280,12 +280,12 @@ class Linear(
     gradWeight.sync()
     gradBias.sync()
 
-    if (null != wRegularizer && scaleW != 0) {
-      wRegularizer.accRegularization(weight.dense, gradWeight.dense, scaleW)
-    }
-    if (null != bRegularizer && scaleB != 0) {
-      bRegularizer.accRegularization(bias.dense, gradBias.dense, scaleB)
-    }
+//    if (null != wRegularizer && scaleW != 0) {
+//      wRegularizer.accRegularization(weight.dense, gradWeight.dense, scaleW)
+//    }
+//    if (null != bRegularizer && scaleB != 0) {
+//      bRegularizer.accRegularization(bias.dense, gradBias.dense, scaleB)
+//    }
   }
 
   override def parameters(): (Array[Tensor[Float]], Array[Tensor[Float]]) = {

@@ -24,6 +24,8 @@ private[bigdl] class InputWrapper extends MklDnnLayer {
     Input(Array(128, 3, 224, 224), Memory.Format.nchw)
   } else null
 
+//  private var inputLayer = Input(Array(4, 3, 224, 224), Memory.Format.nchw)
+
   override private[bigdl] def initFwdPrimitives(inputs: Array[MemoryData], phase: Phase) = {
     // require(inputs.length == 1, "Only accept one tensor as input")
     if (inputLayer == null) {

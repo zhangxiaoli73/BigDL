@@ -123,8 +123,27 @@ object TrainImageNet {
         val tmp = modelDefined.toGraph().asInstanceOf[StaticGraph[Float]].toIRgraph()
         tmp.graph
       } else if (System.getProperty("dnnGraph", "false") == "true") {
-        nn.mkldnn.ResNet.graph(param.batchSize / Engine.nodeNumber(), param.classes,
+        val t1 = nn.mkldnn.ResNet.graph(param.batchSize / Engine.nodeNumber(), param.classes,
           T("depth" -> 50, "dataSet" -> ImageNet))
+//        val t2 = modelDefined.toGraph().asInstanceOf[StaticGraph[Float]].toIRgraph().graph
+//
+//        val p1 = t1.getParameters()
+//        val p2 = t2.getParameters()
+//        p2._1.copy(p1._1)
+//        p2._2.copy(p1._2)
+//
+//        t1.compile(Phase.TrainingPhase)
+//        t2.asInstanceOf[DnnGraph].compile(Phase.TrainingPhase)
+//        val in = Tensor[Float](4, 3, 224, 224).rand()
+//        val gradOut = Tensor[Float](2, 1000).rand()
+//
+//        val out1 = t1.forward(in)
+//        val out2 = t2.forward(in)
+//
+//        val in1 = t1.backward(in, gradOut)
+//        val in2 = t2.backward(in, gradOut)
+
+        t1
       } else modelDefined
 
       println(model)
