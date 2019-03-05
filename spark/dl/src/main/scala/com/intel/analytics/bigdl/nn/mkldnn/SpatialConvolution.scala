@@ -160,6 +160,8 @@ class SpatialConvolution(
   }
 
   override private[mkldnn] def initFwdPrimitives(inputs: Array[MemoryData], phase: Phase) = {
+//    val n = if (_sum) sumOp.getName() else ""
+//    println(s"_relu ${relu} _sum ${sum} ${n} ${this.getName()}")
     reorderManager.setRuntime(runtime)
 
     if (_sum && inputs.length > 1) {

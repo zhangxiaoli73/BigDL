@@ -23,14 +23,13 @@ import com.intel.analytics.bigdl.utils.Node
 
 private[mkldnn] object Fusion {
 
-  private val fuse = true // System.getProperty("bigdl.mkldnn.fusion", "false").toBoolean
+  private val fuse = System.getProperty("bigdl.mkldnn.fusion", "false").toBoolean
 
   def fuseModule(node: Node[AbstractModule[Activity, Activity, Float]]): Unit = {
     if (!fuse) return;
     node.element match {
       case relu: ReLU => fusionRelu(node)
       case bn: SpatialBatchNormalization => fusionBn(node)
-      // case cadd: CAddTable => fusionCAddTable(node)
       case _ =>
     }
   }
@@ -67,7 +66,6 @@ private[mkldnn] object Fusion {
     * @param node
     */
   private def fusionRelu(node: Node[AbstractModule[Activity, Activity, Float]]): Unit = {
-    // if (node.element.asInstanceOf[ReLU].sum) return;
     node.prevNodes.foreach(n => {
       n.element match {
         case conv: SpatialConvolution =>
@@ -104,26 +102,24 @@ private[mkldnn] object Fusion {
       val node2 = findPrevious(previousNodes(1))
 
       var conv : Node[Module[Float]] = null
-      var other : Node[Module[Float]] = null
       var otherNumber: Int = 0
 
       if (node1.element.isInstanceOf[SpatialConvolution]) {
-        if (!node1.element.asInstanceOf[SpatialConvolution].sum) conv = node1
-        other = node2
+        if (requirements(node1)) conv = node1
         otherNumber = 1
       } else if (node2.element.isInstanceOf[SpatialConvolution]) {
-        if (!node2.element.asInstanceOf[SpatialConvolution].sum) conv = node2
-        other = node1
+        if (requirements(node2)) conv = node2
         otherNumber = 0
       }
       // meet fuse requirements
-      if (conv != null && other != null) {
+      if (conv != null) {
         node.element = conv.element
-        node.element.asInstanceOf[SpatialConvolution].setSumOp(other.element, otherNumber)
+        val element = node.element.asInstanceOf[SpatialConvolution]
+        element.setSumOp(previousNodes(otherNumber - 1).element, otherNumber)
         conv.element = Identity[Float]().asInstanceOf[AbstractModule[Activity, Activity, Float]]
 
         val nexts = node.nextNodes(0)
-        if (nexts.element.isInstanceOf[ReLU]) {
+        if (nexts.element.isInstanceOf[ReLU] && !element.relu) {
           node.element.asInstanceOf[SpatialConvolution].setReLU(true)
           nexts.element = new Identity()
         }
@@ -131,9 +127,13 @@ private[mkldnn] object Fusion {
     }
   }
 
+  private def requirements(node: Node[AbstractModule[Activity, Activity, Float]]): Boolean = {
+    val conv = node.element.asInstanceOf[SpatialConvolution]
+    if (conv.sum) false else true
+  }
+
   private def fusionConvBn(conv: SpatialConvolution,
                            bn: SpatialBatchNormalization): Unit = {
-
     conv.setBatchNorm(true)
     val originVar = Tensor[Float].resize(bn.runningVariance.size()).copy(bn.runningVariance.dense)
     val originMean = Tensor[Float].resize(bn.runningMean.size()).copy(bn.runningMean.dense)
@@ -141,10 +141,15 @@ private[mkldnn] object Fusion {
     val convWeight = Tensor[Float].resize(conv.weight.size()).copy(conv.weight.dense)
     val convBias = Tensor[Float].resize(conv.bias.size()).copy(conv.bias.dense)
 
+    val bnWeight = Tensor[Float].resizeAs(bn.weightAndBias.dense).copy(bn.weightAndBias.dense)
+
     (0 until bn.nOutput).foreach { j =>
       val variance = originVar.storage().array()(j + originVar.storageOffset() - 1)
       val base = Math.sqrt(variance.asInstanceOf[Float] + bn.eps).toFloat
       require(base != 0.0, s"the eps of ${bn.getName()} should be more than 0")
+
+      val alpha = bnWeight.storage().array()(bnWeight.storageOffset() - 1 + j)
+      val beta = bnWeight.storage().array()(bnWeight.storageOffset() - 1 + bn.nOutput + j)
 
       val weight = if (conv.nGroup == 1) {
         convWeight.select(1, j + 1)
@@ -152,10 +157,11 @@ private[mkldnn] object Fusion {
         convWeight.select(2, j + 1)
       }
       weight.div(base)
+      weight.mul(alpha)
 
       val bias = convBias.storage().array()(j)
       val mean = originMean.storage().array()(j)
-      convBias.storage().array()(j) = (bias - mean) / base
+      convBias.storage().array()(j) = alpha / base * bias + beta - (alpha * mean) / base
     }
 
     conv.weight.copy(convWeight)

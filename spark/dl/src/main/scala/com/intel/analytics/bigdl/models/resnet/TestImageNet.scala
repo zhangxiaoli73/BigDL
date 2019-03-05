@@ -44,12 +44,18 @@ object TestImageNet {
       val sc = new SparkContext(conf)
       Engine.init
 
+      val t1 = System.nanoTime()
       val model = Module.loadModule[Float](param.model)
       val evaluationSet = ImageNetDataSet.valDataSet(param.folder + "/val",
         sc, 224, param.batchSize).toDistributed().data(train = false)
 
       val result = model.evaluate(evaluationSet,
         Array(new Top1Accuracy[Float], new Top5Accuracy[Float]))
+
+      val end = (System.nanoTime() - t1) / 1e9
+      if (System.getProperty("debugTime", "false") == "true") {
+        println(s"total_time ${end}")
+      }
       result.foreach(r => println(s"${r._2} is ${r._1}"))
 
       sc.stop()

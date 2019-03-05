@@ -96,7 +96,12 @@ class Evaluator[T: ClassTag] private[optim](model: Module[T])(implicit ev: Tenso
       val localModel = modelBroad.value()
       val localMethod = otherBroad.value
       miniBatch.map(batch => {
+        val t1 = System.nanoTime()
         val output = localModel.forward(batch.getInput())
+        val end = (System.nanoTime() - t1) / 1e9
+        if (System.getProperty("debugTime", "false") == "true") {
+          println(s"model_forward_time ${end}")
+        }
         localMethod.map(validation => {
           validation(output, batch.getTarget())
         })
