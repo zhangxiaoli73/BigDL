@@ -19,6 +19,7 @@ package com.intel.analytics.bigdl.utils.intermediate
 import java.util.concurrent.atomic.AtomicInteger
 
 import breeze.linalg.*
+import breeze.numerics._
 import com.intel.analytics.bigdl.{Module, utils}
 import com.intel.analytics.bigdl.dataset.{LocalDataSet, MiniBatch, Sample, SampleToMiniBatch}
 import com.intel.analytics.bigdl.example.loadmodel.AlexNet
@@ -35,7 +36,7 @@ import com.intel.analytics.bigdl.nn.mkldnn.Phase.InferencePhase
 import com.intel.analytics.bigdl.nn.mkldnn.models.Vgg_16
 import com.intel.analytics.bigdl.numeric.NumericFloat
 import com.intel.analytics.bigdl.optim._
-import com.intel.analytics.bigdl.tensor.Tensor
+import com.intel.analytics.bigdl.tensor.{DenseTensorMath, Tensor}
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
 import com.intel.analytics.bigdl.utils.RandomGenerator._
 import com.intel.analytics.bigdl.utils._
@@ -47,6 +48,37 @@ import org.apache.spark.rdd.RDD
 import scala.collection.mutable.ArrayBuffer
 import scala.reflect.ClassTag
 
+object EquivalentNew {
+  def nearlyEqual(a: Float, b: Float, epsilon: Double): Boolean = {
+    val absA = math.abs(a)
+    val absB = math.abs(b)
+    val diff = math.abs(a - b)
+
+    val result = if (a == b) {
+      true
+    } else {
+      math.min(diff / (absA + absB), diff) < epsilon
+    }
+
+    result
+  }
+
+  def nearequals(t1: Tensor[Float], t2: Tensor[Float],
+                 epsilon: Double = DenseTensorMath.floatEpsilon): Boolean = {
+    var result = true
+    t1.map(t2, (a, b) => {
+      if (result) {
+        result = nearlyEqual(a, b, epsilon)
+        if (!result) {
+          val diff = math.abs(a - b)
+          println("epsilon " + a + "***" + b + "***" + diff / (abs(a) + abs(b)) + "***" + diff)
+        }
+      }
+      a
+    })
+    result
+  }
+}
 object DistriPerf {
   val logger = Logger.getLogger(getClass)
 
@@ -235,6 +267,51 @@ object DistriPerf {
     }
   }
 
+  def accurayTest(params: DistriPerfParams, sc: SparkContext, modelLoad: Module[Float]): Unit = {
+    val batchSize = params.batchSize
+    val iterations = params.iteration
+
+    val graph = if (!modelLoad.isInstanceOf[Graph[Float]]) modelLoad.toGraph() else modelLoad
+    val model = if (Engine.getEngineType() == MklDnn) {
+      val m = graph.asInstanceOf[StaticGraph[Float]].toIRgraph()
+      m.build()
+      println("graph_type: dnn graph")
+      m
+    } else {
+      graph
+    }
+
+    var inputShape: Array[Int] = null
+    var outputShape: Array[Int] = null
+    params.dataType match {
+      case "imagenet" =>
+        inputShape = Array(batchSize, 3, 224, 224)
+        outputShape = Array(batchSize)
+      case "ssd" =>
+        inputShape = Array(batchSize, 3, 300, 300)
+        outputShape = Array(batchSize)
+      case "lenet" =>
+        inputShape = Array(batchSize, 1, 28, 28)
+        outputShape = Array(batchSize)
+      case "conv" =>
+        inputShape = Array(batchSize, 512, 10, 10)
+        outputShape = Array(batchSize)
+      case _ => throw new UnsupportedOperationException(s"Unkown model ${params.dataType}")
+    }
+
+    graph.evaluate()
+    model.evaluate()
+
+    val in = Tensor[Float](inputShape).rand()
+
+    val out2 = model.forward(in)
+    val out1 = graph.forward(in)
+
+    require(EquivalentNew.nearequals(out1.toTensor[Float], out2.toTensor[Float], 1e-6) == true)
+
+    val tmp = 0
+  }
+
   def main(argv: Array[String]): Unit = {
     parser.parse(argv, new DistriPerfParams()).foreach { params =>
       val conf = Engine.createSparkConf()
@@ -245,6 +322,7 @@ object DistriPerf {
 
       val modelLoad = Module.loadModule[Float](params.modelPath)
       threadPredict(params, sc, modelLoad)
+      // accurayTest(params, sc, modelLoad)
     }
   }
 }

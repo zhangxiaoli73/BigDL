@@ -17,7 +17,7 @@
 package com.intel.analytics.bigdl.nn.mkldnn
 
 import com.intel.analytics.bigdl.Module
-import com.intel.analytics.bigdl.nn.SpatialDilatedConvolution
+import com.intel.analytics.bigdl.nn.{DetectionOutputSSD, SpatialDilatedConvolution}
 import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.utils.{Engine, LayerException, Util}
 import org.apache.spark.SparkContext
@@ -101,14 +101,17 @@ object TestPerf {
     val sc = new SparkContext(conf)
     Engine.init
 
-    val module = SpatialDilatedConvolution[Float](512, 1024, 3, 3, 1, 1, 6, 6, 6, 6)
-    val batchSize = System.getProperty("batchSize", "8").toInt
-    val cores = Engine.coreNumber()
-    val input = Tensor[Float](batchSize, 512, 19, 19).rand()
-    val part = Tensor[Float](batchSize / cores, 512, 19, 19).rand()
+//    val module = SpatialDilatedConvolution[Float](512, 1024, 3, 3, 1, 1, 6, 6, 6, 6)
+//    val batchSize = System.getProperty("batchSize", "8").toInt
+//    val cores = Engine.coreNumber()
+//    val input = Tensor[Float](batchSize, 512, 19, 19).rand()
+//    val part = Tensor[Float](batchSize / cores, 512, 19, 19).rand()
+//
+//    run(module.asInstanceOf[Module[Float]], input, part)
+//    threadRun(module.asInstanceOf[Module[Float]], part)
 
-    run(module.asInstanceOf[Module[Float]], input, part)
+    val module = new DetectionOutputSSD[Float](21, true, 0, 0.45f, 400, 200, 0.0f, false, false)
 
-    threadRun(module.asInstanceOf[Module[Float]], part)
+    val in = Tensor[Float]
   }
 }

@@ -220,7 +220,7 @@ object Engine {
   // Thread pool for layer use
   @volatile private var _model: ThreadPool = new ThreadPool(1)
 
-  // Thread pool for wrapper blas layer use
+  // Thread pool for blaw wrapper layer
   private[bigdl] var wrapperComputing: ThreadPool = null
 
   // This thread is mainly for mkldnn library.
