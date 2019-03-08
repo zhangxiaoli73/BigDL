@@ -30,7 +30,7 @@ import com.intel.analytics.bigdl.utils.Node
  */
 private[mkldnn] object Fusion {
 
-  private val fuse = System.getProperty("bigdl.mkldnn.fusion", "false").toBoolean
+  private val fuse = System.getProperty("bigdl.mkldnn.fusion", "true").toBoolean
 
   def fuseModule(node: Node[AbstractModule[Activity, Activity, Float]]): Unit = {
     if (!fuse) return;
@@ -122,7 +122,7 @@ private[mkldnn] object Fusion {
       if (conv != null) {
         node.element = conv.element
         val element = node.element.asInstanceOf[SpatialConvolution]
-        element.setSumOp(previousNodes(otherNumber - 1).element, otherNumber)
+        element.setSumOp(previousNodes(otherNumber).element, otherNumber + 1)
         conv.element = Identity[Float]().asInstanceOf[AbstractModule[Activity, Activity, Float]]
 
         val nexts = node.nextNodes(0)

@@ -250,6 +250,9 @@ object DistriPerf {
       case "ssd" =>
         inputShape = Array(batchSize, 3, 300, 300)
         outputShape = Array(batchSize)
+      case "ssd-l" =>
+        inputShape = Array(batchSize, 3, 512, 512)
+        outputShape = Array(batchSize)
       case "lenet" =>
         inputShape = Array(batchSize, 1, 28, 28)
         outputShape = Array(batchSize)

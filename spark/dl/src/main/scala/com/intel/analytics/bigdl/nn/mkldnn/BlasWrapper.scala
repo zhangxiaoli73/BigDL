@@ -16,6 +16,7 @@
 
 package com.intel.analytics.bigdl.nn.mkldnn
 
+import breeze.linalg.Axis._1
 import breeze.linalg.dim
 import com.intel.analytics.bigdl.Module
 import com.intel.analytics.bigdl.dataset.MiniBatch
@@ -27,7 +28,6 @@ import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
 import com.intel.analytics.bigdl.utils.Engine._
 import com.intel.analytics.bigdl.utils._
-import com.intel.analytics.bigdl.utils.intermediate.{EquivalentNew, IRGraph}
 import org.apache.log4j.Logger
 
 /**
@@ -55,13 +55,15 @@ private[bigdl] class BlasWrapper(val module: AbstractModule[Activity, Activity, 
   }
 
   private[mkldnn] var needOutputFormats: Boolean = true
+  private val logger = Logger.getLogger(getClass)
+
   @transient private var subModels: Array[Module[Float]] = _
-  @transient private var _subModelNumber : Int = 1
+  @transient private var subModelNumber : Int = 1
   @transient private var withMultiThread: Boolean = false
   @transient private var inputBuffer : Array[Activity] = _
   @transient private var tensorBuffer : Array[Tensor[Float]] = _
   @transient private var batchSize : Int = _
-  private val logger = Logger.getLogger(getClass)
+  @transient private var initEnv: Boolean = false
 
   private def inferInputFormats(inputs: Array[MemoryData]): Array[MemoryData] = {
     inputs.map(in => HeapData(in.shape, getFormats(in.shape.length)))
@@ -89,14 +91,18 @@ private[bigdl] class BlasWrapper(val module: AbstractModule[Activity, Activity, 
    * input and output for this module must be in batch.
    */
   private def setMultiThreadEnv(input: Activity): Unit = {
+    initEnv = true
     val multiThread = System.getProperty("multiThread", "false").toBoolean
-    if (this.train || !multiThread) return
-    if (_outputFormats != null && _outputFormats.length != 1) return
-    if (_outputFormats != null && _inputFormats != null
-      && _inputFormats(0).shape(0) != _outputFormats(0).shape(0)) {
+    require(this.train && multiThread, "Please not set multiThread to true for model training")
+    if (this.train
+      || !multiThread
+      || (_outputFormats != null && _outputFormats.length != 1)
+      || (_outputFormats != null && _inputFormats != null
+      && _inputFormats(0).shape(0) != _outputFormats(0).shape(0))
+      || !flattenInput(input)
+    ) {
       return
     }
-    if (!flattenInput(input)) return
     batchSize = tensorBuffer(0).size(1)
     val t = batchSize % Engine.coreNumber()
     if (t != 0 || batchSize < 2 || Engine.coreNumber() < 2) {
@@ -106,7 +112,7 @@ private[bigdl] class BlasWrapper(val module: AbstractModule[Activity, Activity, 
         s"but now get core number ${Engine.coreNumber()} batch size ${batchSize}")
       return
     }
-    _subModelNumber = Engine.coreNumber()
+    subModelNumber = Engine.coreNumber()
     initModules()
     withMultiThread = true
   }
@@ -121,8 +127,11 @@ private[bigdl] class BlasWrapper(val module: AbstractModule[Activity, Activity, 
       for (i <- 1 to in.length()) {
         if (in.get(i).get.isInstanceOf[Table]) return false
         tensorBuffer(i - 1) = in.get[Tensor[Float]](i).get
-        if (i == 0) batch = tensorBuffer(i - 1).size(1)
-        if (batch != tensorBuffer(i - 1).size(1)) return false
+        if (i == 1) batch = tensorBuffer(i - 1).size(1)
+        if (batch != tensorBuffer(i - 1).size(1)
+          && !module.isInstanceOf[DetectionOutputSSD[Float]]) {
+          return false
+        }
       }
     }
     true
@@ -130,7 +139,7 @@ private[bigdl] class BlasWrapper(val module: AbstractModule[Activity, Activity, 
   private def initModules(): Unit = {
     subModels = if (module.parameters() != null) {
         val wb = Util.getAndClearWeightBias(module.parameters())
-        val models = (1 to _subModelNumber).map(i => {
+        val models = (1 to subModelNumber).map(i => {
           val m = module.cloneModule()
           Util.putWeightBias(wb, m)
           m.asInstanceOf[Module[Float]]
@@ -138,7 +147,7 @@ private[bigdl] class BlasWrapper(val module: AbstractModule[Activity, Activity, 
         Util.putWeightBias(wb, module)
         models
       } else {
-        val models = (1 to _subModelNumber).map(i => {
+        val models = (1 to subModelNumber).map(i => {
           val m = module.cloneModule()
           m.asInstanceOf[Module[Float]]
         }).toArray
@@ -176,21 +185,15 @@ private[bigdl] class BlasWrapper(val module: AbstractModule[Activity, Activity, 
     }
   }
   private def forwardWithMultiThread(input: Activity): Activity = {
-    if (inputBuffer == null) inputBuffer = new Array[Activity](_subModelNumber)
-    val stackSize = batchSize / _subModelNumber
-    val tasks = Engine.wrapperComputing.invoke(() => {
-      var b = 0
-      while (b < _subModelNumber) {
-        inputBuffer(b) = getInput(1, b * stackSize + 1, stackSize)
-        b += 1
-      }
-    })
-    Engine.wrapperComputing.sync(Seq(tasks))
+    if (inputBuffer == null) inputBuffer = new Array[Activity](subModelNumber)
+    val stackSize = batchSize / subModelNumber
 
-    val forwardThreads = Engine.wrapperComputing.invoke((0 until _subModelNumber).map(i =>
-      () => {
-        subModels(i).forward(inputBuffer(i)).toTensor[Float]
-      }))
+    val tasks = Engine.wrapperComputing.invoke((0 until subModelNumber).map(i =>
+      () => inputBuffer(i) = getInput(1, i * stackSize + 1, stackSize)))
+    Engine.wrapperComputing.sync(tasks)
+
+    val forwardThreads = Engine.wrapperComputing.invoke((0 until subModelNumber).map(i =>
+      () => subModels(i).forward(inputBuffer(i)).toTensor[Float]))
     Engine.wrapperComputing.sync(forwardThreads)
 
     if (subModels(0).output.isTable) {
@@ -206,7 +209,7 @@ private[bigdl] class BlasWrapper(val module: AbstractModule[Activity, Activity, 
         if (output == null || output.toTensor[Float].isEmpty) {
           output = Tensor[Float]().resize(subOutSize)
         }
-        val copyThreads = Engine.wrapperComputing.invoke((0 until _subModelNumber).map(i =>
+        val copyThreads = Engine.wrapperComputing.invoke((0 until subModelNumber).map(i =>
           () => {
             output.toTensor[Float].narrow(1, i * stackSize + 1, stackSize)
               .copy(subModels(i).output.toTensor[Float])
@@ -219,15 +222,12 @@ private[bigdl] class BlasWrapper(val module: AbstractModule[Activity, Activity, 
   }
 
   override def updateOutput(input: Activity): Activity = {
-    val s1 = System.nanoTime()
-    setMultiThreadEnv(input)
+    if (!initEnv) setMultiThreadEnv(input)
     output = if (withMultiThread) {
       forwardWithMultiThread(input)
     } else {
       module.forward(input)
     }
-    val end1 = (System.nanoTime() - s1)/ 1e9
-    // println(s"time ${end1} ${this.module} ${withMultiThread}")
     output
   }
 
