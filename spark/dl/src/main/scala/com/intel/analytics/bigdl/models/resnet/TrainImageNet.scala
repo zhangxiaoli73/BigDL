@@ -64,11 +64,7 @@ object TrainImageNet {
 
       val trainDataSet = dataSet.trainDataSet(param.folder + "/train", sc, imageSize, batchSize)
 
-      // test
-//      val validateSet = dataSet.valDataSet(param.folder + "/val", sc, imageSize, batchSize)
-      val vali = dataSet.valDataSet(param.folder + "/val", sc, imageSize, batchSize).toDistributed().data(train = false)
-      val nodes = Engine.nodeNumber()
-      val validateSet = DataSet.rdd(vali.repartition(nodes))
+      val validateSet = dataSet.valDataSet(param.folder + "/val", sc, imageSize, batchSize)
 
       val shortcut: ShortcutType = ShortcutType.B
 
@@ -193,10 +189,19 @@ object TrainImageNet {
       trainSummary.setSummaryTrigger("Parameters", Trigger.severalIteration(10))
       val validationSummary = ValidationSummary(logdir, appName)
 
+      if (System.setProperty("validatEpoch", "false") == "true") {
+        optimizer.setValidation(Trigger.everyEpoch, validateSet,
+          Array(new Top1Accuracy[Float], new Top5Accuracy[Float]))
+      } else {
+        optimizer.setValidation(Trigger.severalIteration(50),
+          validateSet, Array(new Top1Accuracy[Float], new Top5Accuracy[Float]))
+      }
       optimizer
         .setOptimMethod(optimMethod)
-        .setValidation(Trigger.everyEpoch,
-          validateSet, Array(new Top1Accuracy[Float], new Top5Accuracy[Float]))
+//        .setValidation(Trigger.everyEpoch,
+//          validateSet, Array(new Top1Accuracy[Float], new Top5Accuracy[Float]))
+//        .setValidation(Trigger.severalIteration(300),
+//          validateSet, Array(new Top1Accuracy[Float], new Top5Accuracy[Float]))
         .setEndWhen(Trigger.maxEpoch(maxEpoch))
         .optimize()
       sc.stop()
