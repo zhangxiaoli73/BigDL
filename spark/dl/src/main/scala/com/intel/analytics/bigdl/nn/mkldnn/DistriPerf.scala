@@ -310,6 +310,8 @@ object DistriPerf {
     val out2 = model.forward(in)
     val out1 = graph.forward(in)
 
+    EquivalentNew.nearequals(out1.toTensor[Float], out2.toTensor[Float], 1e-6)
+
     require(EquivalentNew.nearequals(out1.toTensor[Float], out2.toTensor[Float], 1e-6) == true)
 
     val tmp = 0

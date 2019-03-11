@@ -93,7 +93,9 @@ private[bigdl] class BlasWrapper(val module: AbstractModule[Activity, Activity, 
   private def setMultiThreadEnv(input: Activity): Unit = {
     initEnv = true
     val multiThread = System.getProperty("multiThread", "false").toBoolean
-    require(this.train && multiThread, "Please not set multiThread to true for model training")
+    if (this.train && multiThread) {
+      throw new IllegalArgumentException("Please not set multiThread to true for model training")
+    }
     if (this.train
       || !multiThread
       || (_outputFormats != null && _outputFormats.length != 1)
