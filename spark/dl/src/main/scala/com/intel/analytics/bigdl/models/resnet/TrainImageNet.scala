@@ -193,7 +193,7 @@ object TrainImageNet {
         optimizer.setValidation(Trigger.everyEpoch, validateSet,
           Array(new Top1Accuracy[Float], new Top5Accuracy[Float]))
       } else {
-        optimizer.setValidation(Trigger.severalIteration(50),
+        optimizer.setValidation(Trigger.severalIteration(40),
           validateSet, Array(new Top1Accuracy[Float], new Top5Accuracy[Float]))
       }
       optimizer

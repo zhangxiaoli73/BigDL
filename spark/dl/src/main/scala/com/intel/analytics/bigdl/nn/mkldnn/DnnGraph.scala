@@ -75,6 +75,7 @@ class DnnGraph(
   buildBackwardGraph()
 
   override def updateOutput(input: Activity): Activity = {
+    val s1 = System.nanoTime()
     var i = 0
     while(i < forwardExecution.length) {
       val node = forwardExecution(i)
@@ -88,6 +89,10 @@ class DnnGraph(
       i += 1
     }
     output = getRealOutput(input, dummyOutput.element.output)
+    val end1 = (System.nanoTime() - s1)/1e9
+    if (System.getProperty("debugGraph", "false") == "true") {
+      println(s"graph_fwd ${end1}")
+    }
     output
   }
 
@@ -100,6 +105,7 @@ class DnnGraph(
   }
 
   override def updateGradInput(input: Activity, gradOutput: Activity): Activity = {
+    val s1 = System.nanoTime()
     dummyOutputGrad.element.gradInput = gradOutput
     var i = 0
     while (i < backwardExecution.length - 1) { // do not execute the dummy backward end
@@ -113,10 +119,15 @@ class DnnGraph(
       i += 1
     }
     gradInput = getRealOutput(input, fetchModelGradInput())
+    val end1 = (System.nanoTime() - s1)/1e9
+    if (System.getProperty("debugGraph", "false") == "true") {
+      println(s"graph_bwd ${end1}")
+    }
     gradInput
   }
 
   override def accGradParameters(input: Activity, gradOutput: Activity): Unit = {
+    val s1 = System.nanoTime()
     var i = 0
     while (i < backwardExecution.length - 1) {
       val curNode = backwardExecution(i)
@@ -126,6 +137,10 @@ class DnnGraph(
       curNode.element.accGradParameters(curInput, curGradOutput)
       curNode.element.asyncGradient()
       i += 1
+    }
+    val end1 = (System.nanoTime() - s1)/1e9
+    if (System.getProperty("debugGraph", "false") == "true") {
+      println(s"graph_acc ${end1}")
     }
   }
 

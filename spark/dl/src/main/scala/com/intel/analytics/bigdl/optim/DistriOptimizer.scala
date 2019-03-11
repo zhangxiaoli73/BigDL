@@ -834,12 +834,11 @@ class DistriOptimizer[T: ClassTag] (
         s"have corresponding OptimMethod")
     }
 
+    prepareInput()
 
     val modelsAndBroadcast = DistriOptimizer.initThreadModels(model, distDataset, criterion, state,
       nodeNumber, coresPerNode, checkSingleton, parameters, validationMethods,
       optimMethods, parameterProcessors)
-
-    prepareInput()
 
     models = if (reserveOptimMethod && previousOptim != null) {
       // replace optimMethods with previous ones

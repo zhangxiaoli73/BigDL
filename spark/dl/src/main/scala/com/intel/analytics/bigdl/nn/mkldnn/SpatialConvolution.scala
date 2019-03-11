@@ -454,17 +454,24 @@ class SpatialConvolution(
     gradBias.sync()
 
     if (System.getProperty("reguFor", "false") == "true") {
-      weightAcc.resizeAs(weight.dense).copy(weight.dense)
-      biasAcc.resizeAs(bias.dense).copy(bias.dense)
-      gradWeightAcc.resizeAs(gradWeight.dense).copy(gradWeight.dense)
-      gradBiasAcc.resizeAs(gradBias.dense).copy(gradBias.dense)
+//      weightAcc.resizeAs(weight.dense).copy(weight.dense)
+//      biasAcc.resizeAs(bias.dense).copy(bias.dense)
+//      gradWeightAcc.resizeAs(gradWeight.dense).copy(gradWeight.dense)
+//      gradBiasAcc.resizeAs(gradBias.dense).copy(gradBias.dense)
+//      if (null != wRegularizer) {
+//        wRegularizer.accRegularization(weightAcc, gradWeightAcc, scaleW)
+//        gradWeight.dense.copy(gradWeightAcc)
+//      }
+//      if (withBias && null != bRegularizer) {
+//        bRegularizer.accRegularization(biasAcc, gradBiasAcc, scaleB)
+//        gradBias.dense.copy(gradBiasAcc)
+//      }
+
       if (null != wRegularizer) {
-        wRegularizer.accRegularization(weightAcc, gradWeightAcc, scaleW)
-        gradWeight.dense.copy(gradWeightAcc)
+        wRegularizer.accRegularization(weight.dense, gradWeight.dense, scaleW)
       }
       if (withBias && null != bRegularizer) {
-        bRegularizer.accRegularization(biasAcc, gradBiasAcc, scaleB)
-        gradBias.dense.copy(gradBiasAcc)
+        bRegularizer.accRegularization(bias.dense, gradBias.dense, scaleB)
       }
     }
   }
@@ -475,6 +482,7 @@ class SpatialConvolution(
     } else {
       (Array(weight.dense), Array(gradWeight.dense))
     }
+
   }
 
   // we need not implement it, because the grad parameters will clean by mkldnn
