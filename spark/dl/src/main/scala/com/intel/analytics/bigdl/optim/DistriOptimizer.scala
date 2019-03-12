@@ -260,8 +260,8 @@ object DistriOptimizer extends AbstractOptimizer {
               if (Engine.getEngineType() == MklBlas || localModel.isInstanceOf[IRGraph[T]]) {
                 val output = localModel.forward(input)
                 lossArray(i) = ev.toType[Double](localCriterion.forward(output, target))
-                val errors = localCriterion.backward(output, target)
-                localModel.backward(input, errors)
+                // val errors = localCriterion.backward(output, target)
+                // localModel.backward(input, errors)
               } else {
                 Engine.dnnComputing.invokeAndWait2(Array(0).map(_ => () => {
                   val output = localModel.forward(input)
@@ -495,7 +495,8 @@ object DistriOptimizer extends AbstractOptimizer {
           driverState,
           parameters,
           optimMethods,
-          trainingModel
+          trainingModel,
+          validationDataSet
         )
 
       } else {
@@ -546,7 +547,14 @@ object DistriOptimizer extends AbstractOptimizer {
     // ModelBroadcast to clone model here.
     // Notes: All models returned by modelBroadcast.value() share the same weight&bias, while
     // gradWeight&gradBias is unshared.
-    val modelBroadcast = ModelBroadcast[T]().broadcast(sc, ConversionUtils.convert(model))
+    val m = ConversionUtils.convert(model.cloneModule())
+    val loaded = Module.loadModule[T]("/home/zhangli/workspace/zoo-model/resnet-50.bigdl")
+    val p1 = m.getParameters()
+    val p2 = loaded.getParameters()
+    p1._1.copy(p2._1)
+    p1._2.copy(p2._2)
+
+    val modelBroadcast = ModelBroadcast[T]().broadcast(sc, loaded)
     val _subModelNumber = Engine.getEngineType match {
       case MklBlas => coresPerNode
       case MklDnn => 1

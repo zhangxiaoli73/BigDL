@@ -16,6 +16,8 @@
 
 package com.intel.analytics.bigdl.optim
 
+import com.intel.analytics
+import com.intel.analytics.bigdl
 import com.intel.analytics.bigdl.dataset.{DistributedDataSet, _}
 import com.intel.analytics.bigdl.{DataSet, Module}
 import com.intel.analytics.bigdl.optim.DistriOptimizer.{Cache, logger}
@@ -208,13 +210,23 @@ abstract class AbstractOptimizer {
     state: Table,
     parameters: Map[String, AllReduceParameter[T]],
     optimMethods: Map[String, OptimMethod[T]],
-    trainingModel: Module[T])(implicit ev: TensorNumeric[T]): Unit = {
+    trainingModel: Module[T],
+    validateData: Option[analytics.bigdl.DataSet[MiniBatch[T]]] = None)
+    (implicit ev: TensorNumeric[T]): Unit = {
     cacheTrigger.foreach { trigger =>
       cachePath.foreach { path =>
         if (trigger(state)) {
-          saveModel(getModel(models, parameters, trainingModel), cachePath, isOverWrite,
+          val m = getModel(models, parameters, trainingModel)
+          val m_evaluate = m.cloneModule()
+          saveModel(m, cachePath, isOverWrite,
             s".${state[Int]("neval")}")
           logger.info(s"[Wall Clock ${wallClockTime / 1e9}s] Save model to $path")
+          println("111111111111")
+          val data = validateData.get.toDistributed().data(train = false)
+          val result = m_evaluate.evaluate(data,
+            Array(new Top1Accuracy[T], new Top5Accuracy[T]))
+          result.foreach(r => println(s"${r._2} is ${r._1}"))
+          println("22222222222")
           optimMethods.foreach{case (name, optimMethod) =>
             optimMethod.state.update("epoch", state[Int]("epoch"))
             optimMethod.state.update("neval", state[Int]("neval"))

@@ -98,31 +98,32 @@ object TrainImageNet {
       } else modelDefined
 
       println(model)
+//      val optimMethod = if (param.stateSnapshot.isDefined) {
+//        val optim = OptimMethod.load[Float](param.stateSnapshot.get).asInstanceOf[SGD[Float]]
+//        val baseLr = param.learningRate
+//        val iterationsPerEpoch = math.ceil(1281167 / param.batchSize).toInt
+//        val warmUpIteration = iterationsPerEpoch * param.warmupEpoch
+//        val maxLr = param.maxLr
+//        val delta = (maxLr - baseLr) / warmUpIteration
+//        optim.learningRateSchedule = SGD.EpochDecayWithWarmUp(warmUpIteration, delta, imageNetDecay)
+//        optim
+//      } else {
+//        val baseLr = param.learningRate
+//        val iterationsPerEpoch = math.ceil(1281167 / param.batchSize).toInt
+//        val warmUpIteration = iterationsPerEpoch * param.warmupEpoch
+//        val maxLr = param.maxLr
+//        val delta = (maxLr - baseLr) / warmUpIteration
+//
+//        logger.info(s"warmUpIteraion: $warmUpIteration, startLr: ${param.learningRate}, " +
+//          s"maxLr: $maxLr, " +
+//          s"delta: $delta, nesterov: ${param.nesterov}")
+//        new SGD[Float](learningRate = param.learningRate, learningRateDecay = 0.0,
+//          weightDecay = param.weightDecay, momentum = param.momentum, dampening = param.dampening,
+//          nesterov = param.nesterov,
+//          learningRateSchedule = SGD.EpochDecayWithWarmUp(warmUpIteration, delta, imageNetDecay))
+//      }
 
-      val optimMethod = if (param.stateSnapshot.isDefined) {
-        val optim = OptimMethod.load[Float](param.stateSnapshot.get).asInstanceOf[SGD[Float]]
-        val baseLr = param.learningRate
-        val iterationsPerEpoch = math.ceil(1281167 / param.batchSize).toInt
-        val warmUpIteration = iterationsPerEpoch * param.warmupEpoch
-        val maxLr = param.maxLr
-        val delta = (maxLr - baseLr) / warmUpIteration
-        optim.learningRateSchedule = SGD.EpochDecayWithWarmUp(warmUpIteration, delta, imageNetDecay)
-        optim
-      } else {
-        val baseLr = param.learningRate
-        val iterationsPerEpoch = math.ceil(1281167 / param.batchSize).toInt
-        val warmUpIteration = iterationsPerEpoch * param.warmupEpoch
-        val maxLr = param.maxLr
-        val delta = (maxLr - baseLr) / warmUpIteration
-
-        logger.info(s"warmUpIteraion: $warmUpIteration, startLr: ${param.learningRate}, " +
-          s"maxLr: $maxLr, " +
-          s"delta: $delta, nesterov: ${param.nesterov}")
-        new SGD[Float](learningRate = param.learningRate, learningRateDecay = 0.0,
-          weightDecay = param.weightDecay, momentum = param.momentum, dampening = param.dampening,
-          nesterov = param.nesterov,
-          learningRateSchedule = SGD.EpochDecayWithWarmUp(warmUpIteration, delta, imageNetDecay))
-      }
+      val optimMethod = new SGD[Float](0.001)
 
       val optimizer = Optimizer(
         model = model,

@@ -86,9 +86,9 @@ class Evaluator[T: ClassTag] private[optim](model: Module[T])(implicit ev: Tenso
            vMethods: Array[ValidationMethod[T]]
           ): Array[(ValidationResult, ValidationMethod[T])] = {
 
-    val rdd = ConversionUtils.coalesce(dataset)
+    val rdd = dataset // ConversionUtils.coalesce(dataset)
     val modelBroad = ModelBroadcast[T]().broadcast(rdd.sparkContext,
-      ConversionUtils.convert(model.evaluate()))
+      model.evaluate())
     val otherBroad = rdd.sparkContext.broadcast(vMethods)
 
 
