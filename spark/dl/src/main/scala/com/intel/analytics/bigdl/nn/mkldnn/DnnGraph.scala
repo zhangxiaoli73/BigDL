@@ -75,6 +75,7 @@ class DnnGraph(
   buildBackwardGraph()
 
   override def updateOutput(input: Activity): Activity = {
+    val s1 = System.nanoTime()
     var i = 0
     while(i < forwardExecution.length) {
       val node = forwardExecution(i)
@@ -87,8 +88,12 @@ class DnnGraph(
       node.element.forward(nodeInput)
       i += 1
     }
-    output = dummyOutput.element.output
-    getRealOutput(input, output)
+    output = getRealOutput(input, dummyOutput.element.output)
+    val end1 = (System.nanoTime() - s1)/1e9
+    if (System.getProperty("debugGraph", "false") == "true") {
+      println(s"graph_fwd ${end1}")
+    }
+    output
   }
 
   override def backward(input: Activity, gradOutput: Activity): Activity = {
@@ -100,6 +105,7 @@ class DnnGraph(
   }
 
   override def updateGradInput(input: Activity, gradOutput: Activity): Activity = {
+    val s1 = System.nanoTime()
     dummyOutputGrad.element.gradInput = gradOutput
     var i = 0
     while (i < backwardExecution.length - 1) { // do not execute the dummy backward end
@@ -112,11 +118,16 @@ class DnnGraph(
       }
       i += 1
     }
-    gradInput = fetchModelGradInput()
-    getRealOutput(input, gradInput)
+    gradInput = getRealOutput(input, fetchModelGradInput())
+    val end1 = (System.nanoTime() - s1)/1e9
+    if (System.getProperty("debugGraph", "false") == "true") {
+      println(s"graph_bwd ${end1}")
+    }
+    gradInput
   }
 
   override def accGradParameters(input: Activity, gradOutput: Activity): Unit = {
+    val s1 = System.nanoTime()
     var i = 0
     while (i < backwardExecution.length - 1) {
       val curNode = backwardExecution(i)
@@ -126,6 +137,10 @@ class DnnGraph(
       curNode.element.accGradParameters(curInput, curGradOutput)
       curNode.element.asyncGradient()
       i += 1
+    }
+    val end1 = (System.nanoTime() - s1)/1e9
+    if (System.getProperty("debugGraph", "false") == "true") {
+      println(s"graph_acc ${end1}")
     }
   }
 
@@ -409,7 +424,7 @@ class DnnGraph(
   }
 
   // init forward primitives
-  override private[mkldnn] def initFwdPrimitives(inputs: Array[MemoryData], phase: Phase)
+  override private[bigdl] def initFwdPrimitives(inputs: Array[MemoryData], phase: Phase)
     : (Array[MemoryData], Array[MemoryData]) = {
     skipInitFwdPrimitives()
     fusion()
@@ -433,7 +448,7 @@ class DnnGraph(
   }
 
   // init updateGradInput primitives
-  override private[mkldnn] def initBwdPrimitives(grads: Array[MemoryData], phase: Phase)
+  override private[bigdl] def initBwdPrimitives(grads: Array[MemoryData], phase: Phase)
     : (Array[MemoryData], Array[MemoryData]) = {
     var lastGradInputFormats = grads
     var firstRealGradOutputFormats: Array[MemoryData] = null
@@ -453,7 +468,7 @@ class DnnGraph(
   }
 
   // init acc primitives
-  override private[mkldnn] def initGradWPrimitives(grads: Array[MemoryData], phase: Phase)
+  override private[bigdl] def initGradWPrimitives(grads: Array[MemoryData], phase: Phase)
     : Array[MemoryData] = {
     var lastGradInputFormats = grads
     var firstRealGradOutputFormats: Array[MemoryData] = null

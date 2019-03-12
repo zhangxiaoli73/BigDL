@@ -107,7 +107,7 @@ abstract class AbstractOptimizer {
     }
     val vMethods = validationMethods.get
     val validateRDD = validationDataSet.get.toDistributed().data(train = false)
-    logger.info(s"$header Validate model...")
+    logger.info(s"$header Validate model... ${validateRDD.getNumPartitions} ${models.getNumPartitions}")
     val _subModelNumber = Engine.getEngineType match {
       case MklBlas => coresPerNode
       case MklDnn => 1

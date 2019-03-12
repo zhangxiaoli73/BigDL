@@ -53,7 +53,9 @@ private[bigdl] class IRGraph[T: ClassTag](
   require(outputFormats.length == outputs.length, s"IRGraph: outputFormats" +
     s"length ${inputFormats.length} should be same with input nodes length ${outputs.length}")
 
-  private var graph: Graph[T] = null
+  private[bigdl] var graph: Graph[T] = null
+
+  private[bigdl] def isBuild(): Boolean = if (graph == null) false else true
 
   override def updateOutput(input: Activity): Activity = {
     if (graph == null) {
@@ -89,6 +91,7 @@ private[bigdl] class IRGraph[T: ClassTag](
   }
 
   override def training(): this.type = {
+    println("here model training")
     train = true
     graph.training()
     this
@@ -99,6 +102,7 @@ private[bigdl] class IRGraph[T: ClassTag](
    * @return
    */
   override def evaluate(): this.type = {
+    println("here model evaluate")
     train = false
     graph.evaluate()
     this
@@ -137,15 +141,19 @@ private[bigdl] class IRGraph[T: ClassTag](
         })
       }
       val dnnGraph = graph.asInstanceOf[DnnGraph]
+      val phase = if (dnnGraph.isTraining()) Phase.TrainingPhase else Phase.InferencePhase
       dnnGraph.setRuntime(new MklDnnRuntime())
-      dnnGraph.initFwdPrimitives(inputMemory)
+      dnnGraph.initFwdPrimitives(inputMemory, phase)
       if (dnnGraph.isTraining()) {
-        dnnGraph.initBwdPrimitives(dnnGraph.outputFormats())
-        dnnGraph.initGradWPrimitives(dnnGraph.outputFormats())
+        dnnGraph.initBwdPrimitives(dnnGraph.outputFormats(), phase)
+        dnnGraph.initGradWPrimitives(dnnGraph.outputFormats(), phase)
       }
       initPrim = true
     }
   }
+
+  override def release(): Unit = graph.release()
+
 }
 
 object IRGraph {

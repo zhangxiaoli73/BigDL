@@ -22,7 +22,7 @@ import com.intel.analytics.bigdl.Module
 import com.intel.analytics.bigdl.mkl._
 import com.intel.analytics.bigdl.nn._
 import com.intel.analytics.bigdl.nn.abstractnn._
-import com.intel.analytics.bigdl.optim.Regularizer
+import com.intel.analytics.bigdl.optim.{L2Regularizer, Regularizer}
 import com.intel.analytics.bigdl.tensor.{DnnTensor, Tensor}
 
 import scala.collection.mutable.ArrayBuffer
@@ -53,6 +53,13 @@ class SpatialConvolution(
     Array (nGroup, nOutputPlane / nGroup, nInputPlane / nGroup, kernelH, kernelW)
   }
 
+  if (wRegularizer == null) {
+    wRegularizer = L2Regularizer(1e-4)
+  }
+
+  if (bRegularizer == null) {
+    bRegularizer = L2Regularizer(1e-4)
+  }
   // !!!important!!! this is for weight and input conversion.
   // The weight in forward and updateGradInput is different.
   // The input in updateOutput and accGradParameters is different too.
@@ -440,11 +447,13 @@ class SpatialConvolution(
     gradWeight.sync()
     gradBias.sync()
 
-    if (null != wRegularizer) {
-      wRegularizer.accRegularization(weight.dense, gradWeight.dense, scaleW)
-    }
-    if (withBias && null != bRegularizer) {
-      bRegularizer.accRegularization(bias.dense, gradBias.dense, scaleB)
+    if (System.getProperty("reguFor", "false") == "true") {
+      if (null != wRegularizer) {
+        wRegularizer.accRegularization(weight.dense, gradWeight.dense, scaleW)
+      }
+      if (withBias && null != bRegularizer) {
+        bRegularizer.accRegularization(bias.dense, gradBias.dense, scaleB)
+      }
     }
   }
 
