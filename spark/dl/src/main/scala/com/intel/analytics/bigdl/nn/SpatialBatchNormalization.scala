@@ -53,7 +53,7 @@ class SpatialBatchNormalization[T: ClassTag](
 
   override def updateOutput(input: Tensor[T]): Tensor[T] = {
 
-    val parallism = getParallism().getOrElse(1)
+    val parallism = 1 // getParallism().getOrElse(1)
 
     val meanKeyWithId = s"${this.meanKey}_${this.getId}"
     val stdKeyWithId = s"${this.stdKey}_${this.getId}"

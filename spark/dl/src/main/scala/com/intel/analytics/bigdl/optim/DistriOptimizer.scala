@@ -547,31 +547,14 @@ object DistriOptimizer extends AbstractOptimizer {
     // ModelBroadcast to clone model here.
     // Notes: All models returned by modelBroadcast.value() share the same weight&bias, while
     // gradWeight&gradBias is unshared.
-    val loaded = Module.loadModule[T]("/home/zhangli/workspace/zoo-model/resnet-50.bigdl")
-
-    val m = ConversionUtils.convert(model.cloneModule()).asInstanceOf[IRGraph[T]]
+    val loaded = Module.loadModule[T]("/home/zhangli/workspace/zoo-model/resnet-50.bigdl").toGraph()
+    val m = ConversionUtils.convert(model).asInstanceOf[IRGraph[T]]
     val p1 = m.getParameters()
     val p2 = loaded.getParameters()
     p1._1.copy(p2._1)
     p1._2.copy(p2._2)
 
-    val ir = ConversionUtils.convert(loaded).asInstanceOf[IRGraph[T]]
-    val e1 = ir.graph.getForwardExecutions()
-    val e2 = m.graph.getForwardExecutions()
-    var ii = 0
-    while (ii < e1.length) {
-      val m1 = e1(ii).element
-      val m2 = e2(ii).element
-      println(m1 + "   " + m2)
-      ii += 1
-    }
-
-    val in =Tensor[Float](2, 3, 224, 224).rand()
-    val out1 = ir.forward(in)
-    val out2 = m.forward(in)
-    val out3 =
-
-    val modelBroadcast = ModelBroadcast[T]().broadcast(sc, ir)
+    val modelBroadcast = ModelBroadcast[T]().broadcast(sc, m)
     val _subModelNumber = Engine.getEngineType match {
       case MklBlas => coresPerNode
       case MklDnn => 1

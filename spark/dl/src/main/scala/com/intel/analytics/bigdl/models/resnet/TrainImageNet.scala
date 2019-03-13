@@ -68,10 +68,11 @@ object TrainImageNet {
       val shortcut: ShortcutType = ShortcutType.B
 
       val modelDefined = if (param.modelSnapshot.isDefined) {
-        Module.loadModule[Float](param.modelSnapshot.get)
+        Module.load[Float](param.modelSnapshot.get)
       } else {
         val curModel =
-          ResNet(classNum = param.classes, T("shortcutType" -> shortcut, "depth" -> param.depth,
+          ResNet(classNum = param.classes,
+            T("shortcutType" -> shortcut, "depth" -> param.depth,
             "optnet" -> param.optnet, "dataSet" -> dataSetType))
         if (param.optnet) {
           ResNet.shareGradInput(curModel)
@@ -87,7 +88,7 @@ object TrainImageNet {
         instability while improves the performance a lot. */
 //        val parallisim = Engine.coreNumber
 //        setParallism(curModel, parallisim)
-        curModel
+        curModel.toGraph()
       }
 
       val model = if (System.getProperty("ir", "false") == "true") {

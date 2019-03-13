@@ -105,7 +105,7 @@ class ThreadPool(private var poolSize: Int) {
       require(MKL.isMKLLoaded)
       require(BackendMklDnn.isLoaded)
 
-      MKL.setNumThreads(size)
+      // MKL.setNumThreads(size)
       BackendMklDnn.setNumThreads(size)
       Affinity.setOmpAffinity()
     }))

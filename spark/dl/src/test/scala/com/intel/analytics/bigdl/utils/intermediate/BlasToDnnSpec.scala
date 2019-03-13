@@ -143,4 +143,55 @@ class BlasToDnnSpec extends BigDLSpecHelper {
 
     Equivalent.nearequals(outDnn, outBlas, 1e-6) should be(true)
   }
+
+  "resnet50 blas to dnn 1111" should "work properly" in {
+    val batchSize = 2
+    val classNum = 1000
+    RandomGenerator.RNG.setSeed(1000)
+    val input = Tensor[Float](Array(batchSize, 3, 224, 224)).apply1(_ =>
+      RandomGenerator.RNG.uniform(0.1, 1.0).toFloat)
+    var gradOutput = Tensor[Float](batchSize, classNum).apply1(_ =>
+      RandomGenerator.RNG.uniform(1.0, 1000.0).toFloat)
+
+    val blas = ResNet.graph(classNum,
+      T("shortcutType" -> ShortcutType.B, "depth" -> 50,
+        "optnet" -> false, "dataset" -> DatasetType.ImageNet)).asInstanceOf[StaticGraph[Float]]
+    val irBlas = blas.cloneModule().toIRgraph()
+
+    val loaded = Module.loadModule[Float]("/home/zhangli/workspace/zoo-model/resnet-50.bigdl").toGraph()
+
+    val p1 = irBlas.getParameters()
+    val p2 = loaded.getParameters()
+    p1._1.copy(p2._1)
+    p1._2.copy(p2._2)
+
+//    val ir = ConversionUtils.convert(loaded).asInstanceOf[IRGraph[T]]
+//    val e1 = ir.graph.getForwardExecutions()
+//    val e2 = m.graph.getForwardExecutions()
+//    var ii = 0
+//    while (ii < e1.length) {
+//      val m1 = e1(ii).element
+//      val m2 = e2(ii).element
+//      println(m1 + "   " + m2)
+//      if (m2.parameters() != null && m1.parameters() != null) {
+//        val p1 = m1.getParameters()
+//        val p2 = m2.getParameters()
+//      }
+//      ii += 1
+//    }
+
+    val outBlas = blas.forward(input).toTensor[Float]
+    val outDnn = irBlas.forward(input).toTensor[Float]
+    val out = loaded.forward(input).toTensor[Float]
+
+    gradOutput.resizeAs(outBlas).apply1(_ =>
+      RandomGenerator.RNG.uniform(1.0, 1000.0).toFloat)
+
+    val gradInputBlas = blas.backward(input, gradOutput).toTensor[Float]
+
+    val gradInputDnn = irBlas.backward(input, gradOutput).toTensor[Float]
+    val gradInputTensor = Tensor[Float]().resize(gradInputDnn.size()).copy(gradInputDnn)
+
+    Equivalent.nearequals(outDnn, outBlas, 1e-6) should be(true)
+  }
 }
