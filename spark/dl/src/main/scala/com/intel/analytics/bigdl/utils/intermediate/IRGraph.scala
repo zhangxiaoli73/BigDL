@@ -22,7 +22,8 @@ import com.intel.analytics.bigdl.nn.abstractnn.{AbstractModule, Activity, DataFo
 import com.intel.analytics.bigdl.nn.mkldnn._
 import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
-import com.intel.analytics.bigdl.utils.{Engine, MklBlas, Node, T}
+import com.intel.analytics.bigdl.utils._
+
 import scala.reflect.ClassTag
 
 /**
@@ -89,6 +90,8 @@ private[bigdl] class IRGraph[T: ClassTag](
   override def parameters(): (Array[Tensor[T]], Array[Tensor[T]]) = {
     graph.parameters()
   }
+
+  override def getParametersTable(): Table = graph.getParametersTable()
 
   override def training(): this.type = {
     println("here model training")
