@@ -18,10 +18,9 @@ package com.intel.analytics.bigdl.optim
 
 import com.intel.analytics.bigdl.{Module, _}
 import com.intel.analytics.bigdl.dataset.{DataSet, DistributedDataSet, MiniBatch, PaddingParam, Sample, SampleToMiniBatch}
+import com.intel.analytics.bigdl.nn.{Container, Graph, Module, Utils}
 import com.intel.analytics.bigdl.nn.{Container, Module, Utils}
 import com.intel.analytics.bigdl.parameters.{AllReduceParameter, ParameterProcessor}
-import com.intel.analytics.bigdl.nn.{Container, Module, Utils}
-import com.intel.analytics.bigdl.parameters.AllReduceParameter
 import com.intel.analytics.bigdl.tensor.{FloatType, Tensor}
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
 import com.intel.analytics.bigdl.utils._
@@ -31,9 +30,9 @@ import java.util.Calendar
 
 import com.intel.analytics.bigdl.models.utils.{CachedModels, ModelBroadcast}
 import com.intel.analytics.bigdl.nn.abstractnn.Activity
-import com.intel.analytics.bigdl.nn.mkldnn.{DnnGraph, MklDnnContainer}
+import com.intel.analytics.bigdl.nn.mkldnn.{DnnGraph, MklDnnContainer, MklDnnLayer}
 import com.intel.analytics.bigdl.nn.mkldnn.Phase.{InferencePhase, TrainingPhase}
-import com.intel.analytics.bigdl.utils.intermediate.IRGraph
+import com.intel.analytics.bigdl.utils.intermediate.{ConversionUtils, IRGraph}
 import org.apache.commons.lang.exception.ExceptionUtils
 import com.intel.analytics.bigdl.visualization.{TrainSummary, ValidationSummary}
 import org.apache.log4j.Logger
@@ -546,7 +545,7 @@ object DistriOptimizer extends AbstractOptimizer {
     // ModelBroadcast to clone model here.
     // Notes: All models returned by modelBroadcast.value() share the same weight&bias, while
     // gradWeight&gradBias is unshared.
-    val modelBroadcast = ModelBroadcast[T]().broadcast(sc, model)
+    val modelBroadcast = ModelBroadcast[T]().broadcast(sc, ConversionUtils.convert(model))
     val _subModelNumber = Engine.getEngineType match {
       case MklBlas => coresPerNode
       case MklDnn => 1
@@ -786,6 +785,10 @@ class DistriOptimizer[T: ClassTag] (
   override def optimize(): Module[T] = {
 
     val distDataset = dataset.asInstanceOf[DistributedDataSet[MiniBatch[T]]]
+    val trainingModel = if (Engine.getEngineType() == MklDnn && !model.isInstanceOf[MklDnnLayer]
+      && !model.isInstanceOf[IRGraph[T]] && !model.isInstanceOf[Graph[T]]) {
+      model.toGraph().setName(model.getName())
+    } else model
 
     optimMethods.values.foreach { optimMethod =>
       optimMethod.clearHistory()
@@ -806,11 +809,11 @@ class DistriOptimizer[T: ClassTag] (
     val coresPerNode = Engine.coreNumber()
 
     val partitionNum = distDataset.originRDD().partitions.length
-    val modelParameters = model.getParameters()
+    val modelParameters = trainingModel.getParameters()
     // subModuleName -> (storageOffset, length, AllReduceParameter)
     val parameters = if (optimMethods.size != 1) {
       val p = optimMethods.map{case (subModuleName, optimMethods) =>
-        val subModule = model(subModuleName)
+        val subModule = trainingModel(subModuleName)
         require(subModule.isDefined, s"Optimizer couldn't find $subModuleName in $model")
         val subModuleWeights = subModule.get.getParameters()._1
         (subModuleName, subModuleWeights)
@@ -823,18 +826,18 @@ class DistriOptimizer[T: ClassTag] (
         (subModuleName, AllReduceParameter.newParameter[T](
           partitionNum, weights.nElement(), weights.storageOffset()))
       }
-    } else if (optimMethods.contains(model.getName())) {
-      Map(model.getName() -> AllReduceParameter.newParameter[T](
+    } else if (optimMethods.contains(trainingModel.getName())) {
+      Map(trainingModel.getName() -> AllReduceParameter.newParameter[T](
         partitionNum, modelParameters._1.nElement()))
     } else {
-      throw new IllegalArgumentException(s"${model.getName()} doesn't " +
+      throw new IllegalArgumentException(s"${trainingModel.getName()} doesn't " +
         s"have corresponding OptimMethod")
     }
 
     prepareInput()
 
-    val modelsAndBroadcast = DistriOptimizer.initThreadModels(model, distDataset, criterion, state,
-      nodeNumber, coresPerNode, checkSingleton, parameters, validationMethods,
+    val modelsAndBroadcast = DistriOptimizer.initThreadModels(trainingModel, distDataset, criterion,
+      state, nodeNumber, coresPerNode, checkSingleton, parameters, validationMethods,
       optimMethods, parameterProcessors)
 
     models = if (reserveOptimMethod && previousOptim != null) {
@@ -860,7 +863,7 @@ class DistriOptimizer[T: ClassTag] (
     while (retryNum < maxRetry) {
       try {
         DistriOptimizer.optimize(
-          model,
+          trainingModel,
           distDataset,
           coresPerNode,
           state,
@@ -909,7 +912,7 @@ class DistriOptimizer[T: ClassTag] (
               Module.load[T](modelFile)
             } else {
               DistriOptimizer.logger.info("Model recover from origin model")
-              model
+              trainingModel
             }
             optimMethods = optimMethods.map { case (moduleName, optimMethod) =>
               val methodFile = getLatestFile(checkpointPath.get, s"optimMethod-$moduleName")
@@ -935,7 +938,7 @@ class DistriOptimizer[T: ClassTag] (
       }
     }
 
-    DistriOptimizer.getModel(models, parameters, model)
+    DistriOptimizer.getModel(models, parameters, trainingModel)
 
     // Reset some internal states, so this or other optimizers can run optimize again
     clearState()
@@ -953,7 +956,7 @@ class DistriOptimizer[T: ClassTag] (
     }
     models.unpersist()
 
-    model
+    trainingModel
   }
 
   private def getLatestFile(path: String, fileName: String): String = {
