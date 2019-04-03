@@ -49,7 +49,7 @@ object PTBModel {
                input: ModuleNode[Float]): ModuleNode[Float] = {
     if (depth == numLayers) {
       Recurrent[Float]()
-        .add(LSTM[Float](inputSize, hiddenSize, 0, null, null, null))
+        .add(GRU[Float](inputSize, hiddenSize, 0, null, null, null))
         .inputs(input)
     } else {
       addLayer(
@@ -58,7 +58,7 @@ object PTBModel {
         depth + 1,
         numLayers,
         Recurrent[Float]()
-          .add(LSTM[Float](inputSize, hiddenSize, 0, null, null, null))
+          .add(GRU[Float](inputSize, hiddenSize, 0, null, null, null))
           .inputs(input)
       )
     }
