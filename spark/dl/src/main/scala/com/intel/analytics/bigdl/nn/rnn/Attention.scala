@@ -38,11 +38,11 @@ class AttentionLayer[T: ClassTag](hidden_size: Int, num_heads: Int, attention_dr
     val inputBias = Input()
 
     val q_dense_layer = new KerasWrapper(
-      new Dense(outputDim = hidden_size, bias = false)).inputs(inputX)
+      new Dense(outputDim = hidden_size, bias = false).setName("q")).inputs(inputX)
     val k_dense_layer = new KerasWrapper(
-      new Dense(outputDim = hidden_size, bias = false)).inputs(inputY)
+      new Dense(outputDim = hidden_size, bias = false).setName("k")).inputs(inputY)
     val v_dense_layer = new KerasWrapper(
-      new Dense(outputDim = hidden_size, bias = false)).inputs(inputY)
+      new Dense(outputDim = hidden_size, bias = false).setName("v")).inputs(inputY)
 
     val split_q = new SplitHeads(hidden_size, num_heads, true).inputs(q_dense_layer)
     val split_k = new SplitHeads(hidden_size, num_heads).inputs(k_dense_layer)
@@ -55,12 +55,15 @@ class AttentionLayer[T: ClassTag](hidden_size: Int, num_heads: Int, attention_dr
     val matmul = MM(transB = true).inputs(contiguous_q, contiguous_k)
     val cadd = CAddTable().inputs(matmul, inputBias)
     val softMax = new KerasWrapper(keras.SoftMax()).inputs(cadd)
-    val drop = Dropout(initP = (1.0 - attention_dropout)).inputs(softMax)
 
+    val drop = if (train) {
+      Dropout(initP = (1.0 - attention_dropout)).inputs(softMax)
+    } else softMax
     val matmulNoTrans = MM().inputs(drop, contiguous_v)
     val combineHeads = new CombineHeads().inputs(matmulNoTrans)
-    val output_dense_layer = new KerasWrapper(new Dense(outputDim = hidden_size, bias = false)
-    ).inputs(combineHeads)
+    val output_dense_layer = new KerasWrapper(
+        new Dense(outputDim = hidden_size, bias = false)
+        .setName("output_transform")).inputs(combineHeads)
     val graph = Graph(Array(inputX, inputY, inputBias), Array(output_dense_layer))
     if (this.train) graph.training() else graph.evaluate()
     graph
