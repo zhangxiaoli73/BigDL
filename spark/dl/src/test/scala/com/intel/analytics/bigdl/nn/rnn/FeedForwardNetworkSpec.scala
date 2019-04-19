@@ -147,25 +147,4 @@ class FeedForwardNetworkSpec extends FlatSpec with Matchers {
       }
     }
   }
-
-  "linear" should "work good" in {
-    val input = Tensor[Float](T(T(1.62434536, -0.61175641, -0.52817175),
-      T(-1.07296862, 0.86540763, -2.3015387)))
-
-    val model = Dense[Float](1, activation = "relu")
-
-    model.build(Shape(Array(2, 3)))
-
-    val paramTable = model.getParametersTable()
-    for (i <- paramTable.keySet) {
-      val params = paramTable.get[Table](i).get.get[Tensor[Float]]("weight").get
-      params.copy(Tensor[Float](T(T(0.10529343), T(-0.08934997), T(0.03102726))))
-    }
-
-    val out = model.forward(input)
-    val in = model.backward(input, out)
-
-    val paramTableNew = model.getParameters()
-    val tmp = 0
-  }
 }

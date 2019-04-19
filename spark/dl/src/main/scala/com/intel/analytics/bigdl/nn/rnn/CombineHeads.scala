@@ -45,8 +45,7 @@ private[nn] class CombineHeads[T: ClassTag](implicit ev: TensorNumeric[T])
     } else {
       gradInput = gradOutput.contiguous().view(size)
     }
-    //    gradInput.resizeAs(input).copy(gradOutput)
-    gradInput = gradInput.transpose(permutations._1, permutations._2)
+    gradInput = gradInput.transpose(permutations._1, permutations._2).contiguous()
     gradInput
   }
 }

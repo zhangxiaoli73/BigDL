@@ -43,9 +43,13 @@ private[nn] class SplitHeads[T: ClassTag](hidden_size: Int, num_heads: Int,
   }
 
   override def updateGradInput(input: Tensor[T], gradOutput: Tensor[T]): Tensor[T] = {
-    gradInput.resizeAs(input).zero()
-    if (mul) gradInput.add(value, gradOutput)
-    gradInput = gradInput.transpose(permutations._1, permutations._2)
+    if (mul) {
+      gradInput.resizeAs(gradOutput).zero().add(value, gradOutput)
+    } else {
+      gradInput.resizeAs(gradOutput).copy(gradOutput)
+    }
+    gradInput = gradInput.transpose(permutations._1, permutations._2).contiguous()
+    gradInput.resize(input.size())
     gradInput
   }
 }
