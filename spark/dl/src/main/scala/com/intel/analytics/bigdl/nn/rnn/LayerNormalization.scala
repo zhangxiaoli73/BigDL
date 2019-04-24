@@ -16,7 +16,7 @@
 package com.intel.analytics.bigdl.nn.rnn
 
 import com.intel.analytics.bigdl._
-import com.intel.analytics.bigdl.nn.abstractnn.Activity
+import com.intel.analytics.bigdl.nn.abstractnn.{Activity, TensorModule}
 import com.intel.analytics.bigdl.nn.{Module => _, _}
 import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
@@ -26,73 +26,71 @@ import org.dmg.pmml.True
 import scala.reflect.ClassTag
 
 class LayerNormalization[T: ClassTag](hidden_size: Int)(implicit ev: TensorNumeric[T])
-  extends BaseModule[T] {
+  extends TensorModule[T] {
 
   private val epsilon = ev.fromType(1e-6)
-
-  override var model : Module[T] = buildModel()
 
 //  private var weights = Tensor[T](hidden_size).fill(ev.one)
 //  private var bias = Tensor[T](hidden_size).fill(ev.zero)
 
-  private var weights = Tensor[T](T(-0.14037117, -0.16902402, -0.06451887,
+  private var weight = Tensor[T](T(-0.14037117, -0.16902402, -0.06451887,
     -0.5642037,   0.24212438,  0.44951588, -0.4296978,   0.423163))
   private var bias = Tensor[T](T(0.44111532, -0.06523705, -0.3474969,
     -0.08237404, -0.3565278,  -0.18157673, 0.4592312,  -0.36194998))
 
-  private def buildModel(): Module[T] = {
-    val input = Input()
-    val mean = Mean().inputs(input)
-    val square = Square().inputs(input, mean)
-    val variance = Mean().inputs(square)
-    val graph = Graph(Array(input), Array(mean, variance))
-    if (this.train) graph.training() else graph.evaluate()
-    graph
-  }
+  var gradWeight = Tensor[T](hidden_size)
+  var gradBias = Tensor[T](hidden_size)
 
-  override def updateOutput(input: Activity): Activity = {
-    require(input.isTensor, "input should be tensor, but get table")
+  private var subMean = Tensor[T]()
+
+  private var dimension = 2
+  @transient
+  private var _gradOutput: Tensor[T] = null
+
+  override def updateOutput(input: Tensor[T]): Tensor[T] = {
     val inputX = input.toTensor[T].clone()
     val mean = inputX.mean(2).squeeze() // todo: other dimes??
 
+    output = mean
+    return output
+//
     inputX.select(1, 1).sub(mean.valueAt(1))
     inputX.select(1, 2).sub(mean.valueAt(2))
-    val subMean = inputX.clone()
+    subMean = inputX.clone()
     if (output == null) output = Tensor[T]()
     output.toTensor[T].resizeAs(inputX).copy(inputX)
-    inputX.square()
+//    inputX.square()
+//
+//    var variance = inputX.mean(2).squeeze().add(epsilon)
+//    variance = variance.sqrt().squeeze()
+//    output.toTensor[T].select(1, 1).div(variance.valueAt(1)).cmul(weight).add(bias)
+//    output.toTensor[T].select(1, 2).div(variance.valueAt(2)).cmul(weight).add(bias)
 
-    var variance = inputX.mean(2).squeeze().add(epsilon)
-    variance = variance.sqrt().squeeze()
-    output.toTensor[T].select(1, 1).div(variance.valueAt(1)).cmul(weights).add(bias)
-    output.toTensor[T].select(1, 2).div(variance.valueAt(2)).cmul(weights).add(bias)
+    output.toTensor[T].select(1, 1).cmul(weight).add(bias)
+    output.toTensor[T].select(1, 2).cmul(weight).add(bias)
 
     output
   }
 
-  override def updateGradInput(input: Activity, gradOutput: Activity): Activity = {
-    require(input.isTensor, "input should be tensor, but get table")
-    val inputX = input.toTensor[T].clone()
-    val mean = inputX.mean(2).squeeze() // todo: other dimes??
+  override def updateGradInput(input: Tensor[T], gradOutput: Tensor[T]): Tensor[T] = {
+//    val out1 = gradOutput.select(1, 1)
+//    val out2 = gradOutput.select(1, 2)
+//
+//    gradInput.resizeAs(gradOutput)
+//    gradInput.select(1, 1).addcmul(out1, weight)
+//    gradInput.select(1, 2).addcmul(out2, weight)
 
-    inputX.select(1, 1).sub(mean.valueAt(1))
-    inputX.select(1, 2).sub(mean.valueAt(2))
-    //    val out = model.updateOutput(input)
-    //    val mean = out.toTable.apply[Tensor[T]](1)
-    //    val variance = out.toTable.apply[Tensor[T]](1)
-    //
-    //    val out2 = reduceMeanForward(input.toTensor[T], mean, variance)
-    //
-    //    out2.cmul(weights).add(bias)
-    output = inputX
-    output
-  }
+    val size = input.size()
+    size(dimension - 1) = 1
+    if (!gradOutput.isContiguous()) {
+      _gradOutput = gradOutput.clone().view(size)
+    } else {
+      _gradOutput = gradOutput.view(size)
+    }
+    gradInput.resizeAs(input)
+    gradInput.copy(_gradOutput.expandAs(input))
+    gradInput.div(ev.fromType(input.size(dimension)))
 
-  private def reduceMeanForward(inputX: Tensor[T],
-                                inputY: Tensor[T], inputZ: Tensor[T]): Tensor[T] = {
-    val epsion = ev.fromType(1e-6)
-    inputZ.add(epsion)
-    inputZ.sqrt()
-    inputX.sub(inputY).cmul(inputZ)
+    gradInput
   }
 }

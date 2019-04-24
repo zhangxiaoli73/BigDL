@@ -112,7 +112,8 @@ class EmbeddingSharedWeights[T: ClassTag](vocab_size: Int, hidden_size: Int)
   // update weights
   override def accGradParameters(input: Tensor[T], gradOutput: Tensor[T]): Unit = {
     val inputBuffer = input.contiguous()
-    val _gradOutput = gradOutput.contiguous()
+    val _gradOutput = gradOutput.contiguous().mul(value)
+    _gradOutput.addcmul(ev.fromType[Int](1), maskFull, _gradOutput)
 
     val input_data = inputBuffer.storage().array()
     val input_offset = inputBuffer.storageOffset() - 1
