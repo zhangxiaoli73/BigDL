@@ -21,6 +21,17 @@ import com.intel.analytics.bigdl.tensor.TensorNumericMath._
 
 import scala.reflect.ClassTag
 
+/**
+ * Split x into different heads, and transpose the resulting value.
+ * The tensor is transposed to insure the inner dimensions hold the correct
+ * values during the matrix multiplication.
+ * input with shape [batch_size, length, hidden_size]
+ * output with shape [batch_size, num_heads, length, hidden_size/num_heads]
+ * @param hidden_size
+ * @param num_heads
+ * @param mul
+ * @tparam T The numeric type in this module parameters
+ */
 private[nn] class SplitHeads[T: ClassTag](hidden_size: Int, num_heads: Int,
                               mul: Boolean = false)(implicit ev: TensorNumeric[T])
   extends TensorModule[T] {

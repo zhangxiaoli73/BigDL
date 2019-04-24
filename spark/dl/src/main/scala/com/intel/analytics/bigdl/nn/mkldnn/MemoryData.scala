@@ -15,12 +15,8 @@
  */
 package com.intel.analytics.bigdl.nn.mkldnn
 
-
-import com.intel.analytics.bigdl.mkl.Query
+import com.intel.analytics.bigdl.mkl._
 import com.intel.analytics.bigdl.tensor.DnnStorage
-import com.intel.analytics.bigdl.mkl.MklDnn
-import com.intel.analytics.bigdl.mkl.Memory
-import com.intel.analytics.bigdl.mkl.DataType
 
 sealed trait MemoryData extends Serializable {
   def shape: Array[Int]

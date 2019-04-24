@@ -35,7 +35,7 @@ import scala.reflect.ClassTag
  * @param filter_size
  * @param relu_dropout
  */
-class FeedForwardNetwork[T: ClassTag](hidden_size: Int, filter_size: Int,
+private[nn] class FeedForwardNetwork[T: ClassTag](hidden_size: Int, filter_size: Int,
                                       relu_dropout: Float)(implicit ev: TensorNumeric[T])
   extends BaseModule[T]{
 
@@ -43,13 +43,13 @@ class FeedForwardNetwork[T: ClassTag](hidden_size: Int, filter_size: Int,
 
   private def buildModel(): Module[T] = {
     val input = Input()
-    val filter_dense_layer = new KerasWrapper(
-      Dense(outputDim = filter_size, bias = true, activation = "relu")).inputs(input)
+    val filter_dense_layer = TransformerOperation.dense(
+      hidden_size, filter_size, bias = true, activation = ReLU[T]()).inputs(input)
     val drop = if (train) {
       Dropout(initP = (1.0 - relu_dropout)).inputs(filter_dense_layer)
     } else filter_dense_layer
-    val output_dense_layer = new KerasWrapper(
-      Dense(outputDim = hidden_size, bias = true)).inputs(drop)
+    val output_dense_layer = TransformerOperation.dense(
+      filter_size, hidden_size, bias = true).inputs(drop)
     val graph = Graph(Array(input), Array(output_dense_layer))
     if (this.train) graph.training() else graph.evaluate()
     graph
