@@ -39,9 +39,7 @@ private[nn] class FeedForwardNetwork[T: ClassTag](hidden_size: Int, filter_size:
                                       relu_dropout: Float)(implicit ev: TensorNumeric[T])
   extends BaseModule[T]{
 
-  override var model : Module[T] = buildModel()
-
-  private def buildModel(): Module[T] = {
+  override def buildModel(): Module[T] = {
     val input = Input()
     val filter_dense_layer = TransformerOperation.dense(
       hidden_size, filter_size, bias = true, activation = ReLU[T]()).inputs(input)

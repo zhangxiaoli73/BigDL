@@ -51,15 +51,47 @@ class LayerNormalizationSpec extends FlatSpec with Matchers {
 
   "LayerNormalization layer" should "work correct" in {
     val layerNorm = new LayerNormalization[Float](8)
-
-    val mean = Mean[Float](2, squeeze = false)
     val output = layerNorm.forward(input)
-    val out2 = mean.forward(input)
-    val grad2 = mean.backward(input, out2)
     // output should be(outputExpected)
 
     val gradInput = layerNorm.updateGradInput(input, output)
 
     println("done")
+  }
+
+  "layer linear" should "work correct" in {
+    val weight = Tensor[Float](T(-0.14037117, -0.16902402, -0.06451887,
+      -0.5642037, 0.24212438, 0.44951588, -0.4296978, 0.423163))
+    val bias = Tensor[Float](T(0.44111532, -0.06523705, -0.3474969,
+      -0.08237404, -0.3565278, -0.18157673, 0.4592312, -0.36194998))
+
+    val layer = new LayerLinear[Float](8)
+    layer.setWeightsBias(Array(weight, bias))
+    val output = layer.forward(input)
+    val outputExpected = Tensor[Float](
+        T(T( 0.21310404,  0.03816448, -0.31341985,  0.5229988,  -0.14699152, -1.2161549,
+          -0.2905106,  -0.6840646),
+        T( 0.39633143, -0.02308746, -0.44183046,  1.0799649,  -0.43459287, -0.35421526,
+          -0.02794704, -0.8273833)))
+
+    output should be(outputExpected)
+
+    val gradInput = layer.updateGradInput(input, output)
+    val gradInputExpected = Tensor[Float](
+      T(T(-0.02991366, -0.00645071,  0.02022149, -0.29507786, -0.03559023, -0.5466809,
+      0.12483177, -0.28947085),
+      T(-0.05563351,  0.00390234,  0.0285064,  -0.60932016, -0.10522553, -0.15922539,
+      0.01200878, -0.35011798)))
+
+    gradInput should be(gradInputExpected)
+
+    layer.accGradParameters(input, output)
+
+    val gradWeightExpected = Tensor[Float](
+
+    )
+
+
+
   }
 }

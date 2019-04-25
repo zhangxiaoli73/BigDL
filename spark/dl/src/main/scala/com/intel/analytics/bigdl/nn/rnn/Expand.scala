@@ -15,29 +15,27 @@
  */
 package com.intel.analytics.bigdl.nn.rnn
 
-import com.intel.analytics.bigdl._
-import com.intel.analytics.bigdl.nn.abstractnn.{Activity, TensorModule}
-import com.intel.analytics.bigdl.nn.{Module => _, _}
+import com.intel.analytics.bigdl.nn.abstractnn.{AbstractModule, Activity, TensorModule}
 import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
 
 import scala.reflect.ClassTag
 
-class LayerNormalization[T: ClassTag](hidden_size: Int)(implicit ev: TensorNumeric[T])
-  extends BaseModule[T] {
+class Expand[T: ClassTag](dim: Int, value: Int)(implicit ev: TensorNumeric[T])
+  extends TensorModule[T] {
 
-  private val epsilon = 1e-6
-
-  override def buildModel(): Module[T] = {
-    val input = Input()
-    val mean = Mean(2, squeeze = false).inputs(input)
-    val expand = new Expand(2, 8).inputs(mean)
-    val sub = CSubTable().inputs(input, expand)
-    val square = Square().inputs(sub)
-    val mean2 = Mean(2, squeeze = false).inputs(square)
-    val add = AddConstant(epsilon).inputs(mean2)
-    val sqrt = Sqrt().inputs(add)
-    val linear = new LayerLinear[T](hidden_size).inputs(sqrt)
-    Graph(input, sub)
+  override def updateOutput(input: Tensor[T]): Tensor[T] = {
+    output.resizeAs(input).copy(input)
+    val size = input.size
+    size(dim - 1) = value
+    output.expand(size)
+    output
   }
+
+  override def updateGradInput(input: Tensor[T], gradOutput: Tensor[T]): Tensor[T] = {
+    gradInput = gradOutput.select(2, 1)
+    gradInput
+  }
+
+
 }

@@ -34,9 +34,7 @@ private[nn] class AttentionLayer[T: ClassTag](
   hidden_size: Int, num_heads: Int, attention_dropout: Float)
  (implicit ev: TensorNumeric[T]) extends BaseModule[T] {
 
-  override var model : Module[T] = buildModel()
-
-  private def buildModel(): Module[T] = {
+  override def buildModel(): Module[T] = {
     // InputX with shape [batch_size, length_x, hidden_size].
     // InputY with shape [batch_size, length_x, hidden_size]
     // for self attention, InputX and InputY should be same.
