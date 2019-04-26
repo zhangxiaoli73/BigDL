@@ -25,6 +25,28 @@ import com.intel.analytics.bigdl.utils.Table
 
 import scala.reflect.ClassTag
 
+/**
+ * Transformer main model_fn.
+ * features: Map of features to the model. Should contain the following:
+ * "inputs": Transformer inputs. [batch_size, input_length, 1, hidden_dim].
+ * "targets": Target decoder outputs. [batch_size, decoder_length, 1, hidden_dim]
+ * "target_space_id": A scalar int from data_generators.problem.SpaceID.
+ * Returns:
+ * Final decoder representation. [batch_size, decoder_length, hidden_dim]
+ *
+ * @param vocabSize
+ * @param hiddenSize
+ * @param numHeads
+ * @param filterSize
+ * @param num_hidden_layers
+ * @param postprocessDropout
+ * @param attentionDropout
+ * @param reluDropout
+ * @param allow_ffn_pad
+ * @param ev$1
+ * @param ev
+ * @tparam T The numeric type in this module parameters.
+ */
 class TransformerLayer[T: ClassTag](
    vocabSize: Int,
    hiddenSize: Int,
@@ -66,7 +88,7 @@ class TransformerLayer[T: ClassTag](
     attention.toTensor[T]
   }
 
-  private def block(num_layers: Int): Module[T] = {
+  def block(num_layers: Int): Module[T] = {
     val model = Sequential[T]()
     var i = 0
     while (i < num_layers) {
@@ -96,5 +118,6 @@ class TransformerLayer[T: ClassTag](
 //
 //      decoder_input = common_layers.shift_right_3d(targets)
 //      decoder_input = common_attention.add_timing_signal_1d(decoder_input)
+    // return decoder_input, decoder_self_attention_bias
   }
 }
