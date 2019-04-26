@@ -16,7 +16,7 @@
 package com.intel.analytics.bigdl.nn.rnn
 
 import com.intel.analytics.bigdl.Module
-import com.intel.analytics.bigdl.nn.{Dropout, Sequential}
+import com.intel.analytics.bigdl.nn.{Dropout, Graph, Input, Sequential}
 import com.intel.analytics.bigdl.nn.Graph.ModuleNode
 import com.intel.analytics.bigdl.nn.abstractnn.{AbstractModule, Activity}
 import com.intel.analytics.bigdl.tensor.Tensor
@@ -70,8 +70,9 @@ class TransformerLayer[T: ClassTag](
 
   override def updateGradInput(input: Activity, gradOutput: Activity): Activity = gradInput
 
+  // input with shape (batch, length, 1, hidden_size)
   private def updateOutputForLM(input: Tensor[T]): Tensor[T] = {
-    val inputTensor = input.toTensor[T]
+    val inputTensor = input.clone().toTensor[T]
     // Calculate attention bias for encoder self-attention and decoder
     // multi-headed attention layers.
     val attention_bias = TransformerOperation.getPaddingBias(inputTensor)
@@ -89,26 +90,43 @@ class TransformerLayer[T: ClassTag](
   }
 
   def block(num_layers: Int): Module[T] = {
-    val model = Sequential[T]()
+    val decoder_input = Input()
+    val decoder_self_attention_bias = Input()
+    var output = decoder_input
+
     var i = 0
     while (i < num_layers) {
       val attention = new AttentionLayer[T](hiddenSize, numHeads, attentionDropout)
       val ffn = new FeedForwardNetwork[T](hiddenSize, filterSize, reluDropout)
-      val attentionModel = prePostProcessingWrapper(attention)
-      val ffnModel = prePostProcessingWrapper(ffn)
-      model.add(attentionModel).add(ffnModel)
+      val attentionModel = prePostProcessingWrapperAttention(
+        attention, output, decoder_self_attention_bias)
+      val ffnModel = prePostProcessingWrapperFFN(ffn, attentionModel)
+      output = ffnModel
       i += 1
     }
+
+    val norm = new LayerNormalization[T](hiddenSize).inputs(output)
+    val model = Graph(Array(decoder_input, decoder_self_attention_bias), Array(norm))
     model
   }
 
-  private def prePostProcessingWrapper(layer: Module[T]): Module[T] = {
-    val model = Sequential[T]()
-    model.add(new LayerNormalization[T](hiddenSize))
-      .add(layer)
-      .add(Dropout[T](1 - postprocessDropout))
-    // todo: x + y
-    model
+  private def prePostProcessingWrapperAttention(layer: Module[T], decoder_input: ModuleNode[T],
+    decoder_self_attention_bias: ModuleNode[T]): ModuleNode[T] = {
+    val norm = new LayerNormalization[T](hiddenSize).inputs(decoder_input)
+    val drop = Dropout[T](1 - postprocessDropout).
+      inputs(layer.inputs(norm, decoder_self_attention_bias))
+    // todo: x + y, residual connection
+    // Graph(Array(decoder_input, decoder_self_attention_bias), Array(drop))
+    drop
+  }
+  private def prePostProcessingWrapperFFN(layer: Module[T], decoder_input: ModuleNode[T]):
+  ModuleNode[T] = {
+    val norm = new LayerNormalization[T](hiddenSize).inputs(decoder_input)
+    val drop = Dropout[T](1 - postprocessDropout).
+      inputs(layer.inputs(norm))
+    // todo: x + y, residual connection
+    // Graph(Array(decoder_input, decoder_self_attention_bias), Array(drop))
+    drop
   }
 
   private def transformerPrepareDecoder(targets: Tensor[T]) : Unit = {

@@ -40,7 +40,7 @@ private[nn] class AttentionLayer[T: ClassTag](
     // for self attention, InputX and InputY should be same.
     // Bias is attention bias that will be added to the result of the dot product.
     val inputX = Input()
-    val inputY = Input()
+    val inputY = inputX // Input()
     val inputBias = Input()
 
     val q_dense_layer = TransformerOperation.dense(
@@ -71,7 +71,7 @@ private[nn] class AttentionLayer[T: ClassTag](
     // Run the combined outputs through another linear projection layer.
     val output_dense_layer = TransformerOperation.dense(
       hidden_size, hidden_size, false, name = "output_transform").inputs(combineHeads)
-    val graph = Graph(Array(inputX, inputY, inputBias), Array(output_dense_layer))
+    val graph = Graph(Array(inputX, inputBias), Array(output_dense_layer))
     if (this.train) graph.training() else graph.evaluate()
     graph
   }

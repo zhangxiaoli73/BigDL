@@ -68,8 +68,8 @@ private[rnn] object TransformerOperation {
     * @tparam T
     * @return
     */
-  def getPaddingBias[T: ClassTag](input: Tensor[T]): Tensor[T] = {
-    val res = getPadding(input)
+  def getPaddingBias[T: ClassTag](input: Tensor[T])(implicit ev: TensorNumeric[T]): Tensor[T] = {
+    val res = getPadding[T](input)
     res.addSingletonDimension(res, 2)
     res.addSingletonDimension(res, 3)
   }

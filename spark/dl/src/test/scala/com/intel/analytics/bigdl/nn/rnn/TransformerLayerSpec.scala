@@ -23,24 +23,23 @@ class TransformerLayerSpec extends FlatSpec with Matchers {
 
   "block" should "work correctly" in {
     val vocabSize = 10
-    val hiddenSize = 3
-    val numHeads = 2
+    val hiddenSize = 8
+    val numHeads = 4
     val filterSize = 4
     val num_hidden_layers = 6 // number of blocks
     val postprocessDropout = 1.0f
     val attentionDropout = 1.0f
     val reluDropout = 1.0f
-    val transformer = new TransformerLayer(
+    val transformer = new TransformerLayer[Float](
       vocabSize, hiddenSize, numHeads, filterSize, num_hidden_layers,
       postprocessDropout, attentionDropout, reluDropout)
 
     val block = transformer.block(num_hidden_layers)
 
-    val input1 = Tensor[Float]()
-    val input2 = input1.clone()
-    val input3 = Tensor[Float]()
+    val input1 = Tensor[Float](2, 3, 8).rand()
+    val input2 = Tensor[Float](2, 4, 3, 3).rand()
 
-    val out1 = block.forward(T(input1, input2, input3))
+    val out1 = block.forward(T(input1, input2))
 
     println("done")
 
@@ -48,20 +47,19 @@ class TransformerLayerSpec extends FlatSpec with Matchers {
 
   "transformer" should "work correctly" in {
     val vocabSize = 10
-    val hiddenSize = 3
-    val numHeads = 2
+    val hiddenSize = 8
+    val numHeads = 4
     val filterSize = 4
     val num_hidden_layers = 6 // number of blocks
     val postprocessDropout = 1.0f
     val attentionDropout = 1.0f
     val reluDropout = 1.0f
-    val transformer = new TransformerLayer(
+    val transformer = new TransformerLayer[Float](
       vocabSize, hiddenSize, numHeads, filterSize, num_hidden_layers,
       postprocessDropout, attentionDropout, reluDropout)
 
-    val input = Tensor[Float]()
-
-    val out1 = transformer.forward(input)
+    val input = Tensor[Float](2, 3, 8).fill(1.0f)
+    val block = transformer.forward(input)
 
     println("done")
   }

@@ -15,6 +15,7 @@
  */
 package com.intel.analytics.bigdl.nn.rnn
 
+import breeze.macros.expand
 import com.intel.analytics.bigdl._
 import com.intel.analytics.bigdl.nn.abstractnn.{Activity, TensorModule}
 import com.intel.analytics.bigdl.nn.{Module => _, _}
@@ -31,8 +32,9 @@ class LayerNormalization[T: ClassTag](hidden_size: Int)(implicit ev: TensorNumer
   override def buildModel(): Module[T] = {
     val input = Input()
     val mean = Mean(2, squeeze = false).inputs(input)
-    val expand = new Expand(2, 8).inputs(mean)
-    val sub = CSubTable().inputs(input, expand)
+    // val expand = new Expand(2, 8).inputs(mean)
+    // val sub = CSubTable().inputs(input, expand)
+    val sub = CSubTable().inputs(input, mean)
     val square = Square().inputs(sub)
     val mean2 = Mean(2, squeeze = false).inputs(square)
     val add = AddConstant(epsilon).inputs(mean2)

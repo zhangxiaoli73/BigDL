@@ -17,7 +17,8 @@ package com.intel.analytics.bigdl.nn
 
 import com.intel.analytics.bigdl.mkl.Memory
 import com.intel.analytics.bigdl.nn.Graph.ModuleNode
-import com.intel.analytics.bigdl.nn.abstractnn.{AbstractModule, Activity}
+import com.intel.analytics.bigdl.nn.abstractnn.{AbstractModule, Activity, TensorModule}
+import com.intel.analytics.bigdl.nn.rnn.AttentionLayer
 import com.intel.analytics.bigdl.nn.tf.ControlDependency
 import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
