@@ -21,7 +21,9 @@ import com.intel.analytics.bigdl.nn.Graph.ModuleNode
 import com.intel.analytics.bigdl.nn.abstractnn.{AbstractModule, Activity}
 import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
-import com.intel.analytics.bigdl.utils.Table
+import com.intel.analytics.bigdl.utils.{T, Table}
+import com.sun.tracing.dtrace.ModuleName
+import org.apache.spark.api.java.function
 
 import scala.reflect.ClassTag
 
@@ -78,15 +80,15 @@ class TransformerLayer[T: ClassTag](
     val attention_bias = TransformerOperation.getPaddingBias(inputTensor)
     // embedded_inputs with shape [batch, length]
     val embedded_inputs = embedding_softmax_layer.forward(input)
-    val inputs_padding = TransformerOperation.getPadding(input)
-    // todo: add pos encoding
-    val drop = if (train) {
-      postDropOut.forward(embedded_inputs)
-    } else embedded_inputs
+    val (decoder_input, decoder_self_attention_bias) =
+      transformerPrepareDecoder(embedded_inputs)
+    val decoder_input_lm = if (train) {
+      postDropOut.forward(decoder_input)
+    } else decoder_input
 
     // block for encode
-    val attention = blockModel.forward(drop)
-    attention.toTensor[T]
+    output = blockModel.forward(T(decoder_input_lm, decoder_self_attention_bias))
+    output.toTensor[T]
   }
 
   def block(num_layers: Int): Module[T] = {
@@ -99,29 +101,29 @@ class TransformerLayer[T: ClassTag](
       val attention = new AttentionLayer[T](hiddenSize, numHeads, attentionDropout)
       val ffn = new FeedForwardNetwork[T](hiddenSize, filterSize, reluDropout)
       val attentionModel = prePostProcessingWrapperAttention(
-        attention, output, decoder_self_attention_bias)
-      val ffnModel = prePostProcessingWrapperFFN(ffn, attentionModel)
+        attention, output, decoder_self_attention_bias, s"attention_norm_${i}")
+      val ffnModel = prePostProcessingWrapperFFN(ffn, attentionModel, s"ffn_norm_${i}")
       output = ffnModel
       i += 1
     }
 
-    val norm = new LayerNormalization[T](hiddenSize).inputs(output)
+    val norm = new LayerNormalization[T](hiddenSize).setName("norm").inputs(output)
     val model = Graph(Array(decoder_input, decoder_self_attention_bias), Array(norm))
     model
   }
 
   private def prePostProcessingWrapperAttention(layer: Module[T], decoder_input: ModuleNode[T],
-    decoder_self_attention_bias: ModuleNode[T]): ModuleNode[T] = {
-    val norm = new LayerNormalization[T](hiddenSize).inputs(decoder_input)
+    decoder_self_attention_bias: ModuleNode[T], name: String): ModuleNode[T] = {
+    val norm = new LayerNormalization[T](hiddenSize).setName(name).inputs(decoder_input)
     val drop = Dropout[T](1 - postprocessDropout).
       inputs(layer.inputs(norm, decoder_self_attention_bias))
     // todo: x + y, residual connection
     // Graph(Array(decoder_input, decoder_self_attention_bias), Array(drop))
     drop
   }
-  private def prePostProcessingWrapperFFN(layer: Module[T], decoder_input: ModuleNode[T]):
-  ModuleNode[T] = {
-    val norm = new LayerNormalization[T](hiddenSize).inputs(decoder_input)
+  private def prePostProcessingWrapperFFN(layer: Module[T],
+    decoder_input: ModuleNode[T], name: String): ModuleNode[T] = {
+    val norm = new LayerNormalization[T](hiddenSize).setName(name).inputs(decoder_input)
     val drop = Dropout[T](1 - postprocessDropout).
       inputs(layer.inputs(norm))
     // todo: x + y, residual connection
@@ -129,13 +131,11 @@ class TransformerLayer[T: ClassTag](
     drop
   }
 
-  private def transformerPrepareDecoder(targets: Tensor[T]) : Unit = {
-//      decoder_self_attention_bias = (
-//        common_attention.attention_bias_lower_triangle(
-//          common_layers.shape_list(targets)[1]))
-//
-//      decoder_input = common_layers.shift_right_3d(targets)
-//      decoder_input = common_attention.add_timing_signal_1d(decoder_input)
-    // return decoder_input, decoder_self_attention_bias
+  private[nn] def transformerPrepareDecoder(targets: Tensor[T]) : (Tensor[T], Tensor[T]) = {
+      val decoder_self_attention_bias = TransformerOperation.
+        attentionBiasLowerTriangle[T](targets.size(2))
+      val decoder_input = TransformerOperation.shiftRight3D(targets)
+      val decoder_input_tmp = TransformerOperation.addTimingSignal1D(decoder_input)
+     return (decoder_input_tmp, decoder_self_attention_bias)
   }
 }

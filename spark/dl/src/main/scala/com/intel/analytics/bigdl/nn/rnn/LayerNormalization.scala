@@ -39,7 +39,7 @@ class LayerNormalization[T: ClassTag](hidden_size: Int)(implicit ev: TensorNumer
     val mean2 = Mean(2, squeeze = false).inputs(square)
     val add = AddConstant(epsilon).inputs(mean2)
     val sqrt = Sqrt().inputs(add)
-    val linear = new LayerLinear[T](hidden_size).inputs(sqrt)
-    Graph(input, sub)
+    val linear = new LayerLinear[T](hidden_size).setName(this.getName()).inputs(sqrt)
+    Graph(input, linear)
   }
 }

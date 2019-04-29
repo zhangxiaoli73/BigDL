@@ -269,4 +269,15 @@ class AttentionSpec  extends FlatSpec with Matchers {
       if (i == "output_transform") params should be(gw4.t())
     }
   }
+
+  "attention layer 1111" should "work correctly" in {
+    val input = Tensor[Float](2, 6, 4).rand()
+    val bias = Tensor[Float](1, 1, 6, 6).rand()
+
+    val attention = new AttentionLayer[Float](4, 2, 1.0f)
+
+    val out = attention.forward(T(input, bias))
+
+    print("done")
+  }
 }
