@@ -48,7 +48,7 @@ class LayerNormalization[T: ClassTag](hidden_size: Int)(implicit ev: TensorNumer
     val expand2 = new Expand(2, 8, division = true).inputs(sqrt)
     val mul = CMulTable().inputs(sub, expand2)
     val linear = new LayerLinear[T](hidden_size).setName(this.getName()).inputs(mul)
-    Graph(input, linear)
+    Graph(input, sqrt)
   }
 
   override def updateOutput(input: Activity): Activity = {
