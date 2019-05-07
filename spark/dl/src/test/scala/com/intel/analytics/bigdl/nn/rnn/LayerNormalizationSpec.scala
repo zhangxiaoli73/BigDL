@@ -28,6 +28,13 @@ class LayerNormalizationSpec extends FlatSpec with Matchers {
     T( 0.3190391,  -0.24937038,  1.46210794, -2.06014071, -0.3224172,  -0.38405435,
     1.13376944, -1.09989127))
   )
+  val weightsExpected = Tensor[Float](
+    T(-0.14037117, -0.16902402, -0.06451887, -0.5642037,
+    0.24212438, 0.44951588, -0.4296978, 0.423163))
+
+  val biasExpected = Tensor[Float](
+    T(0.44111532, -0.06523705, -0.3474969, -0.08237404,
+      -0.3565278, -0.18157673, 0.4592312, -0.36194998))
 
   val outputExpected = Tensor[Float](
       T(T( 0.2547953,  -0.00365025, -0.32806823,  0.32006884, -0.17416702, -0.92002285,
@@ -51,6 +58,11 @@ class LayerNormalizationSpec extends FlatSpec with Matchers {
 
   "LayerNormalization layer" should "work correct" in {
     val layerNorm = new LayerNormalization[Float](8)
+    if (true) {
+      val params = layerNorm.parameters()
+      params._1.apply(0).copy(weightsExpected)
+      params._1.apply(1).copy(biasExpected)
+    }
     val output = layerNorm.forward(input)
     // output should be(outputExpected)
 

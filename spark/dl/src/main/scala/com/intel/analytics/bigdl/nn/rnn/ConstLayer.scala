@@ -13,39 +13,25 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package com.intel.analytics.bigdl.nn.rnn
 
-import com.intel.analytics.bigdl.nn.abstractnn.{AbstractModule, Activity, TensorModule}
+import com.intel.analytics.bigdl.nn.abstractnn.TensorModule
 import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
 
 import scala.reflect.ClassTag
 
-class Expand[T: ClassTag](dim: Int, value: Int, division: Boolean = false)
-                         (implicit ev: TensorNumeric[T])
-  extends TensorModule[T] {
+private[bigdl] class ConstLayer[T: ClassTag](val value: Tensor[T])
+  (implicit ev: TensorNumeric[T]) extends TensorModule[T] {
 
   override def updateOutput(input: Tensor[T]): Tensor[T] = {
-    output.resizeAs(input).copy(input)
-    val size = input.size
-    size(dim - 1) = value
-    output.expand(size)
+    output = value
     output
   }
 
   override def updateGradInput(input: Tensor[T], gradOutput: Tensor[T]): Tensor[T] = {
-    val size = gradOutput.size(2)
-    var i = 1
-    gradInput.resizeAs(input).zero()
-    while (i <= size) {
-      gradInput.add(gradOutput.select(2, i))
-      i += 1
-    }
-    if (division) {
-      gradInput.div(ev.fromType(size))
-    }
+    gradInput = gradOutput
     gradInput
   }
-
-
 }

@@ -16,8 +16,10 @@
 package com.intel.analytics.bigdl.nn.rnn
 
 import breeze.macros.expand
+import breeze.numerics.sqrt
 import com.intel.analytics.bigdl._
 import com.intel.analytics.bigdl.nn.abstractnn.{Activity, TensorModule}
+import com.intel.analytics.bigdl.nn.tf.Const
 import com.intel.analytics.bigdl.nn.{Module => _, _}
 import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
@@ -31,15 +33,26 @@ class LayerNormalization[T: ClassTag](hidden_size: Int)(implicit ev: TensorNumer
 
   override def buildModel(): Module[T] = {
     val input = Input()
-    val mean = Mean(2, squeeze = false).inputs(input)
-    // val expand = new Expand(2, 8).inputs(mean)
-    // val sub = CSubTable().inputs(input, expand)
-    val sub = CSubTable().inputs(input, mean)
+    val mean = Mean(2, squeeze = false).inputs(input) // mean
+    val expand = new Expand(2, 8).inputs(mean)
+    val sub = CSubTable().inputs(input, expand)
     val square = Square().inputs(sub)
+
     val mean2 = Mean(2, squeeze = false).inputs(square)
+    // val expand2 = new Expand(2, 8, division = true).inputs(mean2) // variance
     val add = AddConstant(epsilon).inputs(mean2)
-    val sqrt = Sqrt().inputs(add)
-    val linear = new LayerLinear[T](hidden_size).setName(this.getName()).inputs(sqrt)
+    // val sqrt = Sqrt().inputs(add)
+
+    val sqrt = Power(-0.5, 1, 0).inputs(add)
+    // val reverse = CDivTable().inputs(new ConstLayer(Tensor[T](2, 8).fill(ev.one)).inputs(input), sqrt)
+    val expand2 = new Expand(2, 8, division = true).inputs(sqrt)
+    val mul = CMulTable().inputs(sub, expand2)
+    val linear = new LayerLinear[T](hidden_size).setName(this.getName()).inputs(mul)
     Graph(input, linear)
+  }
+
+  override def updateOutput(input: Activity): Activity = {
+    output = model.updateOutput(input)
+    output
   }
 }

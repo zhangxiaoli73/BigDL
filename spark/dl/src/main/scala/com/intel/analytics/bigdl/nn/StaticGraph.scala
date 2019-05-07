@@ -58,6 +58,7 @@ class StaticGraph[T: ClassTag](
     var i = 0
     while(i < forwardExecution.length) {
       val node = forwardExecution(i)
+      println(node)
       val nodeInput = findInput(node, input)
       inputCache(i) = nodeInput
       node.element.forward(nodeInput)
@@ -133,6 +134,7 @@ class StaticGraph[T: ClassTag](
     var i = 0
     while (i < backwardExecution.length - 1) {  // do not execute the dummy backward end
       val curNode = backwardExecution(i)
+      println(curNode)
       val curGradOutput = findGradOutput(curNode, gradOutput)
       gradOutputCache(i) = curGradOutput
       val curInput = inputCache(backId2ForwardId(i))

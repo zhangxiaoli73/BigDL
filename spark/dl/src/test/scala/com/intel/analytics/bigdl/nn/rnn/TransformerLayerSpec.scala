@@ -78,10 +78,12 @@ class TransformerLayerSpec extends FlatSpec with Matchers {
       vocabSize, hiddenSize, numHeads, filterSize, num_hidden_layers,
       postprocessDropout, attentionDropout, reluDropout)
 
-    val params = transformer.blockModel.getParametersTable()
+    val block = transformer.blockModel
 
-    val input = Tensor[Float](2, 6).fill(1.0f)
-    val block = transformer.forward(input)
+    val input = Tensor[Float](2, 6, 4).fill(1.0f)
+    val bias = Tensor[Float](1, 1, 6, 6).fill(2.0f)
+
+    val res = block.forward(T(input, bias))
 
     println("done")
   }

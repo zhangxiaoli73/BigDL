@@ -58,14 +58,14 @@ private[nn] class AttentionLayer[T: ClassTag](
     val contiguous_k = new Contiguous[T]().inputs(split_k)
     val contiguous_v = new Contiguous[T]().inputs(split_v)
 
-    val matmul = MM(transB = true).inputs(contiguous_q, contiguous_k)
+    val matmul = MM(transB = true).setName("trans").inputs(contiguous_q, contiguous_k)
     val cadd = CAddTable().inputs(matmul, inputBias)
     val softMax = TransformerOperation.softMax[T]().inputs(cadd)
 
     val drop = if (train) {
       Dropout(initP = (1.0 - attention_dropout)).inputs(softMax)
     } else softMax
-    val matmulNoTrans = MM().inputs(drop, contiguous_v)
+    val matmulNoTrans = MM().setName("trans_no").inputs(drop, contiguous_v)
     // Recombine heads --> [batch_size, length, hidden_size]
     val combineHeads = new CombineHeads().inputs(matmulNoTrans)
     // Run the combined outputs through another linear projection layer.
@@ -74,6 +74,11 @@ private[nn] class AttentionLayer[T: ClassTag](
     val graph = Graph(Array(inputX, inputBias), Array(output_dense_layer))
     if (this.train) graph.training() else graph.evaluate()
     graph
+  }
+
+  override def updateOutput(input: Activity): Activity = {
+    output = model.updateOutput(input)
+    output
   }
 }
 
