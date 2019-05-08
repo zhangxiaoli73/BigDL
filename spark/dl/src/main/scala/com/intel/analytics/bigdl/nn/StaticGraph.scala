@@ -58,7 +58,6 @@ class StaticGraph[T: ClassTag](
     var i = 0
     while(i < forwardExecution.length) {
       val node = forwardExecution(i)
-      println(node)
       val nodeInput = findInput(node, input)
       inputCache(i) = nodeInput
       node.element.forward(nodeInput)
@@ -147,6 +146,9 @@ class StaticGraph[T: ClassTag](
       } else if (executeBackward) {
         curNode.element.accGradParameters(curInput, curGradOutput)
       }
+      println("input -------- " + curInput)
+      println("gradOutput ------------ " + curGradOutput)
+      println("gradInput ------ " + curNode.element.gradInput)
       i += 1
     }
 

@@ -64,11 +64,15 @@ class LayerNormalizationSpec extends FlatSpec with Matchers {
       params._1.apply(1).copy(biasExpected)
     }
     val output = layerNorm.forward(input)
+    println(output)
+    println("start backward")
     // output should be(outputExpected)
 
+    // output.toTensor[Float].fill(1e-8f)
     val gradInput = layerNorm.updateGradInput(input, output)
 
     println("done")
+    println(gradInput)
   }
 
   "layer linear" should "work correct" in {
@@ -113,12 +117,12 @@ class LayerNormalizationSpec extends FlatSpec with Matchers {
       1.74481176, -0.7612069, 0.3190391,  -0.24937038),
     T( 1.46210794, -2.06014071, -0.3224172,  -0.38405435,  1.13376944, -1.09989127,
       -0.17242821, -0.87785842)))
-    val input2 = Tensor[Float](T(T(18.29665), T(-6.0740986)))
-
+    val input2 = Tensor[Float](T(T(1.62434536), T(-0.61175641)))
     val layer = InternalCMulTable[Float]()
     val output = layer.forward(T(input1, input2))
+    println(output)
     val gradInput = layer.backward(T(input1, input2), output)
-
+    println(gradInput)
     print("done")
   }
 }

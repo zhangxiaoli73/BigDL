@@ -34,8 +34,10 @@ class LayerNormalization[T: ClassTag](hidden_size: Int)(implicit ev: TensorNumer
   override def buildModel(): Module[T] = {
     val input = Input()
     val mean = Mean(2, squeeze = false).inputs(input) // mean
-    val expand = new Expand(2, 8).inputs(mean)
-    val sub = CSubTable().inputs(input, expand)
+//    val expand = new Expand(2, 8, division = true).inputs(mean)
+//    val sub = CSubTable().inputs(input, expand)
+    val sub = InternalCSubTable().inputs(input, mean)
+
     val square = Square().inputs(sub)
 
     val mean2 = Mean(2, squeeze = false).inputs(square)
@@ -44,11 +46,13 @@ class LayerNormalization[T: ClassTag](hidden_size: Int)(implicit ev: TensorNumer
     // val sqrt = Sqrt().inputs(add)
 
     val sqrt = Power(-0.5, 1, 0).inputs(add)
-    // val reverse = CDivTable().inputs(new ConstLayer(Tensor[T](2, 8).fill(ev.one)).inputs(input), sqrt)
-    val expand2 = new Expand(2, 8, division = true).inputs(sqrt)
-    val mul = CMulTable().inputs(sub, expand2)
+    // val reverse = CDivTable().inputs(new ConstLayer(Tensor[T](2, 8)
+    // .fill(ev.one)).inputs(input), sqrt)
+    // val expand2 = new Expand(2, 8, division = true).inputs(sqrt)
+    // val mul = CMulTable().inputs(sub, expand2)
+    val mul = InternalCMulTable().inputs(sub, sqrt)
     val linear = new LayerLinear[T](hidden_size).setName(this.getName()).inputs(mul)
-    Graph(input, sqrt)
+    Graph(input, mul)
   }
 
   override def updateOutput(input: Activity): Activity = {
