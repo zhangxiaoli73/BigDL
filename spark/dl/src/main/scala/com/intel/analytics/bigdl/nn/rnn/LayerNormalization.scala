@@ -52,7 +52,7 @@ class LayerNormalization[T: ClassTag](hidden_size: Int)(implicit ev: TensorNumer
     // val mul = CMulTable().inputs(sub, expand2)
     val mul = InternalCMulTable().inputs(sub, sqrt)
     val linear = new LayerLinear[T](hidden_size).setName(this.getName()).inputs(mul)
-    Graph(input, mul)
+    Graph(input, linear)
   }
 
   override def updateOutput(input: Activity): Activity = {

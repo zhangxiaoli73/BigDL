@@ -16,6 +16,7 @@
 package com.intel.analytics.bigdl.nn.rnn
 
 import com.intel.analytics.bigdl.nn.Mean
+import com.intel.analytics.bigdl.nn.mkldnn.Equivalent
 import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.utils.T
 import org.scalatest.{FlatSpec, Matchers}
@@ -50,29 +51,24 @@ class LayerNormalizationSpec extends FlatSpec with Matchers {
 
   val gradWeightExpected = Tensor[Float](
     T( 0.5049854,   0.00593506, -0.5733794,  -1.8879533,  -0.06730913,  1.5727731,
-      -0.28257257,  0.9264967))
-
-  val gradBiasExpected = Tensor[Float](
-    T( 0.6342044,  -0.05316871, -0.7730292,   1.2474256,  -0.56978333, -1.2001302,
-      -0.2079724,  -1.3025129))
+      -0.28257257,  0.9264967, 0.6342044,  -0.05316871, -0.7730292,   1.2474256,
+      -0.56978333, -1.2001302, -0.2079724,  -1.3025129))
 
   "LayerNormalization layer" should "work correct" in {
     val layerNorm = new LayerNormalization[Float](8)
-    if (false) {
-      val params = layerNorm.parameters()
-      params._1.apply(0).copy(weightsExpected)
-      params._1.apply(1).copy(biasExpected)
-    }
+    val params = layerNorm.parameters()
+    params._1.apply(0).copy(weightsExpected)
+    params._1.apply(1).copy(biasExpected)
+
     val output = layerNorm.forward(input)
-    println(output)
-    println("start backward")
-    // output should be(outputExpected)
+    output should be(outputExpected)
 
-    // output.toTensor[Float].fill(1e-8f)
-    val gradInput = layerNorm.updateGradInput(input, output)
+    val gradInput = layerNorm.backward(input, output)
+    Equivalent.nearequals(gradInput.toTensor[Float], gradInputExpected)
 
-    println("done")
-    println(gradInput)
+    val gradWeights = layerNorm.getParameters()._2
+
+    gradWeights should be(gradWeightExpected)
   }
 
   "layer linear" should "work correct" in {
@@ -103,12 +99,15 @@ class LayerNormalizationSpec extends FlatSpec with Matchers {
 
     layer.accGradParameters(input, output)
 
-    val gradWeightExpected = Tensor[Float](
+    val gradWeightExpected = Tensor[Float](T(0.4725998,  -0.01759003, -0.48046428,
+      -2.7860408,   0.01291263,  2.9350655, -0.5385718,   1.4307464, 0.60943544,
+      0.01507702, -0.75525033,  1.6029637,  -0.5815844,  -1.5703702, -0.31845763, -1.5114479))
 
-    )
+    val gradWeights = layer.getParameters()._2
 
+    gradWeights should be(gradWeightExpected)
 
-
+    println("done")
   }
 
   "InternalMulTable" should "good" in {

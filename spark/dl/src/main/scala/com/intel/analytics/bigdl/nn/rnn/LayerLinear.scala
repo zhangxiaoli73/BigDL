@@ -28,8 +28,10 @@ private[nn] class LayerLinear[T: ClassTag](hidden_size: Int)(implicit ev: Tensor
 
   var weight = Tensor[T](hidden_size).fill(ev.one)
   var bias = Tensor[T](hidden_size).fill(ev.zero)
-  var gradWeight = Tensor[T](2, hidden_size)
-  var gradBias = Tensor[T](2, hidden_size)
+  var gradWeight = Tensor[T](hidden_size)
+  var gradBias = Tensor[T](hidden_size)
+
+  private val buffer = Tensor[T]()
 
   override def updateOutput(input: Tensor[T]): Tensor[T] = {
     output.resizeAs(input).copy(input)
@@ -50,18 +52,13 @@ private[nn] class LayerLinear[T: ClassTag](hidden_size: Int)(implicit ev: Tensor
   }
 
   override def accGradParameters(input: Tensor[T], gradOutput: Tensor[T]): Unit = {
-    if (scaleW != 0) {
-      gradWeight.addcdiv(ev.fromType[Double](scaleW), gradOutput, input)
-    }
-    if (scaleB != 0) {
-      gradBias.addcmul(ev.fromType[Double](scaleB), gradOutput, input)
-    }
-
-    val tmp = 0
+    buffer.resizeAs(input).zero()
+    buffer.addcmul(input, gradOutput)
+    gradWeight = buffer.sum(1).squeeze()
+    gradBias = gradOutput.sum(1).squeeze()
   }
 
   override def parameters(): (Array[Tensor[T]], Array[Tensor[T]]) = {
     (Array(this.weight, this.bias), Array(this.gradWeight, this.gradBias))
   }
-
 }

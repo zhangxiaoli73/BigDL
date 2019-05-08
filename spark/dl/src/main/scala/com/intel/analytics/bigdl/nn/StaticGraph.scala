@@ -149,6 +149,7 @@ class StaticGraph[T: ClassTag](
       println("input -------- " + curInput)
       println("gradOutput ------------ " + curGradOutput)
       println("gradInput ------ " + curNode.element.gradInput)
+      println("+++++++++++++++++++++++\n")
       i += 1
     }
 
