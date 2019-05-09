@@ -37,7 +37,6 @@ class InternalCSubTable[T: ClassTag](expandDim: Int = 1)
     val input3 = expandLayer.forward(input2)
 
     output = super.updateOutput(T(input1, input3))
-    println(output)
     return output
   }
 

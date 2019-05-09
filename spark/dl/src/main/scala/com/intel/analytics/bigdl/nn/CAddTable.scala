@@ -91,13 +91,15 @@ class CAddTable[T: ClassTag, D: ClassTag](val inplace: Boolean = false)(
       } else {
         if (input[Tensor[D]](i).isSameSizeAs(gradOutput)) {
           gradInput[Tensor[D]](i).resizeAs(gradOutput).copy(gradOutput)
-        } else {
+        } else if (input[Tensor[D]](i).isScalar) {
           require(input[Tensor[D]](i).isScalar, "Only support scalar broadcast backward now")
           if (!calculateSum) {
             sum = gradOutput.sum()
             calculateSum = true
           }
           gradInput[Tensor[D]](i).resizeAs(input[Tensor[D]](i)).setValue(sum)
+        } else {
+          gradInput[Tensor[D]](i).resizeAs(gradOutput).copy(gradOutput)
         }
       }
       i += 1

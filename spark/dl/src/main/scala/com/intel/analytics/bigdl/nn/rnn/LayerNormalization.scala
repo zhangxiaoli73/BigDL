@@ -26,37 +26,24 @@ import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
 
 import scala.reflect.ClassTag
 
-class LayerNormalization[T: ClassTag](hidden_size: Int)(implicit ev: TensorNumeric[T])
-  extends BaseModule[T] {
+class LayerNormalization[T: ClassTag](hidden_size: Int, dims: Int = 3)
+  (implicit ev: TensorNumeric[T]) extends BaseModule[T] {
 
   private val epsilon = 1e-6
 
   override def buildModel(): Module[T] = {
     val input = Input()
-    val mean = Mean(2, squeeze = false).inputs(input) // mean
-//    val expand = new Expand(2, 8, division = true).inputs(mean)
-//    val sub = CSubTable().inputs(input, expand)
+    // val mean = Mean(3, squeeze = false).inputs(input)
+    val mean = TimeDistributed(Mean(2, squeeze = false)).inputs(input)
     val sub = InternalCSubTable().inputs(input, mean)
-
     val square = Square().inputs(sub)
-
-    val mean2 = Mean(2, squeeze = false).inputs(square)
-    // val expand2 = new Expand(2, 8, division = true).inputs(mean2) // variance
-    val add = AddConstant(epsilon).inputs(mean2)
-    // val sqrt = Sqrt().inputs(add)
-
+    // val mean2 = Mean(3, squeeze = false).inputs(square)
+    val mean2 = TimeDistributed(Mean(2, squeeze = false)).inputs(square)
+    val add = AddConstant(1e-6).inputs(mean2)
     val sqrt = Power(-0.5, 1, 0).inputs(add)
-    // val reverse = CDivTable().inputs(new ConstLayer(Tensor[T](2, 8)
-    // .fill(ev.one)).inputs(input), sqrt)
-    // val expand2 = new Expand(2, 8, division = true).inputs(sqrt)
-    // val mul = CMulTable().inputs(sub, expand2)
     val mul = InternalCMulTable().inputs(sub, sqrt)
-    val linear = new LayerLinear[T](hidden_size).setName(this.getName()).inputs(mul)
+    val linear = TimeDistributed(
+      new LayerLinear[T](hidden_size, dims).setName(this.getName())).inputs(mul)
     Graph(input, linear)
-  }
-
-  override def updateOutput(input: Activity): Activity = {
-    output = model.updateOutput(input)
-    output
   }
 }

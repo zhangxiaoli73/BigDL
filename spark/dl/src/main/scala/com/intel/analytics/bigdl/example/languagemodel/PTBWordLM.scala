@@ -67,7 +67,7 @@ object PTBWordLM {
       val model = if (param.modelSnapshot.isDefined) {
         Module.loadModule[Float](param.modelSnapshot.get)
       } else {
-        val curModel = PTBModel(
+        val curModel = PTBModel.applyTransformer(
           inputSize = param.vocabSize,
           hiddenSize = param.hiddenSize,
           outputSize = param.vocabSize,

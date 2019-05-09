@@ -23,7 +23,7 @@ import com.intel.analytics.bigdl.nn.tf.ControlDependency
 import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
 import com.intel.analytics.bigdl.utils.intermediate.{BlasToIR, IRGraph}
-import com.intel.analytics.bigdl.utils.{Node, Util}
+import com.intel.analytics.bigdl.utils.{LayerException, Node, Util}
 import com.intel.analytics.bigdl.optim.DistriOptimizer._
 
 import scala.reflect.ClassTag
@@ -133,7 +133,6 @@ class StaticGraph[T: ClassTag](
     var i = 0
     while (i < backwardExecution.length - 1) {  // do not execute the dummy backward end
       val curNode = backwardExecution(i)
-      println(curNode)
       val curGradOutput = findGradOutput(curNode, gradOutput)
       gradOutputCache(i) = curGradOutput
       val curInput = inputCache(backId2ForwardId(i))
@@ -146,10 +145,12 @@ class StaticGraph[T: ClassTag](
       } else if (executeBackward) {
         curNode.element.accGradParameters(curInput, curGradOutput)
       }
-      println("input -------- " + curInput)
-      println("gradOutput ------------ " + curGradOutput)
-      println("gradInput ------ " + curNode.element.gradInput)
-      println("+++++++++++++++++++++++\n")
+
+//      println(curNode)
+//      println("input -------- " + curInput)
+//      println("gradOutput ------------ " + curGradOutput)
+//      println("gradInput ------ " + curNode.element.gradInput)
+//      println("+++++++++++++++++++++++\n")
       i += 1
     }
 
