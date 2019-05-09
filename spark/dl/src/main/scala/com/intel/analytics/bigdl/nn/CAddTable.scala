@@ -99,6 +99,7 @@ class CAddTable[T: ClassTag, D: ClassTag](val inplace: Boolean = false)(
           }
           gradInput[Tensor[D]](i).resizeAs(input[Tensor[D]](i)).setValue(sum)
         } else {
+          // todo: refactor same with zoo
           gradInput[Tensor[D]](i).resizeAs(gradOutput).copy(gradOutput)
         }
       }

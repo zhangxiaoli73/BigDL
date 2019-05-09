@@ -17,13 +17,12 @@ package com.intel.analytics.bigdl.nn
 
 import com.intel.analytics.bigdl.mkl.Memory
 import com.intel.analytics.bigdl.nn.Graph.ModuleNode
-import com.intel.analytics.bigdl.nn.abstractnn.{AbstractModule, Activity, TensorModule}
-import com.intel.analytics.bigdl.nn.rnn.AttentionLayer
+import com.intel.analytics.bigdl.nn.abstractnn.{AbstractModule, Activity}
 import com.intel.analytics.bigdl.nn.tf.ControlDependency
 import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
 import com.intel.analytics.bigdl.utils.intermediate.{BlasToIR, IRGraph}
-import com.intel.analytics.bigdl.utils.{LayerException, Node, Util}
+import com.intel.analytics.bigdl.utils.{Node, Util}
 import com.intel.analytics.bigdl.optim.DistriOptimizer._
 
 import scala.reflect.ClassTag
@@ -145,12 +144,6 @@ class StaticGraph[T: ClassTag](
       } else if (executeBackward) {
         curNode.element.accGradParameters(curInput, curGradOutput)
       }
-
-//      println(curNode)
-//      println("input -------- " + curInput)
-//      println("gradOutput ------------ " + curGradOutput)
-//      println("gradInput ------ " + curNode.element.gradInput)
-//      println("+++++++++++++++++++++++\n")
       i += 1
     }
 

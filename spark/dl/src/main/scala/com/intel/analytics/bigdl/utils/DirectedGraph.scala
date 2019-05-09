@@ -168,6 +168,7 @@ class DirectedGraph[T](val source : Node[T], val reverse : Boolean = false) exte
 
     if (reverseEdge) {
       // sort previous node
+      // todo: more refactor
       oldToNew.toArray.foreach(node => {
         // if node has more than one previous nodes, we have to consider nodes order
         if (node._1.prevNodesAndEdges.length > 1) {

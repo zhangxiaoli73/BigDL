@@ -26,11 +26,8 @@ import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
 
 import scala.reflect.ClassTag
 
-class LayerNormalization[T: ClassTag](hidden_size: Int, dims: Int = 3)
+private[nn] class LayerNormalization[T: ClassTag](hidden_size: Int, dims: Int = 3)
   (implicit ev: TensorNumeric[T]) extends BaseModule[T] {
-
-  private val epsilon = 1e-6
-
   override def buildModel(): Module[T] = {
     val input = Input()
     // val mean = Mean(3, squeeze = false).inputs(input)

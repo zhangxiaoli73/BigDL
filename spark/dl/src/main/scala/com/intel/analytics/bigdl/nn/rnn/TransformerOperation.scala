@@ -90,38 +90,6 @@ private[rnn] object TransformerOperation {
     input.apply1(e => {if (e == paddingValue) ev.one else ev.zero})
   }
 
-  /**
-    * Return positional encoding.
-    * Calculates the position encoding as a mix of sine and cosine functions with
-    * geometrically increasing wavelengths.
-    * Defined and formulized in Attention is All You Need, section 3.5.
-    * Args:
-    *  length: Sequence length.
-    *  hidden_size: Size of the
-    *  min_timescale: Minimum scale that will be applied at each position
-    *  max_timescale: Maximum scale that will be applied at each position
-    * Returns:
-    *  Tensor with shape [length, hidden_size]
-    * @param length
-    * @param hidden_size
-    * @param min_timescale
-    * @param max_timescale
-    * @tparam T
-    */
-//  def getPositionEncoding[T: ClassTag](
-//     length: Int,
-//     hidden_size: Int,
-//     min_timescale: Float = 1.0f,
-//     max_timescale: Float = 1.0e4f): Unit = {
-//    val position = range(length)
-//    val  num_timescales = hidden_size // 2
-//    val log_timescale_increment = (math.log(max_timescale / min_timescale) / (num_timescales - 1))
-//    val inv_timescales = min_timescale * math.exp(range(num_timescales) * -log_timescale_increment)
-//    val scaled_time = tf.expand_dims(position, 1) * tf.expand_dims(inv_timescales, 0)
-//    val signal = tf.concat([math.sin(scaled_time), math.cos(scaled_time)], axis=1)
-//    return signal
-//  }
-
   private def range(length : Int): Array[Float] = {
     val arr = new Array[Float](length)
     var i = 0
