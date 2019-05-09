@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 
-package com.intel.analytics.bigdl.nn.rnn
+package com.intel.analytics.bigdl.nn
 
 import com.intel.analytics.bigdl.nn.abstractnn.TensorModule
 import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
-import com.intel.analytics.bigdl.utils.{LayerException, T}
+import com.intel.analytics.bigdl.utils.LayerException
 
 import scala.reflect.ClassTag
 

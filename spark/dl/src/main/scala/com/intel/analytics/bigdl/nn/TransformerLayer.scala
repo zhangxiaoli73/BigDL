@@ -13,17 +13,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.intel.analytics.bigdl.nn.rnn
+package com.intel.analytics.bigdl.nn
 
 import com.intel.analytics.bigdl.Module
-import com.intel.analytics.bigdl.nn.{Dropout, Graph, Input, Sequential}
 import com.intel.analytics.bigdl.nn.Graph.ModuleNode
 import com.intel.analytics.bigdl.nn.abstractnn.{AbstractModule, Activity, TensorModule}
 import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
-import com.intel.analytics.bigdl.utils.{T, Table}
-import com.sun.tracing.dtrace.ModuleName
-import org.apache.spark.api.java.function
 
 import scala.reflect.ClassTag
 

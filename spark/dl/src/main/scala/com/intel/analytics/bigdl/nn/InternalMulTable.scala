@@ -14,10 +14,8 @@
  * limitations under the License.
  */
 
-package com.intel.analytics.bigdl.nn.rnn
+package com.intel.analytics.bigdl.nn
 
-
-import com.intel.analytics.bigdl.nn.{CMulTable, CSubTable}
 import com.intel.analytics.bigdl.nn.abstractnn.AbstractModule
 import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
@@ -25,11 +23,11 @@ import com.intel.analytics.bigdl.utils.{T, Table}
 
 import scala.reflect.ClassTag
 
-class InternalCSubTable[T: ClassTag](expandDim: Int = 1)
-                                   (implicit ev: TensorNumeric[T]) extends CSubTable[T] {
+class InternalMulTable[T: ClassTag](expandDim: Int = 1)
+                                   (implicit ev: TensorNumeric[T]) extends CMulTable[T] {
   private var expandLayer: AbstractModule[Tensor[T], Tensor[T], T] = null
 
-  override def updateOutput(input: Table): Tensor[_] = {
+  override def updateOutput(input: Table): Tensor[T] = {
     val input1 = input[Tensor[T]](1)
     val input2 = input[Tensor[T]](2)
 
@@ -40,7 +38,7 @@ class InternalCSubTable[T: ClassTag](expandDim: Int = 1)
     return output
   }
 
-  override def updateGradInput(input: Table, gradOutput: Tensor[_]): Table = {
+  override def updateGradInput(input: Table, gradOutput: Tensor[T]): Table = {
     val input1 = input[Tensor[T]](1)
     val input2 = input[Tensor[T]](2)
 
@@ -52,13 +50,13 @@ class InternalCSubTable[T: ClassTag](expandDim: Int = 1)
     gradInput
   }
 
-  override def toString: String = s"InternalCSubTable()"
+  override def toString: String = s"InternalCMulTable()"
 
 }
 
-object InternalCSubTable {
+object InternalCMulTable {
   def apply[@specialized(Float, Double) T: ClassTag]()
-    (implicit ev: TensorNumeric[T]) : InternalCSubTable[T] = {
-    new InternalCSubTable[T]()
+    (implicit ev: TensorNumeric[T]) : InternalMulTable[T] = {
+    new InternalMulTable[T]()
   }
 }

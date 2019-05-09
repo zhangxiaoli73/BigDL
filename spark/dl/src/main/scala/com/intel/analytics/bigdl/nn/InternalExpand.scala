@@ -14,12 +14,11 @@
  * limitations under the License.
  */
 
-package com.intel.analytics.bigdl.nn.rnn
+package com.intel.analytics.bigdl.nn
 
 import com.intel.analytics.bigdl.nn.abstractnn.AbstractModule
 import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
-import com.intel.analytics.bigdl.utils.Table
 
 import scala.collection.mutable.ArrayBuffer
 import scala.reflect.ClassTag

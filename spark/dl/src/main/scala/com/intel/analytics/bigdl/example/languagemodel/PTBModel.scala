@@ -18,8 +18,7 @@ package com.intel.analytics.bigdl.example.languagemodel
 
 import com.intel.analytics.bigdl.Module
 import com.intel.analytics.bigdl.nn.Graph._
-import com.intel.analytics.bigdl.nn.rnn.TransformerLayer
-import com.intel.analytics.bigdl.nn.{TimeDistributed, _}
+import com.intel.analytics.bigdl.nn.{TimeDistributed, TransformerLayer, _}
 
 object PTBModel {
   def applyTransformer(
