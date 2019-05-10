@@ -125,11 +125,11 @@ private[nn] object TransformerOperation {
   }
 
   // Shift the second dimension of x right by one.
-  def shiftRight3D[T: ClassTag](input: Tensor[T])(implicit ev: TensorNumeric[T]): Tensor[T] = {
+  def shiftRight3D[T: ClassTag](input: Tensor[T], output: Tensor[T])
+                               (implicit ev: TensorNumeric[T]): Tensor[T] = {
     // todo: return shifted_targets = tf.pad(x, [[0, 0], [1, 0], [0, 0]])[:, :-1, :]
-    val output = Tensor[T]().resizeAs(input).zero()
+    output.resizeAs(input).zero()
     val index = input.size(2)
-    output.narrow(2, 1, 1).zero()
     output.narrow(2, 2, index - 1).copy(input.narrow(2, 1, index - 1))
     output
   }

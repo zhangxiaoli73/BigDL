@@ -16,26 +16,31 @@
 package com.intel.analytics.bigdl.nn
 
 import com.intel.analytics.bigdl._
+import com.intel.analytics.bigdl.nn.abstractnn.Activity
 import com.intel.analytics.bigdl.nn.{Module => _}
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
 
 import scala.reflect.ClassTag
 
-private[nn] class LayerNormalization[T: ClassTag](hidden_size: Int, dims: Int = 3)
+private[nn] class LayerNormalization[T: ClassTag](hidden_size: Int)
   (implicit ev: TensorNumeric[T]) extends BaseModule[T] {
   override def buildModel(): Module[T] = {
     val input = Input()
-    // val mean = Mean(3, squeeze = false).inputs(input)
-    val mean = TimeDistributed(Mean(2, squeeze = false)).inputs(input)
+    val mean = Mean(-1, squeeze = false).inputs(input)
+    // val mean = TimeDistributed(Mean(2, squeeze = false)).inputs(input)
     val sub = InternalCSubTable().inputs(input, mean)
     val square = Square().inputs(sub)
-    // val mean2 = Mean(3, squeeze = false).inputs(square)
-    val mean2 = TimeDistributed(Mean(2, squeeze = false)).inputs(square)
+    val mean2 = Mean(-1, squeeze = false).inputs(square)
+    // val mean2 = TimeDistributed(Mean(2, squeeze = false)).inputs(square)
     val add = AddConstant(1e-6).inputs(mean2)
     val sqrt = Power(-0.5, 1, 0).inputs(add)
     val mul = InternalCMulTable().inputs(sub, sqrt)
     val linear = TimeDistributed(
-      new LayerLinear[T](hidden_size, dims).setName(this.getName())).inputs(mul)
+      new LayerLinear[T](hidden_size)).inputs(mul)
     Graph(input, linear)
+  }
+  override def updateOutput(input: Activity): Activity = {
+    output = model.updateOutput(input)
+    output
   }
 }

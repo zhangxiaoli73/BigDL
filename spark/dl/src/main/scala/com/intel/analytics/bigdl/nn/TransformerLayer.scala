@@ -20,6 +20,7 @@ import com.intel.analytics.bigdl.nn.Graph.ModuleNode
 import com.intel.analytics.bigdl.nn.abstractnn.{AbstractModule, Activity, TensorModule}
 import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
+import com.intel.analytics.bigdl.utils.T
 
 import scala.reflect.ClassTag
 
@@ -57,11 +58,10 @@ class TransformerLayer[T: ClassTag](
    allow_ffn_pad: Boolean = false)
   (implicit ev: TensorNumeric[T]) extends AbstractModule[Activity, Activity, T] {
 
-  val embedding_softmax_layer = new EmbeddingSharedWeights(vocabSize, hiddenSize)
   val postDropOut = Dropout(1- postprocessDropout)
   val blockModel = block(num_hidden_layers)
 
-  val model = defModel
+  val model = buildModel()
 
   override def updateOutput(input: Activity): Activity = {
     require(input.isTensor, "only support LM now")
@@ -78,7 +78,7 @@ class TransformerLayer[T: ClassTag](
     model.accGradParameters(input, gradOutput)
   }
 
-  private def defModel: Module[T] = {
+  private def buildModel(): Module[T] = {
     val input = Input()
     val decoder_input = new TransformerPrepareDecoder().inputs(input)
     val decoder_self_attention_bias = new TransformerConstant().inputs(input)
@@ -95,39 +95,44 @@ class TransformerLayer[T: ClassTag](
     val decoder_input = Input()
     val decoder_self_attention_bias = Input()
     var output = decoder_input
+//    val ffn = new FeedForwardNetwork[T](hiddenSize, filterSize, reluDropout)
+//    val node = ffn.inputs(decoder_input)
+//    return Graph(decoder_input, node)
 
     var i = 0
     while (i < num_layers) {
-      val attention = new AttentionLayer[T](hiddenSize, numHeads, attentionDropout)
+      val attention = new Attention[T](hiddenSize, numHeads, attentionDropout)
       val ffn = new FeedForwardNetwork[T](hiddenSize, filterSize, reluDropout)
       val attentionModel = prePostProcessingWrapperAttention(
-        attention, output, decoder_self_attention_bias, s"attention_norm_${i}")
-      val ffnModel = prePostProcessingWrapperFFN(ffn, attentionModel, s"ffn_norm_${i}")
+        attention, output, decoder_self_attention_bias, s"attention_${i}")
+      val ffnModel = prePostProcessingWrapperFFN(ffn, attentionModel, s"ffn_${i}")
       output = ffnModel
       i += 1
     }
-
     val norm = new LayerNormalization[T](hiddenSize).setName("norm").inputs(output)
     val model = Graph(Array(decoder_input, decoder_self_attention_bias), Array(norm))
+    // val model = Graph(Array(decoder_input), Array(norm))
     model
   }
 
   private def prePostProcessingWrapperAttention(layer: Module[T], decoder_input: ModuleNode[T],
-    decoder_self_attention_bias: ModuleNode[T], name: String): ModuleNode[T] = {
-    val norm = new LayerNormalization[T](hiddenSize).setName(name).inputs(decoder_input)
-    val drop = Dropout[T](1 - postprocessDropout).inputs(
-      layer.inputs(norm, decoder_self_attention_bias))
-    // todo: x + y, residual connection
-    // Graph(Array(decoder_input, decoder_self_attention_bias), Array(drop))
-    drop
+    decoder_self_attention_bias: ModuleNode[T], preName: String): ModuleNode[T] = {
+    val norm = new LayerNormalization[T](hiddenSize).setName(preName + "/norm")
+      .inputs(decoder_input)
+    val drop = Dropout[T](1 - postprocessDropout).setName(preName + "/dropout").inputs(
+      layer.setName(preName + "/attention")
+        .inputs(norm, decoder_self_attention_bias))
+    val add = CAddTable().inputs(decoder_input, drop)
+    add
   }
   private def prePostProcessingWrapperFFN(layer: Module[T],
-    decoder_input: ModuleNode[T], name: String): ModuleNode[T] = {
-    val norm = new LayerNormalization[T](hiddenSize).setName(name).inputs(decoder_input)
-    val drop = Dropout[T](1 - postprocessDropout).inputs(layer.inputs(norm))
-    // todo: x + y, residual connection
-    // Graph(Array(decoder_input, decoder_self_attention_bias), Array(drop))
-    drop
+    decoder_input: ModuleNode[T], preName: String): ModuleNode[T] = {
+    val norm = new LayerNormalization[T](hiddenSize).setName(preName + "/norm")
+      .inputs(decoder_input)
+    val drop = Dropout[T](1 - postprocessDropout).setName(preName + "/dropout")
+      .inputs(layer.setName(preName + "/ffn").inputs(norm))
+    val add = CAddTable().inputs(decoder_input, drop)
+    add
   }
 }
 
@@ -147,16 +152,16 @@ private[nn] class TransformerConstant[T: ClassTag](implicit ev: TensorNumeric[T]
 }
 
 private[nn] class TransformerPrepareDecoder[T: ClassTag](implicit ev: TensorNumeric[T])
-  extends AbstractModule[Activity, Activity, T] {
-  override def updateOutput(input: Activity): Activity = {
+  extends TensorModule[T] {
+  override def updateOutput(input: Tensor[T]): Tensor[T] = {
     val inputTensor = input.toTensor[T]
-    val decoder_input = TransformerOperation.shiftRight3D(inputTensor)
-    val decoder_input_tmp = TransformerOperation.addTimingSignal1D(decoder_input)
+    TransformerOperation.shiftRight3D(inputTensor, output)
+    val decoder_input_tmp = TransformerOperation.addTimingSignal1D(output)
     output = decoder_input_tmp
     return output
   }
 
-  override def updateGradInput(input: Activity, gradOutput: Activity): Activity = {
+  override def updateGradInput(input: Tensor[T], gradOutput: Tensor[T]): Tensor[T] = {
     require(gradOutput.isTensor, "gradOutput should be tensor")
     if (gradInput == null) gradInput = Tensor[T]()
     val gradInputTensor = gradInput.toTensor[T]

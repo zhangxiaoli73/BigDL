@@ -23,7 +23,7 @@ import com.intel.analytics.bigdl.utils.LayerException
 
 import scala.reflect.ClassTag
 
-private[nn] class LayerLinear[T: ClassTag](hidden_size: Int, dim: Int)
+private[nn] class LayerLinear[T: ClassTag](hidden_size: Int)
   (implicit ev: TensorNumeric[T]) extends TensorModule[T] {
 
   var weight = Tensor[T](hidden_size).fill(ev.one)

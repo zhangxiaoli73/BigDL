@@ -144,6 +144,12 @@ class StaticGraph[T: ClassTag](
       } else if (executeBackward) {
         curNode.element.accGradParameters(curInput, curGradOutput)
       }
+      println(curNode.element)
+      if (curInput.isInstanceOf[Tensor[T]]) {
+        if (curInput.asInstanceOf[Tensor[T]].nElement() != curNode.element.gradInput.toTensor[T].nElement()) {
+          val tmp = 0
+        }
+      }
       i += 1
     }
 
