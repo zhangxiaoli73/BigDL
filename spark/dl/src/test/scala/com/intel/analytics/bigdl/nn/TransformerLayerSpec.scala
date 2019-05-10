@@ -35,7 +35,7 @@ class TransformerLayerSpec extends FlatSpec with Matchers {
 
     val attention = new Attention[Float](hiddenSize = hiddenSize,
       numHeads = numHeads, attentionDropout = attentionDropout)
-    val block = transformer.blockModel
+    val block = transformer.block(num_hidden_layers)
     val paramsTable = block.getParametersTable()
 
     for (i <- paramsTable.keySet) {
