@@ -99,7 +99,7 @@ class LayerNormalizationSpec extends FlatSpec with Matchers {
     // gradWeights should be(gradWeightExpected)
   }
 
-  "layer linear" should "work correct" in {
+  "layer linear with 2 dims" should "work correct" in {
     val weight = Tensor[Float](T(-0.14037117, -0.16902402, -0.06451887,
       -0.5642037, 0.24212438, 0.44951588, -0.4296978, 0.423163))
     val bias = Tensor[Float](T(0.44111532, -0.06523705, -0.3474969,

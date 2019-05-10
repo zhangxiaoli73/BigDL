@@ -38,16 +38,12 @@ class CAddTable[T: ClassTag, D: ClassTag](val inplace: Boolean = false)(
 
   output = Tensor[D]()
 
-  val buffer = T()
-
   override def updateOutput(input: Table): Tensor[D] = {
     var scalar = ev2.zero
     var hasTensor = false
     var hasScalar = false
     var initTensor = false
 
-    buffer(1) = input[Tensor[T]](1).clone()
-    buffer(2) = input[Tensor[T]](2).clone()
     var i = 1
     while (i <= input.length()) {
       val curTensor = input[Tensor[D]](i)
