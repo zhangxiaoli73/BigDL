@@ -25,15 +25,13 @@ import com.intel.analytics.bigdl.utils.T
 import scala.reflect.ClassTag
 
 /**
- * Transformer main model_fn.
- * features: Map of features to the model. Should contain the following:
- * "inputs": Transformer inputs. [batch_size, input_length, 1, hidden_dim].
- * "targets": Target decoder outputs. [batch_size, decoder_length, 1, hidden_dim]
- * "target_space_id": A scalar int from data_generators.problem.SpaceID.
- * Returns:
- * Final decoder representation. [batch_size, decoder_length, hidden_dim]
- *
- * @param vocabSize
+ * Transformer model from "Attention Is All You Need".
+ * The Transformer model consists of an encoder and a decoder. Both are stacks
+ * of self-attention layers followed by feed-forward layers. This model yields
+ * good results on a number of problems, especially in NLP and machine translation.
+ * See "Attention Is All You Need" (https://arxiv.org/abs/1706.03762) for the full
+ * description of the model and the results obtained with its early version.
+ * Input with shape (batchSize, length, hiddenSize)
  * @param hiddenSize
  * @param numHeads
  * @param filterSize
@@ -41,21 +39,16 @@ import scala.reflect.ClassTag
  * @param postprocessDropout
  * @param attentionDropout
  * @param reluDropout
- * @param allow_ffn_pad
- * @param ev$1
- * @param ev
  * @tparam T The numeric type in this module parameters.
  */
 class TransformerLayer[T: ClassTag](
-   vocabSize: Int,
-   hiddenSize: Int,
-   numHeads: Int,
-   filterSize: Int,
-   num_hidden_layers: Int,
-   postprocessDropout: Float,
-   attentionDropout: Float,
-   reluDropout: Float,
-   allow_ffn_pad: Boolean = false)
+   val hiddenSize: Int,
+   val numHeads: Int,
+   val filterSize: Int,
+   val num_hidden_layers: Int,
+   val postprocessDropout: Float,
+   val attentionDropout: Float,
+   val reluDropout: Float)
   (implicit ev: TensorNumeric[T]) extends BaseModule[T] {
 
   override def buildModel(): Module[T] = {
@@ -68,12 +61,12 @@ class TransformerLayer[T: ClassTag](
       postDropOut.inputs(decoder_input)
     } else decoder_input
 
-    val blockModel = block(num_hidden_layers)
+    val blockModel = decode(num_hidden_layers)
     val output = blockModel.inputs(decoder_input_lm, decoder_self_attention_bias)
     Graph(input, output)
   }
 
-  def block(num_layers: Int): Module[T] = {
+  private def decode(num_layers: Int): Module[T] = {
     val decoder_input = Input()
     val decoder_self_attention_bias = Input()
     var output = decoder_input
@@ -107,6 +100,21 @@ class TransformerLayer[T: ClassTag](
       .inputs(layer.setName(preName + "/ffn").inputs(norm))
     CAddTable().inputs(decoder_input, drop)
   }
+}
+
+
+object TransformerLayer {
+  def apply[T: ClassTag](
+     hiddenSize: Int,
+     numHeads: Int,
+     filterSize: Int,
+     num_hidden_layers: Int,
+     postprocessDropout: Float,
+     attentionDropout: Float,
+     reluDropout: Float)
+   (implicit ev: TensorNumeric[T]): TransformerLayer[T] =
+    new TransformerLayer(hiddenSize, numHeads, filterSize, num_hidden_layers,
+      postprocessDropout, attentionDropout, reluDropout)
 }
 
 private[nn] class TransformerConstant[T: ClassTag](implicit ev: TensorNumeric[T])

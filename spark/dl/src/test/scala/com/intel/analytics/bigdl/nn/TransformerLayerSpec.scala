@@ -16,8 +16,11 @@
 package com.intel.analytics.bigdl.nn
 
 import com.intel.analytics.bigdl.tensor.Tensor
+import com.intel.analytics.bigdl.utils.serializer.ModuleSerializationTest
 import com.intel.analytics.bigdl.utils.{T, Table}
 import org.scalatest.{FlatSpec, Matchers}
+
+import scala.util.Random
 
 class TransformerLayerSpec extends FlatSpec with Matchers {
   "tranformer block" should "work correctly" in {
@@ -30,12 +33,10 @@ class TransformerLayerSpec extends FlatSpec with Matchers {
     val attentionDropout = 1.0f
     val reluDropout = 1.0f
     val transformer = new TransformerLayer[Float](
-      vocabSize, hiddenSize, numHeads, filterSize, num_hidden_layers,
+      hiddenSize, numHeads, filterSize, num_hidden_layers,
       postprocessDropout, attentionDropout, reluDropout)
 
-    val attention = new Attention[Float](hiddenSize = hiddenSize,
-      numHeads = numHeads, attentionDropout = attentionDropout)
-    val block = transformer.block(num_hidden_layers)
+    val block = transformer.decode(num_hidden_layers)
     val paramsTable = block.getParametersTable()
 
     for (i <- paramsTable.keySet) {
@@ -206,5 +207,39 @@ class TransformerLayerSpec extends FlatSpec with Matchers {
     out should be(expectedOutput)
 
     val out2 = prepare.backward(input, out)
+  }
+}
+
+class TransformerConstantSerialTest extends ModuleSerializationTest {
+  override def test(): Unit = {
+    val model = new TransformerConstant[Float]().setName("TransformerConstant")
+    val input = Tensor[Float](2, 6, 4).apply1(_ => Random.nextFloat())
+    runSerializationTest(model, input)
+  }
+}
+
+class TransformerPrepareDecoderSerialTest extends ModuleSerializationTest {
+  override def test(): Unit = {
+    val model = new TransformerPrepareDecoder[Float]().setName("TransformerPrepareDecoder")
+    val input = Tensor[Float](2, 6, 4).apply1(_ => Random.nextFloat())
+    runSerializationTest(model, input)
+  }
+}
+
+class TransformerLayerSerialTest extends ModuleSerializationTest {
+  override def test(): Unit = {
+    val vocabSize = 10
+    val hiddenSize = 4
+    val numHeads = 2
+    val filterSize = 3
+    val num_hidden_layers = 1
+    val postprocessDropout = 1.0f
+    val attentionDropout = 1.0f
+    val reluDropout = 1.0f
+    val model = new TransformerLayer[Float](
+      hiddenSize, numHeads, filterSize, num_hidden_layers,
+      postprocessDropout, attentionDropout, reluDropout)
+    val input = Tensor[Float](2, 6, 4).apply1(_ => Random.nextFloat())
+    runSerializationTest(model, input)
   }
 }
