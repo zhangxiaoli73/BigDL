@@ -36,7 +36,11 @@ class TransformerLayerSpec extends FlatSpec with Matchers {
       hiddenSize, numHeads, filterSize, num_hidden_layers,
       postprocessDropout, attentionDropout, reluDropout)
 
-    val block = transformer.decode(num_hidden_layers)
+    val input1 = Input[Float]()
+    val input2 = Input[Float]()
+
+    val blockOutput = transformer.decodeStack(num_hidden_layers, Input(), Input())
+    val block = Graph(Array(input1, input2), blockOutput)
     val paramsTable = block.getParametersTable()
 
     for (i <- paramsTable.keySet) {
@@ -129,6 +133,22 @@ class TransformerLayerSpec extends FlatSpec with Matchers {
   "transformer prepare decode layer" should "work correctly" in {
     val prepare = new TransformerPrepareDecoder[Float]()
 
+    val inputTemp = Tensor[Float](T(T(
+        T(1.5575712,  1.6023955,  1.4487493,  0.46178865),
+        T(1.4542825,  0.36078143, 1.0112681,  1.7850459),
+        T(1.0922418,  1.8467345,  0.17114377, 1.5875602),
+        T(1.3181713,  1.1110513,  0.31925488, 0.61749554),
+        T(0.30953693, 0.93909645, 1.9877799,  1.2225482),
+        T(1.3529022,  0.3599646,  1.3499286,  0.4491992)),
+        T(T(0.10186243, 0.9201369,  1.6568646,  0.47073865),
+        T(1.950448,   1.6722536,  0.5169549,  0.83770823),
+        T(1.4055192,  1.535857,   1.0745583,  1.4468269),
+        T(0.53809,    0.01234245, 0.06532454, 0.1288917),
+        T(1.6856189,  1.4987106,  0.1509037,  1.2490149),
+        T(0.6981592,  1.1585901,  1.1459568,  0.3643551))))
+    val outTemp = prepare.forward(inputTemp)
+
+
     val input = Tensor[Float](
         T(T(T( 16.24345364, -6.11756414, -5.28171752, -10.72968622),
         T(8.65407629, -23.01538697, 17.44811764, -7.61206901),
@@ -207,6 +227,14 @@ class TransformerLayerSpec extends FlatSpec with Matchers {
     out should be(expectedOutput)
 
     val out2 = prepare.backward(input, out)
+  }
+
+  "TransformerOperation getPaddingBias" should "work good" in {
+    val input = Tensor[Float](T(0, 1, 2, 3, 4, 5, 6, 7)).resize(Array(2, 4))
+    val ops = TransformerOperation.getPaddingBias(input)
+    val opsExpected = Tensor[Float](T(1.0f, 0.0f, 0f, 0f, 0f, 0f, 0f, 0f))
+      .resize(Array(2, 1, 1, 4))
+    ops should be(opsExpected)
   }
 
 }

@@ -21,7 +21,7 @@ import com.intel.analytics.bigdl.optim.Regularizer
 import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
 import com.intel.analytics.bigdl.tensor.{Storage, Tensor}
-import com.intel.analytics.bigdl.utils.EngineType
+import com.intel.analytics.bigdl.utils.{EngineType, T}
 
 import scala.reflect.ClassTag
 
@@ -57,6 +57,38 @@ private[nn] object TransformerOperation {
     model.add(Transpose[T](Array((2, 4))))
     model.asInstanceOf[AbstractModule[Tensor[T], Tensor[T], T]]
   }
+
+  /**
+    * Calculate bias tensor from padding values in tensor.
+    * Bias tensor that is added to the pre-softmax multi-headed attention logits,
+    * which has shape [batch_size, num_heads, length, length]. The tensor is zero at
+    * non-padding locations, and -1e9 (negative infinity) at padding locations.
+    * Args: x: int tensor with shape [batch_size, length]
+    * Returns: Attention bias tensor of shape [batch_size, 1, 1, length].
+    * @param input
+    * @tparam T
+    * @return
+    */
+  def getPaddingBias[T: ClassTag](input: Tensor[T])(implicit ev: TensorNumeric[T]): Tensor[T] = {
+    val res = getPadding[T](input)
+    res.addSingletonDimension(res, 2)
+    res.addSingletonDimension(res, 3)
+  }
+
+  /**
+   * Return float tensor representing the padding values in x.
+   * Args:
+   * x: int tensor with any shape
+   * padding_value: int value that
+   * Returns:float tensor with same shape as x containing values 0 or 1.
+   *   0 -> non-padding, 1 -> padding
+   */
+  def getPadding[T: ClassTag](input: Tensor[T], paddingValue: Float = 0.0f)
+                             (implicit ev: TensorNumeric[T]): Tensor[T] = {
+    input.apply1(e => {if (e == paddingValue) ev.one else ev.zero})
+  }
+
+  // getPositionEncoding //
 
   // Shift the second dimension of x right by one.
   def shiftRight3D[T: ClassTag](input: Tensor[T], output: Tensor[T])
