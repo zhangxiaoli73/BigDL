@@ -88,8 +88,6 @@ private[nn] object TransformerOperation {
     input.apply1(e => {if (e == paddingValue) ev.one else ev.zero})
   }
 
-  // getPositionEncoding //
-
   // Shift the second dimension of x right by one.
   def shiftRight3D[T: ClassTag](input: Tensor[T], output: Tensor[T])
     (implicit ev: TensorNumeric[T]): Tensor[T] = {
@@ -97,6 +95,47 @@ private[nn] object TransformerOperation {
     val index = input.size(2)
     output.narrow(2, 2, index - 1).copy(input.narrow(2, 1, index - 1))
     output
+  }
+
+  def initRangeTensor[T: ClassTag](length: Int, rangeBuffer: Tensor[T])
+    (implicit ev: TensorNumeric[T]): Unit = {
+    rangeBuffer.resize(Array(length, 2))
+    val arr = rangeBuffer.select(2, 1).storage().array()
+    for (i <- 0 to (length - 1)) {
+      arr(i * 2) = ev.fromType(i)
+      arr(i * 2 + 1) = ev.fromType(i)
+    }
+  }
+
+  def addTimingSignal1D[T: ClassTag](
+    length: Int,
+    channels: Int,
+    min_timescale : Float = 1.0f,
+    max_timescale: Float = 1.0e4f,
+    rangeBuffer: Tensor[T],
+    timeBuffer: Tensor[T])(implicit ev: TensorNumeric[T]): Tensor[T] = {
+    // get_timing_signal_1d, return (1, length, channels)
+    val num_timescales = channels / 2
+    val log_timescale_increment = math.log(max_timescale / min_timescale) /
+      math.max(num_timescales - 1, 1)
+    // tf.range(num_timescales)
+    val inv_timescales = new Array[Double](num_timescales)
+    var i = 0
+    while (i < inv_timescales.length) {
+      inv_timescales(i) = min_timescale * math.exp(i * - log_timescale_increment)
+      i += 1
+    }
+    rangeBuffer.select(2, 1).mul(ev.fromType[Double](inv_timescales(0)))
+    rangeBuffer.select(2, 2).mul(ev.fromType[Double](inv_timescales(1)))
+
+    val sinRes = rangeBuffer.clone().apply1(e =>
+      ev.fromType(math.sin(ev.toType[Float](e))))
+    val cosRes = rangeBuffer.clone().apply1(e =>
+      ev.fromType(math.cos(ev.toType[Float](e))))
+
+    timeBuffer.narrow(2, 1, sinRes.size(2)).copy(sinRes)
+    timeBuffer.narrow(2, sinRes.size(2) + 1, cosRes.size(2)).copy(cosRes)
+    timeBuffer
   }
 }
 
