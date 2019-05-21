@@ -24,10 +24,12 @@ import com.intel.analytics.bigdl.dataset.image._
 import com.intel.analytics.bigdl.nn.{ClassNLLCriterion, Module}
 import com.intel.analytics.bigdl.optim._
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric._
+import com.intel.analytics.bigdl.transform.vision.image.ImageFrame
 import com.intel.analytics.bigdl.utils.{Engine, LoggerFilter, T, Table}
 import com.intel.analytics.bigdl.visualization.{TrainSummary, ValidationSummary}
 import org.apache.log4j.{Level, Logger}
 import org.apache.spark.SparkContext
+import org.apache.spark.rdd.RDD
 
 object Train {
   LoggerFilter.redirectSparkInfoLogs()
@@ -42,6 +44,13 @@ object Train {
           .set("spark.rpc.message.maxSize", "200")
       val sc = new SparkContext(conf)
       Engine.init
+
+      val tmpDataSet = DataSet.array(Utils.loadTrain(param.folder), sc) ->
+        BytesToBGRImg() -> BGRImgNormalizer(trainMean, trainStd) ->
+        BGRImgToSample() -> SampleToImagefeature()
+
+      val tmp = tmpDataSet.toDistributed().data(train = false).collect()
+
 
       val trainDataSet = DataSet.array(Utils.loadTrain(param.folder), sc) ->
         BytesToBGRImg() -> BGRImgNormalizer(trainMean, trainStd) ->

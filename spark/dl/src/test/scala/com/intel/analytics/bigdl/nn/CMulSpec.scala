@@ -65,6 +65,18 @@ class CMulSpec extends FlatSpec with Matchers {
     gradInput3 should be (gradInput4)
     layer2.gradWeight should be (layer1.gradWeight.mul(0.5))
   }
+
+  "111" should "good" in {
+    val tmp1 = Tensor[Float](2, 3).rand()
+    val tmp2 = Tensor[Float](2, 3).rand()
+
+    val tmp = Tensor[Float](2, 2, 3).zero()
+
+    val res = tmp1.addSingletonDimension(tmp2, 1)
+
+    println("done")
+
+  }
 }
 
 class CMulSerialTest extends ModuleSerializationTest {

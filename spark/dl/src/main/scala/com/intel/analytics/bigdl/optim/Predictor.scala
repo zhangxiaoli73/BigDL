@@ -125,6 +125,7 @@ object Predictor {
     featurePaddingParam: Option[PaddingParam[T]])(
     implicit ev: TensorNumeric[T]): DistributedImageFrame = {
 
+    val t = imageFrame.asInstanceOf[DistributedImageFrame].rdd
     val rdd = ConversionUtils.coalesce(imageFrame.asInstanceOf[DistributedImageFrame].rdd)
     val modelBroad = ModelBroadcast[T]().broadcast(rdd.sparkContext,
       ConversionUtils.convert(model.evaluate()))

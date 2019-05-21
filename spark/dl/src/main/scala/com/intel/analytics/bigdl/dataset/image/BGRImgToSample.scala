@@ -18,6 +18,9 @@ package com.intel.analytics.bigdl.dataset.image
 
 import com.intel.analytics.bigdl.dataset.{Sample, Transformer}
 import com.intel.analytics.bigdl.tensor.Tensor
+import com.intel.analytics.bigdl.transform.vision.image.ImageFeature
+import org.apache.spark.ml
+import org.apache.spark.ml.feature
 
 import scala.collection.Iterator
 
@@ -44,6 +47,30 @@ class BGRImgToSample(toRGB: Boolean = true) extends Transformer[LabeledBGRImage,
 
       img.copyTo(featureBuffer.storage().array(), 0, toRGB)
       Sample(featureBuffer, labelBuffer)
+    })
+  }
+}
+
+
+object SampleToImagefeature {
+  def apply(): SampleToImagefeature = {
+    new SampleToImagefeature()
+  }
+}
+
+class SampleToImagefeature() extends Transformer[Sample[Float], ImageFeature] {
+
+  override def apply(prev: Iterator[Sample[Float]]): Iterator[ImageFeature] = {
+    prev.map(img => {
+      val imageFeature = new ImageFeature()
+      val featureBuffer = Tensor[Float]()
+      val labelBuffer = Tensor[Float]()
+
+      featureBuffer.resizeAs(img.feature()).copy(img.feature())
+      labelBuffer.resizeAs(img.label()).copy(img.label())
+      imageFeature.update("sample", Sample(featureBuffer, labelBuffer))
+      imageFeature.update("label", labelBuffer)
+      imageFeature
     })
   }
 }
