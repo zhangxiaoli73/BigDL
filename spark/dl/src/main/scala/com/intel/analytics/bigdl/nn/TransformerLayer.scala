@@ -52,6 +52,8 @@ class TransformerLayer[T: ClassTag](
    val problem: ProblemType = LanguageModel)
   (implicit ev: TensorNumeric[T]) extends BaseModule[T] {
 
+  private val embedding = EmbeddingSharedWeights[T](vocabSize, hiddenSize)
+
   override def buildModel(): Module[T] = {
     problem match {
       case LanguageModel => buildLM()
@@ -59,6 +61,10 @@ class TransformerLayer[T: ClassTag](
     }
   }
 
+  override def updateOutput(input: Activity): Activity = {
+    output = model.updateOutput(input)
+    output
+  }
   private def buildTranslation(): Module[T] = {
     val inNode = Input()
     val tarNode = Input()
@@ -227,7 +233,8 @@ private[nn] class EncodePositionConstant[T: ClassTag](implicit ev: TensorNumeric
 private[nn] class AttentionBiasConstant[T: ClassTag](implicit ev: TensorNumeric[T])
   extends TensorModule[T] {
   override def updateOutput(input: Tensor[T]): Tensor[T] = {
-    output = TransformerOperation.getPaddingBias(input)
+    output.resizeAs(input).copy(input)
+    output = TransformerOperation.getPaddingBias(output)
     output
   }
 

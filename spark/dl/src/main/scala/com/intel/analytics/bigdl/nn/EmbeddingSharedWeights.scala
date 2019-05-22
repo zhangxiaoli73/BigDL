@@ -18,6 +18,7 @@ package com.intel.analytics.bigdl.nn
 import com.intel.analytics.bigdl.nn.abstractnn.TensorModule
 import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
+import com.intel.analytics.bigdl.utils.T
 
 import scala.reflect.ClassTag
 
@@ -39,7 +40,24 @@ class EmbeddingSharedWeights[T: ClassTag](
   (implicit ev: TensorNumeric[T]) extends TensorModule[T] {
 
   // todo: init with random normal
-  val weight = Tensor[T](vocab_size, hidden_size).rand()
+  // val weight = Tensor[T](vocab_size, hidden_size).rand()
+  val weight = Tensor[T]( T(T( 0.0901417,  -0.25920567,  0.35886005, -0.79801846),
+    T( 0.7101189,  -0.5279109,   0.24793072,  0.07292826),
+    T(-0.00906177,  0.6962627,   0.37465635,  0.15718417),
+    T(-0.11258064, -0.3311236,  -0.3180385,   0.58970255),
+    T( 0.17320412, -0.49935055,  0.7124023,  -0.28340986),
+    T(-0.33200186,  1.0381325,  -0.18797834,  0.5976197),
+    T(-0.06744625, -0.23964763,  0.37403554, -0.4539435),
+    T(-0.39824682,  0.18769431,  0.02896992, -0.7393345),
+    T( 0.5590472,  -0.7522993,  -0.44121778, -0.1815617),
+    T( 0.7071572,   0.27919358,  0.23945637, -0.17475012),
+    T(-0.36576417, -1.6407981,  -0.5480189,   0.00637588),
+    T( 0.3870772,   0.5724747,  -0.6339975,  -0.6118532),
+    T(-0.08697614, -0.21675488, -0.13310283,  0.19130157),
+    T( 0.06459922, -0.57852674,  0.9070809,   0.09887356),
+    T( 0.8016945,  -0.09532502, -0.6059104,   0.74728966),
+    T( 0.24903144,  0.06780083,  0.16405171, -0.29252014))
+  )
 
   var gradWeight = Tensor[T](vocab_size, hidden_size).zero()
 
