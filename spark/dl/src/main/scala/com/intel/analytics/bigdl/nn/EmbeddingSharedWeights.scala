@@ -34,8 +34,9 @@ import scala.reflect.ClassTag
  * @param ev
  * @tparam T The numeric type in this module parameters
  */
-class EmbeddingSharedWeights[T: ClassTag](vocab_size: Int, hidden_size: Int)
-                                         (implicit ev: TensorNumeric[T]) extends TensorModule[T] {
+class EmbeddingSharedWeights[T: ClassTag](
+  val vocab_size: Int, val hidden_size: Int)
+  (implicit ev: TensorNumeric[T]) extends TensorModule[T] {
 
   // todo: init with random normal
   val weight = Tensor[T](vocab_size, hidden_size).rand()
@@ -105,4 +106,10 @@ class EmbeddingSharedWeights[T: ClassTag](vocab_size: Int, hidden_size: Int)
   override def parameters(): (Array[Tensor[T]], Array[Tensor[T]]) = {
     (Array(this.weight), Array(this.gradWeight))
   }
+}
+
+object EmbeddingSharedWeights {
+  def apply[T: ClassTag](vocab_size: Int, hidden_size: Int)
+           (implicit ev: TensorNumeric[T]): EmbeddingSharedWeights[T] =
+    new EmbeddingSharedWeights(vocab_size, hidden_size)
 }

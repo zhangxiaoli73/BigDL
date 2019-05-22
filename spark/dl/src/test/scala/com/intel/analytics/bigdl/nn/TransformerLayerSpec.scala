@@ -354,15 +354,17 @@ class TransformerLayerSpec extends FlatSpec with Matchers {
     val reluDropout = 1.0f
     val transformer = new TransformerLayer[Float](vocabSize,
       hiddenSize, numHeads, filterSize, num_hidden_layers,
-      postprocessDropout, attentionDropout, reluDropout)
+      postprocessDropout, attentionDropout, reluDropout, problem = Translation)
 
-//    val input1 = Input[Float](
-//      T(T(0, 1, 2, 3, 4, 5),
-//      T(6, 7, 8, 9, 10, 11)))
-//    val input2 = Input[Float](
-//      T(T(4, 5, 7, 9, 10, 11),
-//      T(0, 12, 6, 3, 2, 15)))
+    val input1 = Tensor[Float](
+      T(T(1, 2, 3, 4, 5, 6),
+      T(7, 8, 9, 10, 11, 12)))
 
+    val input2 = Tensor[Float](
+      T(T(4, 5, 7, 9, 10, 11),
+      T(1, 12, 6, 3, 2, 15)))
+
+    val res = transformer.forward(T(input1, input2))
     val paramsTable = transformer.getParametersTable()
 
     for (i <- paramsTable.keySet) {

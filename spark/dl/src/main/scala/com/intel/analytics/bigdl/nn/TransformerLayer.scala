@@ -77,7 +77,7 @@ class TransformerLayer[T: ClassTag](
   private[nn] def encode(inputs: ModuleNode[T], attention_bias: ModuleNode[T]): ModuleNode[T] = {
     // Prepare inputs to the layer stack by adding positional encodings and
     // applying dropout.
-    val embedding = inputs // LookupTable[T](nIndex = vocabSize, nOutput = hiddenSize).inputs(inputs)
+    val embedding = EmbeddingSharedWeights[T](vocabSize, hiddenSize).inputs(inputs)
     val input2 = new EncodePositionConstant().inputs(embedding)
     val encoder_inputs = CAddTable().inputs(embedding, input2)
     val decoder_input_drop = if (train) {
@@ -91,7 +91,7 @@ class TransformerLayer[T: ClassTag](
   private[nn] def decode(targets: ModuleNode[T],
                      encoder_outputs: ModuleNode[T] = null,
                      attention_bias: ModuleNode[T] = null): ModuleNode[T] = {
-    val embedding = targets // LookupTable[T](nIndex = vocabSize, nOutput = hiddenSize).inputs(targets)
+    val embedding = EmbeddingSharedWeights[T](vocabSize, hiddenSize).inputs(targets)
     val decoder_input = new TransformerPrepareDecoder().inputs(embedding)
     val decoder_self_attention_bias = new SelfAttentionBiasConstant().inputs(embedding)
 
@@ -109,36 +109,39 @@ class TransformerLayer[T: ClassTag](
   private[nn] def encodeStack(num_layers: Int,
                               encoder_input: ModuleNode[T],
                               attention_bias: ModuleNode[T]): ModuleNode[T] = {
-    decodeStack(num_layers, encoder_input, attention_bias)
+    decodeStack(num_layers, encoder_input, attention_bias, preName = "encode")
   }
 
   private[nn] def decodeStack(num_layers: Int,
                               decoder_input: ModuleNode[T],
                               decoder_self_attention_bias: ModuleNode[T],
                               encoder_outputs: ModuleNode[T] = null,
-                              attention_bias: ModuleNode[T] = null): ModuleNode[T] = {
+                              attention_bias: ModuleNode[T] = null,
+                              preName: String = "decode"): ModuleNode[T] = {
     var input = decoder_input
     var i = 0
     while (i < num_layers) {
       val selfAttention = new Attention[T](hiddenSize, numHeads, attentionDropout)
       val selfAttentionModel = prePostProcessingSelfAttention(
-        selfAttention, input, decoder_self_attention_bias, s"self_attention_${i}")
+        selfAttention, input, decoder_self_attention_bias,
+        s"${preName}_self_attention_${i}")
       input = selfAttentionModel
 
       if (encoder_outputs != null && attention_bias != null) {
         val encdecAttention = new Attention[T](hiddenSize, numHeads, attentionDropout)
         val encdecAttentionModel = prePostProcessingEncDecAttention(
-          encdecAttention, input, encoder_outputs, attention_bias, s"encdec_attention_${i}")
+          encdecAttention, input, encoder_outputs, attention_bias,
+          s"${preName}_encdec_attention_${i}")
         input = encdecAttentionModel
       }
 
       val ffn = new FeedForwardNetwork[T](hiddenSize, filterSize, reluDropout)
-      val ffnModel = prePostProcessingFFN(ffn, input, s"ffn_${i}")
+      val ffnModel = prePostProcessingFFN(ffn, input, s"${preName}_ffn_${i}")
       input = ffnModel
 
       i += 1
     }
-    val norm = new LayerNormalization[T](hiddenSize).setName("norm").inputs(input)
+    val norm = new LayerNormalization[T](hiddenSize).inputs(input)
     norm
   }
 

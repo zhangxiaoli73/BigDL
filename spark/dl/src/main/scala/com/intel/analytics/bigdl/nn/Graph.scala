@@ -167,9 +167,15 @@ abstract class Graph[T: ClassTag](
       buffer
     }
 
-    require(forwardNodes.map(_.element.getName()).distinct.length == forwardNodes.length,
-      s"the name of node in the graph should be unique, but find duplicated name " +
-        s"${duplicatedNames(forwardNodes.map(_.element.getName())).mkString(", ")}")
+    val tmp = duplicatedNames(forwardNodes.map(_.element.getName())).mkString(", ")
+    val length1 = forwardNodes.map(_.element.getName()).distinct.length
+    val length2 = forwardNodes.length
+    if (length1 != length2) {
+      val tmp11 = 0
+    }
+    require(length1 == length2,
+      s"the name of node in the graph should be unique," +
+        s"but find duplicated name $tmp ${length1} ${length2} ")
 
     val roots = forwardNodes.filter(_.prevNodes.size == 0)
       .filterNot(_.element.isInstanceOf[WithoutInput])
