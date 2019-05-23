@@ -15,6 +15,7 @@
  */
 package com.intel.analytics.bigdl.nn
 
+import breeze.linalg.*
 import com.intel.analytics.bigdl.Module
 import com.intel.analytics.bigdl.nn.Graph.ModuleNode
 import com.intel.analytics.bigdl.nn.abstractnn.{AbstractModule, Activity, TensorModule}
@@ -22,6 +23,7 @@ import com.intel.analytics.bigdl.tensor.{Storage, Tensor}
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
 import com.intel.analytics.bigdl.utils.T
 
+import scala.collection.mutable.ArrayBuffer
 import scala.reflect.ClassTag
 
 /**
@@ -52,8 +54,6 @@ class TransformerLayer[T: ClassTag](
    val problem: ProblemType = LanguageModel)
   (implicit ev: TensorNumeric[T]) extends BaseModule[T] {
 
-  private val embedding = EmbeddingSharedWeights[T](vocabSize, hiddenSize)
-
   override def buildModel(): Module[T] = {
     problem match {
       case LanguageModel => buildLM()
@@ -61,31 +61,43 @@ class TransformerLayer[T: ClassTag](
     }
   }
 
-  override def updateOutput(input: Activity): Activity = {
-    output = model.updateOutput(input)
-    output
-  }
+  // inputs: int tensor with shape [batch_size, input_length].
+  // targets: None or int tensor with shape [batch_size, target_length].
   private def buildTranslation(): Module[T] = {
     val inNode = Input()
     val tarNode = Input()
     val attention_bias = new AttentionBiasConstant().inputs(inNode)
-    val encoder_outputs = encode(inNode, attention_bias)
-    val outNode = decode(tarNode, encoder_outputs, attention_bias)
+
+    val embedding = LookupTable[T](vocabSize, hiddenSize)
+    val embeddingDupicate = LookupTable[T](vocabSize, hiddenSize)
+    // parameter share
+    val params1 = embedding.getParameters()
+    val params2 = embeddingDupicate.getParameters()
+    params1._1.set(params2._1)
+    params1._2.set(params2._2)
+
+    val constantValue = math.sqrt(hiddenSize)
+    val embeddingInput = MulConstant(constantValue).inputs(embedding.inputs(inNode))
+    val embeddingOutput = MulConstant(constantValue).inputs(embeddingDupicate.inputs(tarNode))
+    val encoder_outputs = encode(embeddingInput, attention_bias)
+    val outNode = decode(embeddingOutput, encoder_outputs, attention_bias)
     Graph(Array(inNode, tarNode), outNode)
   }
 
   private def buildLM(): Module[T] = {
     val inNode = Input()
-    val outNode = decode(inNode)
+    val constantValue = math.sqrt(hiddenSize)
+    val embeddingInput = MulConstant(constantValue).inputs(
+      LookupTable[T](vocabSize, hiddenSize).inputs(inNode))
+    val outNode = decode(embeddingInput)
     Graph(inNode, outNode)
   }
 
   private[nn] def encode(inputs: ModuleNode[T], attention_bias: ModuleNode[T]): ModuleNode[T] = {
     // Prepare inputs to the layer stack by adding positional encodings and
     // applying dropout.
-    val embedding = EmbeddingSharedWeights[T](vocabSize, hiddenSize).inputs(inputs)
-    val input2 = new EncodePositionConstant().inputs(embedding)
-    val encoder_inputs = CAddTable().inputs(embedding, input2)
+    val input2 = new EncodePositionConstant().inputs(inputs)
+    val encoder_inputs = CAddTable().inputs(inputs, input2)
     val decoder_input_drop = if (train) {
       val postDropOut = Dropout(1- postprocessDropout)
       postDropOut.inputs(encoder_inputs)
@@ -97,9 +109,8 @@ class TransformerLayer[T: ClassTag](
   private[nn] def decode(targets: ModuleNode[T],
                      encoder_outputs: ModuleNode[T] = null,
                      attention_bias: ModuleNode[T] = null): ModuleNode[T] = {
-    val embedding = EmbeddingSharedWeights[T](vocabSize, hiddenSize).inputs(targets)
-    val decoder_input = new TransformerPrepareDecoder().inputs(embedding)
-    val decoder_self_attention_bias = new SelfAttentionBiasConstant().inputs(embedding)
+    val decoder_input = new TransformerPrepareDecoder().inputs(targets)
+    val decoder_self_attention_bias = new SelfAttentionBiasConstant().inputs(targets)
 
     val decoder_input_drop = if (train) {
       val postDropOut = Dropout(1- postprocessDropout)
@@ -108,7 +119,6 @@ class TransformerLayer[T: ClassTag](
 
     decodeStack(numHiddenlayers, decoder_input_drop,
       decoder_self_attention_bias, encoder_outputs, attention_bias)
-    // todo: add linear
   }
 
 
@@ -194,17 +204,17 @@ object TransformerLayer {
      numHiddenlayers: Int,
      postprocessDropout: Float,
      attentionDropout: Float,
-     reluDropout: Float)
+     reluDropout: Float,
+      problem: ProblemType = LanguageModel)
    (implicit ev: TensorNumeric[T]): TransformerLayer[T] =
     new TransformerLayer(vocabSize, hiddenSize, numHeads,
       filterSize, numHiddenlayers,
-      postprocessDropout, attentionDropout, reluDropout)
+      postprocessDropout, attentionDropout, reluDropout, problem)
 }
 
 private[nn] class EncodePositionConstant[T: ClassTag](implicit ev: TensorNumeric[T])
   extends TensorModule[T] {
   @transient private var rangeBuffer : Tensor[T] = null
-  @transient private var timeBuffer : Tensor[T] = null
 
   override def updateOutput(input: Tensor[T]): Tensor[T] = {
     if (!output.isEmpty && output.nElement() == input.nElement()) return output
@@ -215,11 +225,10 @@ private[nn] class EncodePositionConstant[T: ClassTag](implicit ev: TensorNumeric
       rangeBuffer = Tensor[T]()
       TransformerOperation.initRangeTensor(length, rangeBuffer)
     }
-    if (timeBuffer == null) {
-      timeBuffer = Tensor[T]().resize(length, channel)
-      output = TransformerOperation.addTimingSignal1D(length, channel,
-        rangeBuffer = rangeBuffer, timeBuffer = timeBuffer)
-    }
+
+    output.resize(length, channel)
+    TransformerOperation.addTimingSignal1D(length, channel,
+      rangeBuffer = rangeBuffer, timeBuffer = output)
     output
   }
 
