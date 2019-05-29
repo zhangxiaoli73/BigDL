@@ -35,17 +35,22 @@ private[bigdl] object ConversionUtils {
    * @return
    */
   def convert[T: ClassTag](model: Module[T]): Module[T] = {
-    if (model.isInstanceOf[IRGraph[T]]) {
-      val g = model.asInstanceOf[IRGraph[T]]
-      if (g.isBuild) g else g.build()
-    } else if (!model.isInstanceOf[MklDnnModule] && Engine.getEngineType() == MklDnn) {
-      val m = if (!model.isInstanceOf[Graph[T]]) model.toGraph() else model
-      if (!m.isInstanceOf[StaticGraph[T]]) return model
-      val ir = m.asInstanceOf[StaticGraph[T]].toIRgraph().asInstanceOf[Module[T]]
-      if (model.isTraining()) ir.training() else ir.evaluate()
-      ir
-    } else {
+    if (System.getProperty("convert") == "blas") {
+      println("here use the blas model")
       model
+    } else {
+      if (model.isInstanceOf[IRGraph[T]]) {
+        val g = model.asInstanceOf[IRGraph[T]]
+        if (g.isBuild) g else g.build()
+      } else if (!model.isInstanceOf[MklDnnModule] && Engine.getEngineType() == MklDnn) {
+        val m = if (!model.isInstanceOf[Graph[T]]) model.toGraph() else model
+        if (!m.isInstanceOf[StaticGraph[T]]) return model
+        val ir = m.asInstanceOf[StaticGraph[T]].toIRgraph().asInstanceOf[Module[T]]
+        if (model.isTraining()) ir.training() else ir.evaluate()
+        ir
+      } else {
+        model
+      }
     }
   }
 
@@ -65,8 +70,14 @@ private[bigdl] object ConversionUtils {
    */
   def coalesce[T: ClassTag](dataset: RDD[T]): RDD[T] = {
     if (dataset.partitions.length != Engine.nodeNumber()
-      && Engine.getEngineType() == MklDnn) {
-      dataset.coalesce(Engine.nodeNumber(), false)
+      && Engine.getEngineType() == MklDnn && (System.getProperty("coalesce", "true") == "true")) {
+      if (System.getProperty("repartition") == "true") {
+        println(s"here use repartition to ${Engine.nodeNumber()}")
+        dataset.repartition(Engine.nodeNumber())
+      } else {
+        println(s"here use coalesce tp ${Engine.nodeNumber()}")
+        dataset.coalesce(Engine.nodeNumber(), false)
+      }
     } else dataset
   }
 

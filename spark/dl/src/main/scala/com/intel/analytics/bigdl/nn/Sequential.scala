@@ -36,7 +36,6 @@ class Sequential[T: ClassTag]
     var i = 0
     var result = input.asInstanceOf[Activity]
     while (i < modules.length) {
-      println(s"forward_${modules(i)}_batch_${input.toTensor[Float].size(1)}")
       result = modules(i).forward(result)
       i += 1
     }
@@ -49,7 +48,6 @@ class Sequential[T: ClassTag]
     var i = modules.length - 1
     var error = nextError.asInstanceOf[Activity]
     while (i > 0) {
-      println(s"updateGradInput_${modules(i)}")
       val input = modules(i - 1).output
       error = modules(i).updateGradInput(input, error)
       i -= 1
@@ -67,7 +65,6 @@ class Sequential[T: ClassTag]
     var currentModule = modules(i)
     var currentGradOutput = gradOutput
     while (i > 0) {
-      println(s"accGradParameters_${modules(i)}")
       val previousModule = modules(i - 1)
       currentModule.accGradParameters(previousModule.output, currentGradOutput)
       currentGradOutput = currentModule.gradInput
@@ -83,7 +80,6 @@ class Sequential[T: ClassTag]
     var i = modules.length - 1
     var error = nextError.asInstanceOf[Activity]
     while (i > 0) {
-      println(s"backward_${modules(i)}")
       val input = modules(i - 1).output
       error = modules(i).backward(input, error)
       i -= 1
