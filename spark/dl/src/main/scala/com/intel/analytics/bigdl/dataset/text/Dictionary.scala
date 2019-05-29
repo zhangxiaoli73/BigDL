@@ -164,6 +164,17 @@ class Dictionary()
     update(freqDict, vocabSize)
   }
 
+  def this(words: Array[String],
+           vocabSize: Int, isDict: Boolean) = {
+    this()
+    require(isDict, "must be dictionary")
+
+    val freqDict = words.map(
+      n => (n, 1)
+    ).toSeq
+    update(freqDict, vocabSize)
+  }
+
   def this(sentences: Stream[Array[String]],
            vocabSize: Int) = {
     this()
@@ -227,6 +238,9 @@ object Dictionary {
 
   def apply(words: Array[String], vocabSize: Int)
   : Dictionary = new Dictionary(words, vocabSize)
+
+  def apply(words: Array[String], vocabSize: Int, isDisct: Boolean)
+  : Dictionary = new Dictionary(words, vocabSize, isDisct)
 
   def apply(dataset: Stream[Array[String]], vocabSize: Int)
   : Dictionary = new Dictionary(dataset, vocabSize)

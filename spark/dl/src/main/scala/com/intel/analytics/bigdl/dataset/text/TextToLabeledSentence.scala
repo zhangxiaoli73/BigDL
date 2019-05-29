@@ -29,6 +29,9 @@ object TextToLabeledSentence {
     new TextToLabeledSentence[T](dictionary)
   def apply[T: ClassTag](numSteps: Int)(implicit ev: TensorNumeric[T])
   : TextToSentenceWithSteps[T] = new TextToSentenceWithSteps[T](numSteps)
+
+  def apply[T: ClassTag]()(implicit ev: TensorNumeric[T]):
+  IdxToLabeledSentence[T] = new IdxToLabeledSentence[T]()
 }
 
 /**
@@ -52,6 +55,21 @@ class TextToLabeledSentence[T: ClassTag](dictionary: Dictionary)
     prev.map(sentence => {
       val indexes = sentence.map(x =>
         ev.fromType[Int](dictionary.getIndex(x)))
+      val nWords = indexes.length - 1
+      val data = indexes.take(nWords)
+      val label = indexes.drop(1)
+      buffer.copy(data, label)
+    })
+  }
+}
+
+class IdxToLabeledSentence[T: ClassTag](implicit ev: TensorNumeric[T])
+  extends Transformer[Array[T], LabeledSentence[T]] {
+  private val buffer = new LabeledSentence[T]()
+
+  override def apply(prev: Iterator[Array[T]]): Iterator[LabeledSentence[T]] = {
+    prev.map(sentence => {
+      val indexes = sentence
       val nWords = indexes.length - 1
       val data = indexes.take(nWords)
       val label = indexes.drop(1)

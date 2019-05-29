@@ -302,10 +302,10 @@ class LookupTable[T: ClassTag]
 object LookupTable {
   def apply[@specialized(Float, Double)T: ClassTag](
     nIndex: Int, nOutput: Int,
-    paddingValue: Double = 0, maxNorm: Double = Double.MaxValue,
+    paddingValue: Double = 10001, maxNorm: Double = Double.MaxValue,
     normType: Double = 2.0, shouldScaleGradByFreq: Boolean = false,
     wRegularizer: Regularizer[T] = null,
-    maskZero: Boolean = false
+    maskZero: Boolean = true
   )
    (implicit ev: TensorNumeric[T]): LookupTable[T] =
     new LookupTable[T](nIndex, nOutput, paddingValue,

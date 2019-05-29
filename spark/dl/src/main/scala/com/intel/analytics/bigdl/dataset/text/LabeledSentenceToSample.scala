@@ -135,14 +135,24 @@ class LabeledSentenceToSample[T: ClassTag](
           i += 1
         }
       } else {
-        feature.resize(dataLength).zero
-        label.resize(labelLength).zero
+//        feature.resize(dataLength).zero
+//        label.resize(labelLength).zero
+
+        feature.resize(dataLength).fill(ev.fromType(10001))
+        label.resize(labelLength).fill(ev.fromType(10001))
 
         val featureBuffer = feature.storage().array()
         val labelBuffer = label.storage().array()
 
-        Array.copy(sentence.data, 0, featureBuffer, 0, dataLength)
-        Array.copy(sentence.label, 0, labelBuffer, 0, labelLength)
+        // println(sentence.data().length + "_________" + sentence.label().length)
+
+        val length1 = sentence.dataLength()
+        val length2 = sentence.labelLength()
+        Array.copy(sentence.data, 0, featureBuffer, 0, length1)
+        Array.copy(sentence.label, 0, labelBuffer, 0, length2)
+
+//        Array.copy(sentence.data, 0, featureBuffer, 0, dataLength)
+//        Array.copy(sentence.label, 0, labelBuffer, 0, labelLength)
       }
       Sample[T](feature, label)
     })

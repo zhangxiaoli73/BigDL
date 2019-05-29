@@ -213,6 +213,46 @@ object SequencePreprocess {
     (trainData.toArray, validData.toArray, testData.toArray, dictionary)
   }
 
+  def transformer(
+             fileDirect: String,
+             vocabSize: Int): (Array[Array[Float]], Array[Array[Float]], Dictionary) = {
+
+    val trainPath = new File(fileDirect, "ptb.train.txt").toString
+    val validPath = new File(fileDirect, "ptb.valid.txt").toString
+
+    val voc = new File(fileDirect, "vocab.lmptb.10000").toString
+    val vocWords = readWords(voc, appendEOS = false).toArray
+    val dictionary = Dictionary(vocWords, vocabSize - 1, isDisct = true)
+
+    val trainData = sentenceToWordIdx(trainPath, dictionary)
+    val validData = sentenceToWordIdx(validPath, dictionary)
+
+    (trainData, validData, dictionary)
+  }
+
+  // todo: start from 0
+  private def sentenceToWordIdx(fileName: String, dictionary: Dictionary):
+  Array[Array[Float]] = {
+    val sent = readLines(fileName)
+    val res = sent.map(x => {
+      x.map(ele => dictionary.getIndex(ele).toFloat + 1.0f)
+    })
+    res
+  }
+
+  def readLines(fileName: String): Array[Array[String]] = {
+    val bufferLines = new ArrayBuffer[Array[String]]
+    val readWords = Source.fromFile(fileName).getLines.foreach(x => {
+      val buffer = new ArrayBuffer[String]
+      // remove leading and trailing white space (trim)
+      val words = x.trim.split(" ").foreach(t => buffer.append(t))
+      buffer.append("<EOS>")
+      buffer.append("<unk>")
+      bufferLines.append(buffer.toArray)
+    })
+    bufferLines.toArray
+  }
+
   def reader(rawData: Array[Float], numSteps: Int): Array[Array[Float]] = {
     var offset = 0
     val length = rawData.length - 1 - numSteps
@@ -232,11 +272,11 @@ object SequencePreprocess {
     words.map(x => dictionary.getIndex(x).toFloat + 1.0f)
   }
 
-  private[bigdl] def readWords(fileName: String): Iterator[String] = {
+  private[bigdl] def readWords(fileName: String, appendEOS: Boolean = true): Iterator[String] = {
     val buffer = new ArrayBuffer[String]
     val readWords = Source.fromFile(fileName).getLines.foreach(x => {
       val words = x.split(" ").foreach(t => buffer.append(t))
-      buffer.append("<eos>")
+      if (appendEOS) buffer.append("<eos>")
     })
     buffer.toIterator
   }
