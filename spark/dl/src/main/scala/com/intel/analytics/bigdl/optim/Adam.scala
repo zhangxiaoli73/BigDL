@@ -17,6 +17,7 @@
 package com.intel.analytics.bigdl.optim
 
 import breeze.linalg.*
+import com.intel.analytics.bigdl.optim.SGD.{Default, LearningRateSchedule}
 import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
 import com.intel.analytics.bigdl.utils.{T, Table}
@@ -43,6 +44,7 @@ class Adam[@specialized(Float, Double) T: ClassTag](
   @transient
   private var buffer: Tensor[T] = null
 
+  private var clr : Double = learningRate
   /**
    * An implementation of Adam http://arxiv.org/pdf/1412.6980.pdf
    *
@@ -73,7 +75,10 @@ class Adam[@specialized(Float, Double) T: ClassTag](
           Tensor[T]().resizeAs(dfdx).zero())
       }
 
-    val clr = lr / (1 + timestep*lrd)
+
+    // val clr = lr / (1 + timestep*lrd)
+    clr = lr / (1 + timestep*lrd)
+    // print(s"!!!!!!!!!!!!!!!!!!! ${clr} ")
 
     timestep = timestep + 1
 
@@ -121,4 +126,15 @@ class Adam[@specialized(Float, Double) T: ClassTag](
   }
 
   override def getLearningRate(): Double = this.learningRate
+
+  /**
+    * return an string of current hyperParameter.
+    */
+  override def getHyperParameter(): String = {
+    val clr = this.clr
+    val wd = this.learningRateDecay
+    s"Current learning rate is $clr. " +
+      {s"Current learning rate decay is $wd. "}
+  }
+
 }

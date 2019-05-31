@@ -22,16 +22,15 @@ import com.intel.analytics.bigdl.nn.{TimeDistributed, _}
 
 object PTBModel {
   def transformer(
-     inputSize: Int,
-     hiddenSize: Int,
-     outputSize: Int,
-     numLayers: Int,
-     keepProb: Float = 2.0f)
+     inputSize: Int = 10000,
+     hiddenSize: Int = 256,
+     outputSize: Int = 10000,
+     numLayers: Int = 2)
   : Module[Float] = {
     val input = Input[Float]()
     val transformer = TransformerLayer[Float](vocabSize = inputSize,
-      hiddenSize = hiddenSize, numHeads = 8, filterSize = hiddenSize*4,
-      numHiddenlayers = 8, postprocessDropout = 0.1f,
+      hiddenSize = hiddenSize, numHeads = 4, filterSize = hiddenSize*4,
+      numHiddenlayers = 2, postprocessDropout = 0.1f,
       attentionDropout = 0.1f, reluDropout = 0.1f).inputs(input)
 
     val linear = Linear[Float](hiddenSize, outputSize)

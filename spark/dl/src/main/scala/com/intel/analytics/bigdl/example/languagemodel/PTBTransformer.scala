@@ -29,6 +29,7 @@ import org.apache.log4j.{Level, Logger}
 import org.apache.spark.SparkContext
 import com.intel.analytics.bigdl.example.languagemodel.Utils._
 import com.intel.analytics.bigdl.models.rnn.SequencePreprocess
+import org.dmg.pmml.False
 
 object PTBTransformer {
   Logger.getLogger("org").setLevel(Level.ERROR)
@@ -37,7 +38,7 @@ object PTBTransformer {
   Logger.getLogger("com.intel.analytics.bigdl.example").setLevel(Level.INFO)
   val logger = Logger.getLogger(getClass)
   def main(args: Array[String]): Unit = {
-    UtilsTemp.trainParser.parse(args, new UtilsTemp.TrainParams()).map(param => {
+    trainParser.parse(args, new TrainParams()).map(param => {
 
       val conf = Engine.createSparkConf()
         .setAppName("Train ptbModel on text")
@@ -48,23 +49,21 @@ object PTBTransformer {
       val (trainData, validData, dictionary) = SequencePreprocess.transformer(
         param.dataFolder, param.vocabSize)
 
-      val dataLength = 100
-      val labelLength = 100
-
+      val maxLength = 100
       val trainSet = DataSet.rdd(sc.parallelize(trainData))
         .transform(TextToLabeledSentence[Float]())
         .transform(LabeledSentenceToSample[Float](
           oneHot = false,
-          fixDataLength = Some(dataLength),
-          fixLabelLength = Some(labelLength)))
+          fixDataLength = Some(maxLength),
+          fixLabelLength = Some(maxLength)))
         .transform(SampleToMiniBatch[Float](param.batchSize))
 
       val validationSet = DataSet.rdd(sc.parallelize(validData))
         .transform(TextToLabeledSentence[Float]())
         .transform(LabeledSentenceToSample[Float](
           oneHot = false,
-          fixDataLength = Some(dataLength),
-          fixLabelLength = Some(labelLength)))
+          fixDataLength = Some(maxLength),
+          fixLabelLength = Some(maxLength)))
         .transform(SampleToMiniBatch[Float](param.batchSize))
 
       val model = if (param.modelSnapshot.isDefined) {
@@ -74,8 +73,7 @@ object PTBTransformer {
           inputSize = param.vocabSize,
           hiddenSize = param.hiddenSize,
           outputSize = param.vocabSize,
-          numLayers = param.numLayers,
-          keepProb = param.keepProb)
+          numLayers = param.numLayers)
         curModel.reset()
         curModel
       }
@@ -83,15 +81,18 @@ object PTBTransformer {
       val optimMethod = if (param.stateSnapshot.isDefined) {
         OptimMethod.load[Float](param.stateSnapshot.get)
       } else {
-        new Adagrad[Float](learningRate = param.learningRate,
-          learningRateDecay = param.learningRateDecay)
+        // ('learning_rate', 0.2), ('learning_rate_constant', 2.0),
+        // ('learning_rate_cosine_cycle_steps', 250000), ('learning_rate_decay_rate', 1.0),
+        // ('learning_rate_decay_scheme', 'noam'), ('learning_rate_decay_staircase', False), ('learning_rate_decay_steps', 5000), ('learning_rate_minimum', None), ('learning_rate_schedule', 'constant*linear_warmup*rsqrt_decay*rsqrt_hidden_size'), ('learning_rate_warmup_steps', 8000),
+        new Adam[Float](learningRate = param.learningRate,
+          learningRateDecay = param.learningRateDecay, beta2 = 0.997)
       }
 
       val optimizer = Optimizer(
         model = model,
         dataset = trainSet,
         criterion = TimeDistributedCriterion[Float](
-          CrossEntropyCriterion[Float](), sizeAverage = true, dimension = 2)
+          CrossEntropyCriterion[Float](), sizeAverage = false, dimension = 2)
       )
 
       if (param.checkpoint.isDefined) {
@@ -106,7 +107,7 @@ object PTBTransformer {
         .setValidation(Trigger.everyEpoch, validationSet, Array(new Loss[Float](
           TimeDistributedCriterion[Float](
             CrossEntropyCriterion[Float](),
-            sizeAverage = true, dimension = 2))))
+            sizeAverage = false, dimension = 2))))
         .setOptimMethod(optimMethod)
         .setEndWhen(Trigger.maxEpoch(param.nEpochs))
         .optimize()
