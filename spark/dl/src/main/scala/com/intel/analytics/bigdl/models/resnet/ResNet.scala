@@ -377,7 +377,7 @@ object ResNet {
 
       val input = Input()
       val conv1 = Convolution(3, 64, 7, 7, 2, 2, 3, 3,
-        optnet = optnet, propagateBack = false).inputs(input)
+        optnet = optnet, propagateBack = true).inputs(input)
       val bn = Sbn(64).inputs(conv1)
       val relu = ReLU(true).inputs(bn)
       val pool = SpatialMaxPooling(3, 3, 2, 2, 1, 1).inputs(relu)
