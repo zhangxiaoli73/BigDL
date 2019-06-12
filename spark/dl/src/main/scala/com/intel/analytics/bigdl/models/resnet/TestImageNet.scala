@@ -19,15 +19,18 @@ package com.intel.analytics.bigdl.models.resnet
 import com.intel.analytics.bigdl._
 import com.intel.analytics.bigdl.dataset.DataSet
 import com.intel.analytics.bigdl.dataset.image.CropCenter
+import com.intel.analytics.bigdl.mkl.Memory
 import com.intel.analytics.bigdl.models.resnet.ResNet.{DatasetType, ShortcutType}
-import com.intel.analytics.bigdl.nn.{CrossEntropyCriterion, Module, StaticGraph}
+import com.intel.analytics.bigdl.nn.mkldnn._
+import com.intel.analytics.bigdl.nn._
+import com.intel.analytics.bigdl.nn.mkldnn.Phase.TrainingPhase
 import com.intel.analytics.bigdl.optim._
-import com.intel.analytics.bigdl.tensor.Tensor
+import com.intel.analytics.bigdl.tensor.{DnnTensor, Tensor}
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric._
 import com.intel.analytics.bigdl.transform.vision.image.{ImageFeature, MTImageFeatureToBatch, MatToTensor, PixelBytesToMat}
 import com.intel.analytics.bigdl.transform.vision.image.augmentation.{ChannelScaledNormalizer, RandomCropper, RandomResize}
 import com.intel.analytics.bigdl.utils._
-import com.intel.analytics.bigdl.utils.intermediate.ConversionUtils
+import com.intel.analytics.bigdl.utils.intermediate.{ConversionUtils, IRGraph}
 import org.apache.log4j.{Level, Logger}
 import org.apache.spark.SparkContext
 
@@ -41,6 +44,16 @@ object TestImageNet {
 
   import Utils._
 
+  def toNCHW(src: Tensor[Float], inputFormat: MemoryData): Tensor[Float] = {
+    val outputFormat = HeapData(inputFormat.shape,
+      if (src.size().length == 2) { Memory.Format.nc } else { Memory.Format.nchw })
+    val reorder = ReorderMemory(inputFormat, outputFormat, null, null)
+
+    reorder.setRuntime(new MklDnnRuntime)
+    reorder.initFwdPrimitives(Array(inputFormat))
+    reorder.forward(src).toTensor
+  }
+
   def main(args: Array[String]): Unit = {
     testParser.parse(args, new TestParams()).map(param => {
       val conf = Engine.createSparkConf().setAppName("Test model on ImageNet2012")
@@ -48,27 +61,34 @@ object TestImageNet {
       val sc = new SparkContext(conf)
       Engine.init
 
-      val modelCaffe = Module.loadModule[Float]("/home/zhangli/workspace/zoo-model/analytics-zoo_resnet-50_imagenet_0.1.0.model")
-
-      val batch = Tensor[Float](64, 3, 224, 224).apply1(_ =>
-        RandomGenerator.RNG.uniform(-100, 100).toInt.toFloat)
-      val inputTemp = batch.select(1, 1).resize(Array(1, 3, 224, 224))
-      val model2 = modelCaffe.cloneModule()
-
-      modelCaffe.evaluate()
-      model2.evaluate()
-
-      val out1 = modelCaffe.forward(batch)
-      val out2 = model2.forward(inputTemp).toTensor[Float].resize(Array(1, 1000))
-
-      println("done")
-
       import com.intel.analytics.bigdl.models.resnet
-      val model = ResNet.graph(classNum = 1000, T("shortcutType" -> ShortcutType.B, "depth" -> 50,
-        "optnet" -> false, "dataset" -> DatasetType.ImageNet))
+      val model = ResNet(classNum = 1000, T("shortcutType" -> ShortcutType.B, "depth" -> 50,
+        "optnet" -> false, "dataSet" -> DatasetType.ImageNet)).toGraph()
       // Module.loadModule[Float](param.model)
-      val modelDnn = ConversionUtils.convert(model.cloneModule())
+      val modelDnn = ConversionUtils.convert(model.cloneModule().asInstanceOf[StaticGraph[Float]]
+        .setOutputFormats(Seq(Memory.Format.nchw)))
 
+      val pool = SpatialMaxPooling[Float](3, 3, 2, 2, 1, 1)
+//      val input = Tensor[Float](2, 3, 224, 224).rand()
+//      val gradOutput = Tensor[Float](2, 1000).rand()
+//      val out1 = model.forward(input).toTensor[Float]
+//      val out2 = modelDnn.forward(input)
+//      val grad1 = model.backward(input, gradOutput).toTensor[Float]
+//      val grad2 = modelDnn.backward(input, gradOutput).toTensor[Float]
+//
+//      val bk = model.asInstanceOf[StaticGraph[Float]].getExecutions()
+//      val bkDnn = modelDnn.asInstanceOf[IRGraph[Float]].graph.asInstanceOf[DnnGraph].getExecutions()
+//
+//
+//      var j = 2
+//      while (j < bk.length) {
+//        if (bk(j).element.isInstanceOf[SpatialBatchNormalization[Float]]) {
+//          val blas = bk(j).element
+//          val dnn = bkDnn(j + 1).element
+//          println("done")
+//        }
+//        j += 1
+//      }
       val evaluationSet = ImageNetDataSet.valDataSet(param.folder,
         sc, 224, param.batchSize).toDistributed().data(train = false)
 
@@ -84,27 +104,91 @@ object TestImageNet {
       val length = data.length
       var i = 0
       while (i < length) {
-        val input = data(i)._1
+        RandomGenerator.RNG.setSeed(100)
+        val input = Tensor[Float](8, 3, 224, 224).rand(-1, 1) // data(i)._1
         val target = data(i)._2
 
         val out1 = model.forward(input).toTensor[Float]
-        val out2 = modelDnn.forward(input)
+        val out2 = modelDnn.forward(input).toTensor[Float]
 
-        criterion.forward(out1, target)
-        val cri = criterion.backward(out1, target)
+        Equivalent.getunequals(out1, out2, 1e-5)
 
-        val grad1 = model.backward(input, cri)
-        val grad2 = modelDnn.backward(input, cri)
+//        criterion.forward(out1, target)
+//        val cri = criterion.backward(out1, target)
+
+//        RandomGenerator.RNG.setSeed(100)
+        val cri = out1 // Tensor[Float]().resizeAs(out1).rand()
+        val grad1 = model.backward(input, cri).toTensor[Float]
+        val grad2 = modelDnn.backward(input, cri).toTensor[Float]
+
+        Equivalent.getunequals(grad1, grad2, 1e-5)
 
         model.zeroGradParameters()
         modelDnn.zeroGradParameters()
 
+        val bk = model.asInstanceOf[StaticGraph[Float]].getExecutions()
+        val bkDnn = modelDnn.asInstanceOf[IRGraph[Float]].graph.asInstanceOf[DnnGraph].getExecutions()
+
+        val diff = if (bkDnn.length > bk.length + 1) 1 else 0
+        var j = 0
+        while (j < bk.length) {
+          val blas = bk(j).element
+          val dnn = bkDnn(j + diff).element
+          println(blas + "--------------" + dnn)
+
+          val outBlas = blas.output.toTensor[Float]
+          val outDnn = if (dnn.output.asInstanceOf[Tensor[Float]].isInstanceOf[DnnTensor[Float]]) {
+            toNCHW(dnn.output.asInstanceOf[Tensor[Float]],
+              dnn.asInstanceOf[MklDnnLayer].outputFormats()(0))
+          } else {
+            dnn.output.toTensor[Float]
+          }
+
+          val gradBlas = blas.gradInput.toTensor[Float]
+          val gradDnn =
+            if (dnn.gradInput.asInstanceOf[Tensor[Float]].isInstanceOf[DnnTensor[Float]]) {
+            toNCHW(dnn.gradInput.asInstanceOf[Tensor[Float]],
+              dnn.asInstanceOf[MklDnnLayer].gradInputFormats()(0))
+          } else {
+              dnn.gradInput.toTensor[Float]
+          }
+          Equivalent.getunequals(outBlas, outDnn, 1e-5)
+          Equivalent.getunequals(gradBlas, gradDnn, 1e-5)
+          println("done")
+//
+//          if (bk(j).element.isInstanceOf[SpatialBatchNormalization[Float]]) {
+//            val blas = bk(j).element.asInstanceOf[SpatialBatchNormalization[Float]]
+//            val dnn = bkDnn(j + 1).element.asInstanceOf[BlasWrapper].module.
+//              asInstanceOf[SpatialBatchNormalization[Float]]
+//
+//            val inBlas = blas.inputBuffer
+//            val inDnn = dnn.inputBuffer
+//            Equivalent.nearequals(inBlas, inDnn)
+//
+//            val gradOutBlas = blas.gradOutputBuffer
+//            val gradOutDnn = dnn.gradOutputBuffer
+//            Equivalent.nearequals(gradOutBlas, gradOutDnn)
+//
+//            val outBlas = blas.output
+//            val outDnn = dnn.output
+//
+//            val gradBlas = blas.gradInput
+//            val gradDnn = dnn.gradInput
+//
+//            println("done")
+//          }
+          j += 1
+        }
+
+        if (i == 10) {
+          val tmp = 0
+        }
         i += 1
+        println(s"******* ${i}")
       }
 //      val result = model.evaluate(evaluationSet,
 //        Array(new Top1Accuracy[Float], new Top5Accuracy[Float]))
 //      result.foreach(r => println(s"${r._2} is ${r._1}"))
-
       sc.stop()
     })
   }

@@ -124,7 +124,9 @@ class StaticGraph[T: ClassTag](
     checkDuplicate()
   }
 
-
+  def getExecutions(): Array[Node[AbstractModule[Activity, Activity, T]]] = {
+    backwardExecution
+  }
   private def backwardExecution(input: Activity, gradOutput: Activity,
     executeBackward: Boolean): Activity = {
     dummyOutputGrad.element.gradInput = gradOutput

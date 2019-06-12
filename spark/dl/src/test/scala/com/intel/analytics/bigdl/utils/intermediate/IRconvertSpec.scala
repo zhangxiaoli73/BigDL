@@ -17,6 +17,8 @@
 package com.intel.analytics.bigdl.utils.intermediate
 
 import com.intel.analytics.bigdl.mkl.Memory
+import com.intel.analytics.bigdl.models.resnet.ResNet.{DatasetType, ShortcutType}
+import com.intel.analytics.bigdl.models.resnet.{ResNet, Sbn}
 import com.intel.analytics.bigdl.nn._
 import com.intel.analytics.bigdl.nn.abstractnn.DataFormat
 import com.intel.analytics.bigdl.nn.mkldnn.Phase.TrainingPhase
@@ -265,5 +267,34 @@ class IRconvertSpec extends BigDLSpecHelper {
 
     dnn.release()
     System.clearProperty("bigdl.engineType")
+  }
+
+  "tests" should "ok" in {
+    System.setProperty("bigdl.engineType", "mkldnn")
+    // RandomGenerator.RNG.setSeed(1000)
+//    val model = Sequential()
+//    model.add(SpatialConvolution(3, 64, 7, 7, 2, 2, 3, 3))
+//      .add(Sbn(64))
+//      .add(ReLU(true))
+//      .add(SpatialMaxPooling(3, 3, 2, 2, 1, 1))
+    import com.intel.analytics.bigdl.models.resnet
+    val model = ResNet(classNum = 1000, T("shortcutType" -> ShortcutType.B, "depth" -> 50,
+      "optnet" -> false, "dataSet" -> DatasetType.ImageNet)).toGraph()
+
+    val modelBlas = model.toGraph()
+    val modelDnn = modelBlas.cloneModule().asInstanceOf[StaticGraph[Float]].
+      setOutputFormats(Seq(Memory.Format.nchw)).toIRgraph()
+
+    val in = Tensor[Float](8, 3, 224, 224).rand(-1, 1)
+
+    val out1 = modelBlas.forward(in).toTensor[Float]
+    val out2 = modelDnn.forward(in).toTensor[Float]
+
+    val grad1 = modelBlas.backward(in, out1).toTensor[Float]
+    val grad2 = modelDnn.backward(in, out2).toTensor[Float]
+
+    Equivalent.getunequals(out1, out2, 1e-5)
+    Equivalent.getunequals(grad1, grad2, 1e-5)
+    println("done")
   }
 }

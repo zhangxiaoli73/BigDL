@@ -19,7 +19,7 @@ package com.intel.analytics.bigdl.nn
 import com.intel.analytics.bigdl.nn.abstractnn.DataFormat
 import com.intel.analytics.bigdl.tensor.{FloatType, Tensor}
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
-import com.intel.analytics.bigdl.utils.{Engine, ParameterSynchronizer}
+import com.intel.analytics.bigdl.utils.{Engine, ParameterSynchronizer, Shape}
 
 import scala.collection.JavaConverters._
 import scala.reflect.ClassTag
@@ -51,7 +51,11 @@ class SpatialBatchNormalization[T: ClassTag](
     initWeight, initBias, initGradWeight, initGradBias) {
   override val nDim = 4
 
+  var inputBuffer : Tensor[T] = null
+  var gradOutputBuffer : Tensor[T] = null
+
   override def updateOutput(input: Tensor[T]): Tensor[T] = {
+    inputBuffer = input.clone()
 
     val parallism = getParallism().getOrElse(1)
 
@@ -164,6 +168,7 @@ class SpatialBatchNormalization[T: ClassTag](
   }
 
   override def updateGradInput(input: Tensor[T], gradOutput: Tensor[T]): Tensor[T] = {
+    gradOutputBuffer = gradOutput.clone()
     val gmKeyWithId = s"${this.gmKey}_${this.getId}"
     val gxmKeyWithId = s"${this.gxmKey}_${this.getId}"
     val needSync = getParallism() != None && getParallism().get > 1
@@ -276,6 +281,13 @@ class SpatialBatchNormalization[T: ClassTag](
 
   override def toString(): String = {
     s"${getPrintName}[${ev.getType()}]($nOutput, $eps, $momentum, $affine)"
+  }
+
+  override def computeOutputShape(inputShape: Shape) : Shape = {
+    val input = inputShape.toSingle().toArray
+    require(input.length == 4,
+      s"BatchNormalization requires 4D input, but got input dim ${input.length}")
+    inputShape
   }
 }
 

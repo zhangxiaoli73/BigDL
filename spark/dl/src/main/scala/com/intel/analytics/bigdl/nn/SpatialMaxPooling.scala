@@ -19,7 +19,7 @@ package com.intel.analytics.bigdl.nn
 import com.intel.analytics.bigdl.nn.abstractnn.{AbstractModule, Activity, DataFormat, TensorModule}
 import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
-import com.intel.analytics.bigdl.utils.Engine
+import com.intel.analytics.bigdl.utils.{Engine, Shape}
 import com.intel.analytics.bigdl.utils.serializer._
 import com.intel.analytics.bigdl.utils.serializer.converters.DataConverter
 import com.intel.analytics.bigdl.serialization.Bigdl.{AttrValue, BigDLModule}
@@ -63,6 +63,7 @@ class SpatialMaxPooling[T: ClassTag](
   val kW: Int, val kH: Int, val dW: Int, val dH: Int, val padW: Int = 0, val padH: Int = 0,
   val format: DataFormat = DataFormat.NCHW)(implicit ev: TensorNumeric[T]) extends TensorModule[T] {
 
+  var inputBuffer: Tensor[T] = Tensor[T]()
   var ceilMode = false
   val indices = Tensor[T]()
 
@@ -89,6 +90,7 @@ class SpatialMaxPooling[T: ClassTag](
   }
 
   override def updateOutput(input: Tensor[T]): Tensor[T] = {
+    inputBuffer.resizeAs(input).copy(input)
     require(input.dim() == 3 || input.dim() == 4,
       "SpatialMaxPooling: " + ErrorInfo.constrainInputAs3DOrBatch)
 
@@ -409,6 +411,40 @@ class SpatialMaxPooling[T: ClassTag](
     super.clearState()
     indices.set()
     this
+  }
+
+  override def computeOutputShape(inputShape: Shape): Shape = {
+    val input = inputShape.toSingle().toArray
+    val (dimh, dimw, dimc) = format.getHWCDims(input.length)
+
+    val nBatch = input(0)
+    val nInputPlane = input(dimc - 1)
+    val inputHeight = input(dimh - 1 )
+    val inputWidth = input(dimw - 1)
+
+    val sizes =
+      if (padW == -1 && padH == -1) {
+        // no ceil/floor mode in SAME padding
+        Utils.getSAMEOutSizeAndPadding(inputHeight, inputWidth, dH, dW, kH, kW)
+      } else {
+        require(inputWidth >= kW - padW && inputHeight >= kH - padH,
+          "input smaller than kernel size" +
+            s"input size(${input(dimw)},${input(dimh)})" +
+            s"kernel size(${kW-padW},${kH-padH})")
+        require(kW / 2 >= padW && kH / 2 >= padH, "pad should be smaller than half of kernel size" +
+          s"pad size($padW,$padH)" +
+          s"kernel size($kW, $kH)")
+        Utils.getOutSizeAndPadding(inputHeight, inputWidth, dH, dW, kH, kW, padH, padW, ceilMode)
+      }
+
+    val padTop = sizes(0)
+    val padBottom = sizes(1)
+    val padLeft = sizes(2)
+    val padRight = sizes(3)
+    val oHeight = sizes(4)
+    val oWidth = sizes(5)
+
+    Shape(Array(nBatch, nInputPlane, oHeight, oWidth))
   }
 }
 

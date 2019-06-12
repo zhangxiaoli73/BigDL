@@ -67,8 +67,9 @@ object Sbn {
     eps: Double = 1e-3,
     momentum: Double = 0.1,
     affine: Boolean = true)
-  (implicit ev: TensorNumeric[T]): SpatialBatchNormalization[T] = {
-    SpatialBatchNormalization[T](nOutput, eps, momentum, affine).setInitMethod(Ones, Zeros)
+  (implicit ev: TensorNumeric[T]): Module[T] = {
+    SpatialBatchNormalization[T](nOutput, eps, momentum, affine)
+      .setInitMethod(Ones, Zeros).asInstanceOf[Module[T]]
   }
 }
 
@@ -205,7 +206,7 @@ object ResNet {
         .add(Sbn(n))
         .add(ReLU(true))
         .add(Convolution(n, n*4, 1, 1, 1, 1, 0, 0, optnet = optnet))
-        .add(Sbn(n * 4).setInitMethod(Zeros, Zeros))
+        .add(Sbn(n * 4)) // .setInitMethod(Zeros, Zeros))
       Sequential()
         .add(ConcatTable()
           .add(s)
@@ -246,18 +247,18 @@ object ResNet {
       iChannels = 64
       logger.info(" | ResNet-" + depth + " ImageNet")
 
-      model.add(Convolution(3, 64, 7, 7, 2, 2, 3, 3, optnet = optnet, propagateBack = false))
-        .add(Sbn(64))
+      model.add(Convolution(3, 64, 7, 7, 2, 2, 3, 3, optnet = optnet, propagateBack = true))
+        // .add(Sbn(64))
         .add(ReLU(true))
-        .add(SpatialMaxPooling(3, 3, 2, 2, 1, 1))
-        .add(layer(block, 64, loopConfig._1))
-        .add(layer(block, 128, loopConfig._2, 2))
-        .add(layer(block, 256, loopConfig._3, 2))
-        .add(layer(block, 512, loopConfig._4, 2))
-        .add(SpatialAveragePooling(7, 7, 1, 1))
-        .add(View(nFeatures).setNumInputDims(3))
-        .add(Linear(nFeatures, classNum, true, L2Regularizer(1e-4), L2Regularizer(1e-4))
-          .setInitMethod(RandomNormal(0.0, 0.01), Zeros))
+        // .add(SpatialMaxPooling(3, 3, 2, 2, 1, 1))
+//        .add(layer(block, 64, loopConfig._1))
+//        .add(layer(block, 128, loopConfig._2, 2))
+//        .add(layer(block, 256, loopConfig._3, 2))
+//        .add(layer(block, 512, loopConfig._4, 2))
+//        .add(SpatialAveragePooling(7, 7, 1, 1))
+//        .add(View(nFeatures).setNumInputDims(3))
+//        .add(Linear(nFeatures, classNum, true, L2Regularizer(1e-4), L2Regularizer(1e-4))
+//          .setInitMethod(RandomNormal(0.0, 0.01), Zeros))
     } else if (dataSet == DatasetType.CIFAR10) {
       require((depth - 2)%6 == 0,
         "depth should be one of 20, 32, 44, 56, 110, 1202")
@@ -336,7 +337,7 @@ object ResNet {
       val bn2 = Sbn(n).inputs(conv2)
       val relu2 = ReLU(true).inputs(bn2)
       val conv3 = Convolution(n, n*4, 1, 1, 1, 1, 0, 0, optnet = optnet).inputs(relu2)
-      val sbn = Sbn(n * 4).setInitMethod(Zeros, Zeros).inputs(conv3)
+      val sbn = Sbn(n * 4).inputs(conv3) // .setInitMethod(Zeros, Zeros).inputs(conv3)
 
       val shortcut = shortcutFunc(nInputPlane, n * 4, stride, input)
       val add = CAddTable(true).inputs(sbn, shortcut)

@@ -123,6 +123,9 @@ class DnnGraph(
       i += 1
     }
   }
+  def getExecutions(): Array[Node[AbstractModule[Activity, Activity, Float]]] = {
+    backwardExecution
+  }
 
   override def buildBackwardGraph(): this.type = {
     super.buildBackwardGraph()
