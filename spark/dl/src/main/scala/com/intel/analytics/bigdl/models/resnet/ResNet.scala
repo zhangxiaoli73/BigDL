@@ -249,7 +249,7 @@ object ResNet {
 
       model.add(Convolution(3, 64, 7, 7, 2, 2, 3, 3, optnet = optnet, propagateBack = true))
         // .add(Sbn(64))
-        .add(ReLU(true))
+        // .add(ReLU(true))
         // .add(SpatialMaxPooling(3, 3, 2, 2, 1, 1))
 //        .add(layer(block, 64, loopConfig._1))
 //        .add(layer(block, 128, loopConfig._2, 2))
