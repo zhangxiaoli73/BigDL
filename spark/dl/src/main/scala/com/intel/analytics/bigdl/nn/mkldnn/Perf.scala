@@ -387,7 +387,7 @@ object ResNet {
       iChannels = 64
 
       val input = Input(Array(batchSize, 3, 224, 224), Memory.Format.nchw).inputs()
-      val conv1 = SpatialConvolution(3, 64, 7, 7, 2, 2, 3, 3, propagateBack = false)
+      val conv1 = SpatialConvolution(3, 64, 7, 7, 2, 2, 3, 3, propagateBack = true)
         .setName("conv1").inputs(input)
       val bn1 = SbnDnn(64).setName("bn_conv1").inputs(conv1)
       val relu1 = ReLU().setName("conv1_relu").inputs(bn1)

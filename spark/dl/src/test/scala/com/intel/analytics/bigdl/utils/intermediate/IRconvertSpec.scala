@@ -22,7 +22,7 @@ import com.intel.analytics.bigdl.models.resnet.{ResNet, Sbn}
 import com.intel.analytics.bigdl.nn._
 import com.intel.analytics.bigdl.nn.abstractnn.DataFormat
 import com.intel.analytics.bigdl.nn.mkldnn.Phase.TrainingPhase
-import com.intel.analytics.bigdl.nn.mkldnn.{DnnGraph, Equivalent, Input, Output}
+import com.intel.analytics.bigdl.nn.mkldnn._
 import com.intel.analytics.bigdl.numeric.NumericFloat
 import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.utils._
@@ -298,14 +298,22 @@ class IRconvertSpec extends BigDLSpecHelper {
   "dnn resnet50" should "be same with blas" in {
     System.setProperty("bigdl.engineType", "mkldnn")
     System.setProperty("useBlasBN", "false")
+
+    val batchSize = 8
+
     import com.intel.analytics.bigdl.models.resnet
     RandomGenerator.RNG.setSeed(1)
-    val model = ResNet(classNum = 1000, T("shortcutType" -> ShortcutType.B, "depth" -> 50,
+    val model = resnet.ResNet(classNum = 1000, T("shortcutType" -> ShortcutType.B, "depth" -> 50,
       "optnet" -> false, "dataSet" -> DatasetType.ImageNet)).toGraph()
-
     val modelBlas = model.toGraph()
     val modelDnn = modelBlas.cloneModule().asInstanceOf[StaticGraph[Float]].
       setOutputFormats(Seq(Memory.Format.nc)).toIRgraph()
+
+    import com.intel.analytics.bigdl.nn.mkldnn
+    val dnn = mkldnn.ResNet.graph(batchSize, classNum = 1000,
+      T("shortcutType" -> ShortcutType.B, "depth" -> 50,
+      "optnet" -> false, "dataSet" -> DatasetType.ImageNet))
+    dnn.compile(Phase.TrainingPhase)
 
     RandomGenerator.RNG.setSeed(100)
     val in = Tensor[Float](8, 3, 224, 224).rand(-1, 1)
