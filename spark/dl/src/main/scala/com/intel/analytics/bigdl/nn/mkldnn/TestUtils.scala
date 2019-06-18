@@ -484,7 +484,7 @@ object Equivalent {
   }
 
   def getunequals(t1: Tensor[Float], t2: Tensor[Float],
-                  epsilon: Double = DenseTensorMath.floatEpsilon): Boolean = {
+                  epsilon: Double = DenseTensorMath.floatEpsilon): Int = {
     require(t1.isContiguous())
     require(t2.isContiguous())
     require(t2.nElement() == t1.nElement())
@@ -506,7 +506,7 @@ object Equivalent {
       i += 1
     }
     println("diff num " + num)
-    return true
+    return num
   }
 
 //  def getunequals(t1: Tensor[Float], t2: Tensor[Float],

@@ -160,35 +160,37 @@ private[bigdl] class IRToDnn extends ConvertBase[IRElement[Float], Module[Float]
 
   private def fromSpatialBatchNormalization(node: IRElement[Float]) : Module[Float] = {
     val t = node.getOp().asInstanceOf[IRSpatialBatchNormalization[Float]]
-//    val name = node.getOp().name
-//    val subName = s"com.intel.analytics.bigdl.nn.${name.substring(2)}"
-//    return BlasWrapper(ReflectionUtils.reflectFromIR(node, Class.forName(subName)))
+    if (System.getProperty("useBlasBN", "false") == "true") {
+      val name = node.getOp().name
+      val subName = s"com.intel.analytics.bigdl.nn.${name.substring(2)}"
+      return BlasWrapper(ReflectionUtils.reflectFromIR(node, Class.forName(subName)))
+    } else {
+      require(t.dataFormat == DataFormat.NCHW, "Dnn SpatialBatchNormalization only supports NCHW")
+      val nOutput = t.nOutput
+      val eps = t.eps
+      val momentum = t.momentum
+      val initWeight = t.initWeight
+      val initBias = t.initBias
+      val initGradWeight = t.initGradWeight
+      val initGradBias = t.initGradBias
 
-    require(t.dataFormat == DataFormat.NCHW, "Dnn SpatialBatchNormalization only supports NCHW")
-    val nOutput = t.nOutput
-    val eps = t.eps
-    val momentum = t.momentum
-    val initWeight = t.initWeight
-    val initBias = t.initBias
-    val initGradWeight = t.initGradWeight
-    val initGradBias = t.initGradBias
+      val layer = mkldnn.SpatialBatchNormalization(nOutput, eps, momentum,
+        true, initWeight, initBias, initGradWeight, initGradBias)
 
-    val layer = mkldnn.SpatialBatchNormalization(nOutput, eps, momentum,
-      true, initWeight, initBias, initGradWeight, initGradBias)
+      val params = node.getParameters()
+      if (params._1 != null) layer.weightAndBias.copy(params._1)
+      if (params._2 != null) layer.gradWeightAndBias.copy(params._2)
 
-    val params = node.getParameters()
-    if (params._1 != null) layer.weightAndBias.copy(params._1)
-    if (params._2 != null) layer.gradWeightAndBias.copy(params._2)
+      val extraParams = layer.getExtraParameter()
+      if (t.runningMean != null) extraParams(0).copy(t.runningMean.toTensor[Float])
+      if (t.runningVar != null) extraParams(1).copy(t.runningVar.toTensor[Float])
 
-    val extraParams = layer.getExtraParameter()
-    if (t.runningMean != null) extraParams(0).copy(t.runningMean.toTensor[Float])
-    if (t.runningVar != null) extraParams(1).copy(t.runningVar.toTensor[Float])
+      ReflectionUtils.setScales(node, layer)
 
-    ReflectionUtils.setScales(node, layer)
-
-    // reminder: assume batch_norm is converted from blas
-    layer.needScale = true
-    layer
+      // reminder: assume batch_norm is converted from blas
+      layer.needScale = true
+      layer
+    }
   }
 
   private def fromBlasModule(node: IRElement[Float]) : Module[Float] = {
