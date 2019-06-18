@@ -294,4 +294,30 @@ class IRconvertSpec extends BigDLSpecHelper {
     Equivalent.getunequals(grad1, grad2, 1e-5)
     println("done")
   }
+
+  "dnn resnet50" should "be same with blas" in {
+    System.setProperty("bigdl.engineType", "mkldnn")
+    System.setProperty("useBlasBN", "false")
+    import com.intel.analytics.bigdl.models.resnet
+    RandomGenerator.RNG.setSeed(1)
+    val model = ResNet(classNum = 1000, T("shortcutType" -> ShortcutType.B, "depth" -> 50,
+      "optnet" -> false, "dataSet" -> DatasetType.ImageNet)).toGraph()
+
+    val modelBlas = model.toGraph()
+    val modelDnn = modelBlas.cloneModule().asInstanceOf[StaticGraph[Float]].
+      setOutputFormats(Seq(Memory.Format.nc)).toIRgraph()
+
+    RandomGenerator.RNG.setSeed(100)
+    val in = Tensor[Float](8, 3, 224, 224).rand(-1, 1)
+
+    val out1 = modelBlas.forward(in).toTensor[Float]
+    val out2 = modelDnn.forward(in).toTensor[Float]
+
+    val grad1 = modelBlas.backward(in, out1).toTensor[Float]
+    val grad2 = modelDnn.backward(in, out1).toTensor[Float]
+
+    Equivalent.getunequals(out1, out2, 1e-5)
+    Equivalent.getunequals(grad1, grad2, 1e-5)
+    println("done")
+  }
 }
