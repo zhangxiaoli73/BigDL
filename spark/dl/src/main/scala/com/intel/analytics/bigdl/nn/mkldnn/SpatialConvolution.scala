@@ -18,6 +18,7 @@ package com.intel.analytics.bigdl.nn.mkldnn
 
 import com.intel.analytics.bigdl.Module
 import com.intel.analytics.bigdl.mkl._
+import com.intel.analytics.bigdl.models.resnet.TestImageNet
 import com.intel.analytics.bigdl.nn.{Utils => NNUtils, _}
 import com.intel.analytics.bigdl.nn.abstractnn._
 import com.intel.analytics.bigdl.optim.Regularizer
@@ -137,7 +138,6 @@ class SpatialConvolution(
   private var _dim = 1
   private var _sumInput = false
 
-
   def relu: Boolean = _relu
   def setReLU(value: Boolean = true): this.type = {
     _relu = value
@@ -163,6 +163,9 @@ class SpatialConvolution(
     _sum = true
     this
   }
+
+  var inputBuffer = Tensor[Float]()
+  var gradOutputBuffer = Tensor[Float]()
 
   // get padding type
   private val paddingType: PaddingType.Value = getPaddingType()
@@ -256,16 +259,20 @@ class SpatialConvolution(
     val inputHeight = inputMemoryData.shape(2) // TODO only supports 4-D and nchw
     val inputWidth = inputMemoryData.shape(3)
 
-    val convPaddingShape = getConvPaddingShape(inputHeight, inputWidth, paddingType)
-    val convOutputShape = getConvOutputShape(inputHeight, inputWidth, convPaddingShape)
+    val sizes = if (padW == -1 && padH == -1) {
+        NNUtils.getSAMEOutSizeAndPadding(inputHeight, inputWidth, strideH, strideW, kernelH,
+          kernelW)
+      } else {
+        NNUtils.getOutSizeAndPadding(inputHeight, inputWidth, strideH, strideW, kernelH, kernelW,
+          padH, padW, ceilMode = false)
+      }
 
-    val padTop = convPaddingShape.top
-    val padBottom = convPaddingShape.bottom
-    val padLeft = convPaddingShape.left
-    val padRight = convPaddingShape.right
-    val outputHeight = convOutputShape.height
-    val outputWidth = convOutputShape.width
-
+    val padTop = sizes(0)
+    val padBottom = sizes(1)
+    val padLeft = sizes(2)
+    val padRight = sizes(3)
+    val outputHeight = sizes(4)
+    val outputWidth = sizes(5)
     paddingTL = Array(padTop, padLeft)
     paddingBR = Array(padBottom, padRight)
 
@@ -318,14 +325,13 @@ class SpatialConvolution(
     val scaleWeight = this.getWeightScales().flatten.map { w => Scale.S8_MAX / w }
 
     // TODO check wether ForwardInference and ForwardTraining is the same
-    val desc = MklDnn.DilatedConvForwardDescInit(
+    val desc = MklDnn.ConvForwardDescInit(
       PropKind.ForwardTraining, AlgKind.ConvolutionDirect,
       src.getMemoryDescription(),
       wei.getMemoryDescription(),
       bis.getMemoryDescription(),
       dst.getMemoryDescription(),
-      Array(strideW, strideH), Array(dilationW_mkldnn, dilationH_mkldnn),
-      paddingTL, paddingBR,
+      Array(strideW, strideH), paddingTL, paddingBR,
       MklDnn.PaddingKind.mkldnnPaddingZero)
 
     forwardPrimDesc = if (relu || sum) {
@@ -424,6 +430,8 @@ class SpatialConvolution(
 
   override def updateOutput(input: Activity): Activity = {
     val inputTensor = if (input.isTensor) {
+      inputBuffer = TestImageNet.toNCHW(input.toTensor[Float],
+        _inputFormats(0)).clone()
       input.toTensor[Float]
     } else {
       // here we should not use the output branch
@@ -456,6 +464,9 @@ class SpatialConvolution(
   }
 
   override private[mkldnn] def initBwdPrimitives(grad: Array[MemoryData], phase: Phase) = {
+    if (this.getName() == "res2b_branch2a") {
+      val tmp = 0
+    }
     val inputShape = inputFormats()(0).shape.length match {
       case 1 => inputFormats()(0).shape ++ Array(1) // TODO Test
       case _ => inputFormats()(0).shape
@@ -468,15 +479,12 @@ class SpatialConvolution(
     val bis = NativeData(Array(nOutputPlane), Memory.Format.x)
     val dst = NativeData(outputShape, Memory.Format.any)
 
-    val desc = MklDnn.DilatedConvBackwardDataDescInit(
+    val desc = MklDnn.ConvBackwardDataDescInit(
       AlgKind.ConvolutionDirect,
       src.getMemoryDescription(),
       wei.getMemoryDescription(), // TODO check correctness of strides and padding
-      dst.getMemoryDescription(),
-      Array(strideW, strideH), Array(dilationW_mkldnn, dilationH_mkldnn),
-      paddingTL, paddingBR,
+      dst.getMemoryDescription(), Array(strideW, strideH), paddingTL, paddingBR,
       MklDnn.PaddingKind.mkldnnPaddingZero)
-
     val backwardPrimDesc = MklDnn.PrimitiveDescCreate(desc, runtime.engine, forwardPrimDesc)
 
     val List(realDiffSrc, realWei, realDiffDst) =
@@ -500,12 +508,21 @@ class SpatialConvolution(
     updateGradInputPrimitives = Array(primitive)
     gradInput = initTensor(realDiffSrc)
 
-    _gradInputFormats = Array(realDiffSrc)
+    if (this.getName() == "res2b_branch2a") {
+      // val tmp = NativeData(realDiffSrc.shape, Memory.Format.nchw)
+      val tmp = realDiffSrc // NativeData(realDiffSrc.shape, realDiffSrc.layout)
+      _gradInputFormats = Array(tmp)
+    } else {
+      _gradInputFormats = Array(realDiffSrc)
+    }
     _gradOutputFormats = Array(realDiffDst)
     (_gradOutputFormats, _gradInputFormats)
   }
 
   override def updateGradInput(input: Activity, gradOutput: Activity): Activity = {
+    gradOutputBuffer = TestImageNet.toNCHW(gradOutput.toTensor[Float],
+      _gradOutputFormats(0)).clone()
+
     // if needed, reorder manager will reorder the wegiht to mkldnn wants
     weightForBackward = reorderManager.infer(Array(weight.heapData),
       Array(weightForBackwardMemoryData), weight.dense).asInstanceOf[DnnTensor[Float]]
@@ -524,6 +541,27 @@ class SpatialConvolution(
     MklDnnOps.streamSubmit(runtime.stream, 1, updateGradInputPrimitives,
       updateGradInputPrimitives.length, updateGradInputMemoryPrimitives, updateGradInputTensors)
 
+    if (this.getName() == "res2b_branch2a") {
+      import com.intel.analytics.bigdl.nn
+      val layer = nn.SpatialConvolution[Float](
+        nInputPlane, nOutputPlane, kernelW, kernelH,
+        strideW, strideH, padW, padH, nGroup, propagateBack,
+        wRegularizer, bRegularizer, initWeight, initBias,
+        initGradWeight, initGradBias, withBias, format)
+
+      val p1 = layer.getParameters()
+      val p2 = this.getParameters()
+      p1._1.copy(p2._1)
+      p1._2.copy(p2._2)
+
+      val out = layer.forward(inputBuffer)
+      val gradin = layer.backward(inputBuffer, gradOutputBuffer)
+
+      val dnnGrad = TestImageNet.toNCHW(gradInput.toTensor, gradInputFormats()(0))
+
+      val tmp = 0
+    }
+
     gradInput
   }
 
@@ -536,16 +574,13 @@ class SpatialConvolution(
     val wei = NativeData(weightShape, Memory.Format.any)
     val bis = NativeData(Array(nOutputPlane), Memory.Format.x)
 
-    val desc = MklDnn.DilatedConvBackwardWeightsDescInit(
+    val desc = MklDnn.ConvBackwardWeightsDescInit(
       AlgKind.ConvolutionDirect,
       src.getMemoryDescription(),
       wei.getMemoryDescription(),
       bis.getMemoryDescription(),
-      grad(0).getMemoryDescription(),
-      Array(strideW, strideH), Array(dilationW_mkldnn, dilationH_mkldnn),
-      paddingTL, paddingBR,
+      grad(0).getMemoryDescription(), Array(strideW, strideH), paddingTL, paddingBR,
       MklDnn.PaddingKind.mkldnnPaddingZero)
-
     val gradWeightPrimDesc = MklDnn.PrimitiveDescCreate(desc, runtime.engine, forwardPrimDesc)
 
     // TODO here seems some errors ?????? check the realSrc format.

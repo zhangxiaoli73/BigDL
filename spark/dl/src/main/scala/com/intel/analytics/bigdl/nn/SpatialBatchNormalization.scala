@@ -52,6 +52,7 @@ class SpatialBatchNormalization[T: ClassTag](
   override val nDim = 4
 
   var inputBuffer : Tensor[T] = null
+  var outputBuffer : Tensor[T] = null
   var gradOutputBuffer : Tensor[T] = null
 
   override def updateOutput(input: Tensor[T]): Tensor[T] = {
@@ -164,6 +165,7 @@ class SpatialBatchNormalization[T: ClassTag](
       }
     }
 
+    outputBuffer = output.clone()
     output
   }
 

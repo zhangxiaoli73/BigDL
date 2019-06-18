@@ -16,6 +16,7 @@
 package com.intel.analytics.bigdl.nn.mkldnn
 
 import com.intel.analytics.bigdl.mkl.DataType
+import com.intel.analytics.bigdl.models.resnet.TestImageNet
 import com.intel.analytics.bigdl.nn.DynamicContainer
 import com.intel.analytics.bigdl.nn.abstractnn.{AbstractModule, Activity}
 import com.intel.analytics.bigdl.tensor.{DenseType, DnnTensor, MklDnnType, Tensor}
@@ -151,9 +152,9 @@ trait MklDnnLayer extends AbstractModule[Activity, Activity, Float] with MklDnnM
   @transient
   private var updateGradInputTensors: Array[Tensor[Float]] = _
   @transient
-  private var cachedInput: Activity = _
+  var cachedInput: Activity = _
   @transient
-  private var cachedGradOutput: Activity = _
+  var cachedGradOutput: Activity = _
 
   override private[mkldnn] def initGradWPrimitives(grad: Array[MemoryData],
     phase: Phase): Array[MemoryData] = {
@@ -239,11 +240,31 @@ trait MklDnnLayer extends AbstractModule[Activity, Activity, Float] with MklDnnM
     MklDnnOps.streamSubmit(runtime.stream, 1, updateGradInputPrimitives,
       updateGradInputPrimitives.length,
       updateGradInputMemoryPrimitives, updateGradInputTensors)
+
+
+    if (this.getName() == "res2a_relu") {
+      val in = TestImageNet.toNCHW(cachedInput.toTensor,
+        NativeData(inputFormats()(0).shape, inputFormats()(0).layout))
+      val grad = TestImageNet.toNCHW(cachedGradOutput.toTensor,
+        NativeData(gradOutputFormats()(0).shape, gradOutputFormats()(0).layout))
+
+      import com.intel.analytics.bigdl.nn
+      val layer = nn.ReLU[Float]()
+      val out = layer.forward(in)
+      val gradin = layer.backward(in, grad)
+
+      val dnnGrad = TestImageNet.toNCHW(gradInput.toTensor, gradInputFormats()(0))
+      val dnnGrad2 = TestImageNet.toNCHW(gradInput.toTensor,
+        NativeData(gradInputFormats()(0).shape, gradInputFormats()(0).layout))
+
+      val tmp = 0
+    }
+
     gradInput
   }
 
 
-  override private[mkldnn] def inputFormats() = {
+  override private[bigdl] def inputFormats() = {
     require(_inputFormats != null, "You should call initFwdPrimitives first")
     _inputFormats
   }
@@ -258,7 +279,7 @@ trait MklDnnLayer extends AbstractModule[Activity, Activity, Float] with MklDnnM
     _outputFormats
   }
 
-  override private[mkldnn] def gradOutputFormats() = {
+  override private[bigdl] def gradOutputFormats() = {
     require(_gradOutputFormats != null, "You should call initBwdPrimitives first")
     _gradOutputFormats
   }

@@ -484,23 +484,49 @@ object Equivalent {
   }
 
   def getunequals(t1: Tensor[Float], t2: Tensor[Float],
-    epsilon: Double = DenseTensorMath.floatEpsilon): Boolean = {
-    var result = true
+                  epsilon: Double = DenseTensorMath.floatEpsilon): Boolean = {
+    require(t1.isContiguous())
+    require(t2.isContiguous())
+    require(t2.nElement() == t1.nElement())
+
+    val arr1 = t1.storage()
+    val arr2 = t2.storage()
+
     var num = 0
-    t1.map(t2, (a, b) => {
-      if (true) {
-        result = nearlyEqual(a, b, epsilon)
-        if (!result) {
-          num += 1
-          val diff = math.abs(a - b)
-          println("epsilon " + a + "***" + b + "***" + diff / (abs(a) + abs(b)) + "***" + diff)
-        }
+    var i = 0
+    while (i < arr1.length()) {
+      val a = arr1(i)
+      val b = arr2(i)
+      val result = nearlyEqual(a, b, epsilon)
+      if (!result) {
+        num += 1
+        val diff = math.abs(a - b)
+        // println("epsilon " + a + "***" + b + "***" + diff / (abs(a) + abs(b)) + "***" + diff)
       }
-      a
-    })
+      i += 1
+    }
     println("diff num " + num)
     return true
   }
+
+//  def getunequals(t1: Tensor[Float], t2: Tensor[Float],
+//    epsilon: Double = DenseTensorMath.floatEpsilon): Boolean = {
+//    var result = true
+//    var num = 0
+//    t1.map(t2, (a, b) => {
+//      if (true) {
+//        result = nearlyEqual(a, b, epsilon)
+//        if (!result) {
+//          num += 1
+//          val diff = math.abs(a - b)
+//          println("epsilon " + a + "***" + b + "***" + diff / (abs(a) + abs(b)) + "***" + diff)
+//        }
+//      }
+//      a
+//    })
+//    println("diff num " + num)
+//    return true
+//  }
 
   def isEquals(t1: Tensor[Float], t2: Tensor[Float]): Boolean = {
     var result = true

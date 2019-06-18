@@ -90,6 +90,9 @@ class SpatialConvolution[T: ClassTag](
   require((padW >= 0 && padH >= 0) || (padW == -1 && padH == -1),
     s"Illegal padding configuration (padW: $padW, padH: $padH)")
 
+  var inputBuffer = Tensor[Float]()
+  var gradOutputBuffer = Tensor[Float]()
+
   private val weightShape = format match {
     case DataFormat.NCHW =>
       Array(nGroup, nOutputPlane / nGroup, nInputPlane / nGroup, kernelH, kernelW)
@@ -251,6 +254,7 @@ class SpatialConvolution[T: ClassTag](
   }
 
   override def updateOutput(input: Tensor[T]): Tensor[T] = {
+    inputBuffer = input.toTensor[Float].clone()
     require(input.dim() == 3 || input.dim() == 4,
       "SpatialConvolution: " + ErrorInfo.constrainInputAs3DOrBatch)
     require(input.isContiguous())
@@ -362,6 +366,7 @@ class SpatialConvolution[T: ClassTag](
   }
 
   override def updateGradInput(input: Tensor[T], gradOutput: Tensor[T]): Tensor[T] = {
+    gradOutputBuffer = gradOutput.toTensor[Float].clone()
     if (!propagateBack) {
       return gradInput
     }

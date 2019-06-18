@@ -61,14 +61,16 @@ object TestImageNet {
       val sc = new SparkContext(conf)
       Engine.init
 
+      RandomGenerator.RNG.setSeed(1)
       import com.intel.analytics.bigdl.models.resnet
-      val model = ResNet(classNum = 1000, T("shortcutType" -> ShortcutType.B, "depth" -> 50,
-        "optnet" -> false, "dataSet" -> DatasetType.ImageNet)).toGraph()
+      val seqModel = ResNet(classNum = 1000, T("shortcutType" -> ShortcutType.B, "depth" -> 50,
+        "optnet" -> false, "dataSet" -> DatasetType.ImageNet))
+      val model = seqModel.toGraph()
+      println(seqModel)
       // Module.loadModule[Float](param.model)
       val modelDnn = ConversionUtils.convert(model.cloneModule().asInstanceOf[StaticGraph[Float]]
         .setOutputFormats(Seq(Memory.Format.nchw)))
-
-      val pool = SpatialMaxPooling[Float](3, 3, 2, 2, 1, 1)
+ //     val pool = SpatialMaxPooling[Float](3, 3, 2, 2, 1, 1)
 //      val input = Tensor[Float](2, 3, 224, 224).rand()
 //      val gradOutput = Tensor[Float](2, 1000).rand()
 //      val out1 = model.forward(input).toTensor[Float]
@@ -105,7 +107,7 @@ object TestImageNet {
       var i = 0
       while (i < length) {
         RandomGenerator.RNG.setSeed(100)
-        val input = Tensor[Float](8, 3, 224, 224).rand(-1, 1) // data(i)._1
+        val input = Tensor[Float](8, 3, 224, 224).rand(-1, 1) // data(i)._1 // Tensor[Float](8, 3, 224, 224).rand(-1, 1)
         val target = data(i)._2
 
         val out1 = model.forward(input).toTensor[Float]
@@ -118,10 +120,10 @@ object TestImageNet {
 
 //        RandomGenerator.RNG.setSeed(100)
         val cri = out1 // Tensor[Float]().resizeAs(out1).rand()
-        val grad1 = model.backward(input, cri).toTensor[Float]
-        val grad2 = modelDnn.backward(input, cri).toTensor[Float]
+        val grad1 = model.updateGradInput(input, cri).toTensor[Float]
+        val grad2 = modelDnn.updateGradInput(input, cri).toTensor[Float]
 
-        Equivalent.getunequals(grad1, grad2, 1e-5)
+        Equivalent.getunequals(grad1, grad2, 1e-4)
 
         model.zeroGradParameters()
         modelDnn.zeroGradParameters()
@@ -131,30 +133,113 @@ object TestImageNet {
 
         val diff = if (bkDnn.length > bk.length + 1) 1 else 0
         var j = 0
-        while (j < bk.length) {
+        while (j < bk.length - 1) {
           val blas = bk(j).element
           val dnn = bkDnn(j + diff).element
-          println(blas + "--------------" + dnn)
+          if (!blas.asInstanceOf[Module[Float]].isInstanceOf[nn.CAddTable[Float, _]]) {
+            println(blas + "--------------" + dnn)
+            println(dnn.asInstanceOf[MklDnnLayer].outputFormats()(0)+ " "
+              + dnn.asInstanceOf[MklDnnLayer].gradInputFormats()(0))
 
-          val outBlas = blas.output.toTensor[Float]
-          val outDnn = if (dnn.output.asInstanceOf[Tensor[Float]].isInstanceOf[DnnTensor[Float]]) {
-            toNCHW(dnn.output.asInstanceOf[Tensor[Float]],
-              dnn.asInstanceOf[MklDnnLayer].outputFormats()(0))
-          } else {
-            dnn.output.toTensor[Float]
-          }
+            val outBlas = blas.output.toTensor[Float]
+            val outDnn = if (dnn.output.asInstanceOf[Tensor[Float]].isInstanceOf[DnnTensor[Float]]) {
+              toNCHW(dnn.output.asInstanceOf[Tensor[Float]],
+                dnn.asInstanceOf[MklDnnLayer].outputFormats()(0))
+            } else {
+              dnn.output.toTensor[Float]
+            }
 
-          val gradBlas = blas.gradInput.toTensor[Float]
-          val gradDnn =
-            if (dnn.gradInput.asInstanceOf[Tensor[Float]].isInstanceOf[DnnTensor[Float]]) {
-            toNCHW(dnn.gradInput.asInstanceOf[Tensor[Float]],
-              dnn.asInstanceOf[MklDnnLayer].gradInputFormats()(0))
-          } else {
-              dnn.gradInput.toTensor[Float]
+            val gradBlas = blas.gradInput.toTensor[Float]
+            val gradDnn =
+              if (dnn.gradInput.asInstanceOf[Tensor[Float]].isInstanceOf[DnnTensor[Float]]) {
+                if (dnn.getName() == "res2b_branch2a") {
+                  val tmp = dnn.asInstanceOf[MklDnnLayer].gradInputFormats()(0)
+                  val na = NativeData(tmp.shape, Memory.Format.nchw)
+                  toNCHW(dnn.gradInput.asInstanceOf[Tensor[Float]], NativeData(tmp.shape, Memory.Format.nchw))
+                } else {
+                  toNCHW(dnn.gradInput.asInstanceOf[Tensor[Float]],
+                    dnn.asInstanceOf[MklDnnLayer].gradInputFormats()(0))
+                }
+              } else {
+                dnn.gradInput.toTensor[Float]
+              }
+
+            // for bn
+//            if (blas.isInstanceOf[nn.SpatialBatchNormalization[Float]]) {
+//              val out1 = blas.output.toTensor[Float].clone()
+//              val out2 = dnn.output.toTensor[Float].clone()
+//
+//              val in1 = blas.asInstanceOf[nn.SpatialBatchNormalization[Float]].inputBuffer.clone()
+//              val bn2 = dnn.asInstanceOf[BlasWrapper].module.asInstanceOf[nn.SpatialBatchNormalization[Float]]
+//              val in2 = bn2.inputBuffer.clone()
+//
+//              val inForblas = blas.forward(in2)
+//              val inForDnn = bn2.forward(in1)
+//
+//              println("done")
+//            }
+
+            if (dnn.getName() == "res2a_relu") {
+              val dnnLayer = dnn.asInstanceOf[MklDnnLayer]
+              val in = TestImageNet.toNCHW(dnnLayer.cachedInput.toTensor,
+                NativeData(dnnLayer.inputFormats()(0).shape, Memory.Format.nchw))
+              val grad = TestImageNet.toNCHW(dnnLayer.cachedGradOutput.toTensor,
+                NativeData(dnnLayer.gradOutputFormats()(0).shape, Memory.Format.nchw))
+              val layer = nn.ReLU[Float]()
+              val tmp = 0
+            }
+
+            println("output difference")
+            Equivalent.getunequals(outBlas, outDnn, 1e-5)
+            println("gradInput difference")
+            // Equivalent.getunequals(gradBlas, gradDnn, 1e-5)
+            Equivalent.getunequals(gradBlas, gradDnn, 1e-4)
+//            if (dnn.getName() == "res2b_branch2a") {
+//              val gradDnn =
+//                if (dnn.gradInput.asInstanceOf[Tensor[Float]].isInstanceOf[DnnTensor[Float]]) {
+//                  val tmp = dnn.asInstanceOf[MklDnnLayer].gradInputFormats()(0)
+//                toNCHW(dnn.gradInput.asInstanceOf[Tensor[Float]], NativeData(tmp.shape, Memory.Format.nchw))
+//              } else {
+//                dnn.gradInput.toTensor[Float]
+//              }
+//              Equivalent.getunequals(gradBlas, gradDnn, 1e-4)
+//            } else {
+//              Equivalent.getunequals(gradBlas, gradDnn, 1e-4)
+//            }
+//            if (dnn.getName() == "res2b_branch2a") {
+//              val in1Buffer = blas.asInstanceOf[nn.SpatialConvolution[Float]].inputBuffer
+//              val grad1Buffer = blas.asInstanceOf[nn.SpatialConvolution[Float]].gradOutputBuffer
+//
+//              val in2Buffer = toNCHW(dnn.asInstanceOf[nn.mkldnn.SpatialConvolution].inputBuffer,
+//                  dnn.asInstanceOf[MklDnnLayer].inputFormats()(0)).clone()
+//              val grad2Buffer = toNCHW(dnn.asInstanceOf[nn.mkldnn.SpatialConvolution].gradOutputBuffer,
+//                  dnn.asInstanceOf[MklDnnLayer].gradOutputFormats()(0)).clone()
+//
+//              Equivalent.getunequals(in1Buffer, in2Buffer, 1e-5)
+//              Equivalent.getunequals(grad1Buffer, grad2Buffer, 1e-4)
+//
+//              val conv = resnet.Convolution[Float](256, 64, 1, 1, 1, 1, 0, 0, optnet = false)
+//              // resnet.Convolution[Float](3, 64, 7, 7, 2, 2, 3, 3, optnet = false)
+//              val p1 = blas.getParameters()
+//              val p2 = conv.getParameters()
+//
+//              p2._1.copy(p1._1)
+//              p2._2.copy(p1._2)
+//
+//              val outTmp = conv.forward(in2Buffer).clone()
+//              val gradTmp = conv.updateGradInput(in2Buffer, grad2Buffer).clone()
+//              Equivalent.getunequals(gradTmp, gradDnn, 1e-4)
+//
+//              val outTmp2 = conv.forward(in1Buffer).clone()
+//              val gradTmp2 = conv.updateGradInput(in1Buffer, grad1Buffer).clone()
+//              Equivalent.getunequals(gradTmp2, gradBlas, 1e-4)
+//
+//              Equivalent.getunequals(gradTmp2, gradTmp, 1e-4)
+//
+//              println("done")
+//            }
+            println(s"${dnn} done")
           }
-          Equivalent.getunequals(outBlas, outDnn, 1e-5)
-          Equivalent.getunequals(gradBlas, gradDnn, 1e-5)
-          println("done")
 //
 //          if (bk(j).element.isInstanceOf[SpatialBatchNormalization[Float]]) {
 //            val blas = bk(j).element.asInstanceOf[SpatialBatchNormalization[Float]]
@@ -179,7 +264,6 @@ object TestImageNet {
 //          }
           j += 1
         }
-
         if (i == 10) {
           val tmp = 0
         }

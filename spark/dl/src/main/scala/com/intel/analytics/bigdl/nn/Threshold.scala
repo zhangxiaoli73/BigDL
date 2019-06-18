@@ -43,9 +43,14 @@ class Threshold[T: ClassTag](
   var inPlace = ip
   validateParameters()
 
+  var cachedInput = Tensor[T]()
+  var cachedGradOutput = Tensor[T]()
+
   override def updateOutput(input: Tensor[T]): Tensor[T] = {
     require(input.isContiguous())
     validateParameters()
+
+    cachedInput = input.clone()
 
     val taskSize = input.nElement() / Engine.model.getPoolSize
     var extraTaskSize = input.nElement() % Engine.model.getPoolSize
@@ -214,6 +219,8 @@ class Threshold[T: ClassTag](
 
   override def updateGradInput(input: Tensor[T], gradOutput: Tensor[T]): Tensor[T] = {
     validateParameters()
+
+    cachedGradOutput = gradOutput.clone()
 
     var i = 1
     while (i <= input.nDimension()) {

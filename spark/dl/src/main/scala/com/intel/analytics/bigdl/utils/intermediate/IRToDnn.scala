@@ -125,9 +125,9 @@ private[bigdl] class IRToDnn extends ConvertBase[IRElement[Float], Module[Float]
 
   private def fromSpatialMaxPooling(node: IRElement[Float]) : Module[Float] = {
     val t = node.getOp().asInstanceOf[IRSpatialMaxPooling[Float]]
-    val name = node.getOp().name
-    val subName = s"com.intel.analytics.bigdl.nn.${name.substring(2)}"
-    return BlasWrapper(ReflectionUtils.reflectFromIR(node, Class.forName(subName)))
+//    val name = node.getOp().name
+//    val subName = s"com.intel.analytics.bigdl.nn.${name.substring(2)}"
+//    return BlasWrapper(ReflectionUtils.reflectFromIR(node, Class.forName(subName)))
 
     require(t.format == DataFormat.NCHW, "Dnn SpatialMaxPooling only supports NCHW")
     val layer = ReflectionUtils.reflectFromIR(
@@ -160,9 +160,9 @@ private[bigdl] class IRToDnn extends ConvertBase[IRElement[Float], Module[Float]
 
   private def fromSpatialBatchNormalization(node: IRElement[Float]) : Module[Float] = {
     val t = node.getOp().asInstanceOf[IRSpatialBatchNormalization[Float]]
-    val name = node.getOp().name
-    val subName = s"com.intel.analytics.bigdl.nn.${name.substring(2)}"
-    return BlasWrapper(ReflectionUtils.reflectFromIR(node, Class.forName(subName)))
+//    val name = node.getOp().name
+//    val subName = s"com.intel.analytics.bigdl.nn.${name.substring(2)}"
+//    return BlasWrapper(ReflectionUtils.reflectFromIR(node, Class.forName(subName)))
 
     require(t.dataFormat == DataFormat.NCHW, "Dnn SpatialBatchNormalization only supports NCHW")
     val nOutput = t.nOutput
