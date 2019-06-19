@@ -99,12 +99,14 @@ class DnnGraph(
     var i = 0
     while (i < backwardExecution.length - 1) { // do not execute the dummy backward end
       val curNode = backwardExecution(i)
+      // println(curNode + " start updateGradInput")
       val curGradOutput = findDnnGradOutput(curNode, gradOutput)
       // use input from forward
       val curInput = inputCache(backId2ForwardId(i))
       if (!isStopGradient(curNode.element)) {
         curNode.element.updateGradInput(curInput, curGradOutput)
       }
+      // println(curNode + " done updateGradInput")
       i += 1
     }
     gradInput = getRealOutput(input, fetchModelGradInput())
@@ -115,16 +117,19 @@ class DnnGraph(
     var i = 0
     while (i < backwardExecution.length - 1) {
       val curNode = backwardExecution(i)
+      // println(curNode + " start accGradParameters")
       // use input from forward
       val curInput = inputCache(backId2ForwardId(i))
       val curGradOutput = findDnnGradOutput(curNode, gradOutput, true)
       curNode.element.accGradParameters(curInput, curGradOutput)
       curNode.element.asyncGradient()
+      // println(curNode + " done accGradParameters")
       i += 1
     }
   }
   def getExecutions(): Array[Node[AbstractModule[Activity, Activity, Float]]] = {
     backwardExecution
+    // forwardExecution
   }
 
   override def buildBackwardGraph(): this.type = {

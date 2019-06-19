@@ -177,7 +177,7 @@ object ResNet {
     val depth = opt.get("depth").getOrElse(18)
     val shortCutType = opt.get("shortcutType")
     val shortcutType = shortCutType.getOrElse(ShortcutType.B).asInstanceOf[ShortcutType]
-    val dataSet = opt.getOrElse[DatasetType]("dataSet", DatasetType.CIFAR10)
+    val dataSet = opt.getOrElse[DatasetType]("dataSet", DatasetType.ImageNet)
     val optnet = opt.get("optnet").getOrElse(true)
 
     def shortcut(nInputPlane: Int, nOutputPlane: Int, stride: Int, name: String): Module[Float] = {
@@ -307,7 +307,7 @@ object ResNet {
     val depth = opt.get("depth").getOrElse(18)
     val shortCutType = opt.get("shortcutType")
     val shortcutType = shortCutType.getOrElse(ShortcutType.B).asInstanceOf[ShortcutType]
-    val dataSet = opt.getOrElse[DatasetType]("dataSet", DatasetType.CIFAR10)
+    val dataSet = opt.getOrElse[DatasetType]("dataSet", DatasetType.ImageNet)
     val optnet = opt.get("optnet").getOrElse(true)
 
     def shortcut(input: ModuleNode[Float], nInputPlane: Int, nOutputPlane: Int,

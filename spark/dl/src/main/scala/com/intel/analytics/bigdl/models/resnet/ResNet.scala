@@ -165,7 +165,6 @@ object ResNet {
             .setName(s"res${name}_branch1"))
           .add(Sbn(nOutputPlane).setName(s"bn${name}_branch1"))
       } else if (nInputPlane != nOutputPlane) {
-        throw new IllegalArgumentException(s"useConv false")
         Sequential()
           .add(SpatialAveragePooling(1, 1, stride, stride))
           .add(Concat(2)
@@ -210,7 +209,7 @@ object ResNet {
         .add(ReLU(false).setName(s"res${name}_branch2b_relu"))
         .add(Convolution(n, n*4, 1, 1, 1, 1, 0, 0, optnet = optnet)
           .setName(s"res${name}_branch2c"))
-        .add(Sbn(n * 4).setInitMethod(Zeros, Zeros).setName(s"bn${name}_branch2c"))
+        .add(Sbn(n * 4).setInitMethod(Ones, Zeros).setName(s"bn${name}_branch2c"))
       Sequential()
         .add(ConcatTable()
           .add(s)
@@ -334,7 +333,7 @@ object ResNet {
       val bn2 = Sbn(n).inputs(conv2)
       val relu2 = ReLU(false).inputs(bn2)
       val conv3 = Convolution(n, n*4, 1, 1, 1, 1, 0, 0, optnet = optnet).inputs(relu2)
-      val sbn = Sbn(n * 4).inputs(conv3) // .setInitMethod(Zeros, Zeros).inputs(conv3)
+      val sbn = Sbn(n * 4).setInitMethod(Zeros, Zeros).inputs(conv3)
 
       val shortcut = shortcutFunc(nInputPlane, n * 4, stride, input)
       val add = CAddTable(false).inputs(sbn, shortcut)

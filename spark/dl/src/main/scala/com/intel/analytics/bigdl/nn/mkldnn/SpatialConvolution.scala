@@ -584,13 +584,14 @@ class SpatialConvolution(
     val src = NativeData(inputShape, Memory.Format.any)
     val wei = NativeData(weightShape, Memory.Format.any)
     val bis = NativeData(Array(nOutputPlane), Memory.Format.x)
+    val gradMemoryData = NativeData(grad(0).shape, Memory.Format.any)
 
     val desc = MklDnn.DilatedConvBackwardWeightsDescInit(
       AlgKind.ConvolutionDirect,
       src.getMemoryDescription(),
       wei.getMemoryDescription(),
       bis.getMemoryDescription(),
-      grad(0).getMemoryDescription(),
+      gradMemoryData.getMemoryDescription(),
       Array(strideW, strideH), Array(dilationW_mkldnn, dilationH_mkldnn),
       paddingTL, paddingBR,
       MklDnn.PaddingKind.mkldnnPaddingZero)
@@ -629,6 +630,8 @@ class SpatialConvolution(
     updateGradWMemoryPrimitives = srcs ++ dsts
     accGradientPrimitives = Array(primitive)
 
+    // println("1111111111111111 " + this.getName() + " " + grad(0).layout + " " + realDiffDst.layout)
+
     _gradOutputFormatsForWeight = Array(realDiffDst)
     (_gradOutputFormatsForWeight)
   }
@@ -640,6 +643,7 @@ class SpatialConvolution(
     } else {
       input.toTable.get[Tensor[Float]](_dim).get
     }
+
     inputForAcc = reorderManager.infer(Array(inputFormats()(0)),
       Array(inputForAccMemoryData), inputTensor).asInstanceOf[DnnTensor[Float]]
 

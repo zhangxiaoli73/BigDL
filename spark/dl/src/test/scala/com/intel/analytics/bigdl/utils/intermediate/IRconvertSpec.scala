@@ -108,7 +108,7 @@ class IRconvertSpec extends BigDLSpecHelper {
     val inputsNodes = dnnNodes.filter(_.element.getName() == "input")(0)
     val outputsNodes = dnnNodes.filter(_.element.getName() == "output")(0)
 
-    val inputs = Input(Array(2, 1, 28, 28), Memory.Format.nchw).inputs()
+    val inputs = nn.mkldnn.Input(Array(2, 1, 28, 28), Memory.Format.nchw).inputs()
     inputsNodes.from(inputs)
     val outputs = Output(Memory.Format.nc).inputs(outputsNodes)
     val dnn = DnnGraph(Array(inputs), Array(outputs))
@@ -146,7 +146,7 @@ class IRconvertSpec extends BigDLSpecHelper {
     val inputsNodes = dnnNodes.filter(_.element.getName() == "input")(0)
     val outputsNodes = dnnNodes.filter(_.element.getName() == "output")(0)
 
-    val inputs = Input(Array(2, 1, 28, 28), Memory.Format.nchw).inputs()
+    val inputs = nn.mkldnn.Input(Array(2, 1, 28, 28), Memory.Format.nchw).inputs()
     inputsNodes.from(inputs)
     val outputs = Output(Memory.Format.nchw).inputs(outputsNodes)
     val dnn = DnnGraph(Array(inputs), Array(outputs))
@@ -185,7 +185,7 @@ class IRconvertSpec extends BigDLSpecHelper {
     val inputsNodes = dnnNodes.filter(_.element.getName() == "input")(0)
     val outputsNodes = dnnNodes.filter(_.element.getName() == "output")(0)
 
-    val inputs = Input(Array(2, 1, 28, 28), Memory.Format.nchw).inputs()
+    val inputs = nn.mkldnn.Input(Array(2, 1, 28, 28), Memory.Format.nchw).inputs()
     inputsNodes.from(inputs)
     val outputs = Output(Memory.Format.nc).inputs(outputsNodes)
     val dnn = DnnGraph(Array(inputs), Array(outputs))
@@ -248,7 +248,7 @@ class IRconvertSpec extends BigDLSpecHelper {
 
   "convert blas gap to dnn" should "work correctly" in {
     System.setProperty("bigdl.engineType", "mkldnn")
-    val graph = Sequential()
+    val graph = nn.Sequential()
       .add(SpatialAveragePooling[Float](2, 2, globalPooling = true))
       .toGraph()
 
@@ -305,27 +305,54 @@ class IRconvertSpec extends BigDLSpecHelper {
     RandomGenerator.RNG.setSeed(1)
     val model = resnet.ResNet(classNum = 1000, T("shortcutType" -> ShortcutType.B, "depth" -> 50,
       "optnet" -> false, "dataSet" -> DatasetType.ImageNet)).toGraph()
+    ResNet.modelInit(model)
+
+    RandomGenerator.RNG.setSeed(1)
+    val modelNew = resnet.ResNet(classNum = 1000, T("shortcutType" -> ShortcutType.B, "depth" -> 50,
+      "optnet" -> false, "dataSet" -> DatasetType.ImageNet)).toGraph()
+    ResNet.modelInit(modelNew)
+
     val modelBlas = model.toGraph()
     val modelDnn = modelBlas.cloneModule().asInstanceOf[StaticGraph[Float]].
       setOutputFormats(Seq(Memory.Format.nc)).toIRgraph()
 
+    RandomGenerator.RNG.setSeed(1)
     import com.intel.analytics.bigdl.nn.mkldnn
-    val dnn = mkldnn.ResNet.graph(batchSize, classNum = 1000,
-      T("shortcutType" -> ShortcutType.B, "depth" -> 50,
-      "optnet" -> false, "dataSet" -> DatasetType.ImageNet))
+    val dnn = mkldnn.ResNet(batchSize, classNum = 1000,
+      T("depth" -> 50, "optnet" -> false))
     dnn.compile(Phase.TrainingPhase)
 
-    RandomGenerator.RNG.setSeed(100)
+    val p1 = modelDnn.getParametersTable()
+    val p2 = dnn.getParametersTable()
+
+//    val keys = p1.keySet
+//    for (i <- keys) {
+//      val k = i.asInstanceOf[String]
+//      val t1 = p1[Table](k)
+//      val t2 = p2[Table](k)
+//      if (k == "res3b_branch2a") {
+//        val tmp = 0
+//      }
+//      println(k)
+//      // t1 should be(t2)
+//    }
+
+
+
+     RandomGenerator.RNG.setSeed(100)
     val in = Tensor[Float](8, 3, 224, 224).rand(-1, 1)
 
-    val out1 = modelBlas.forward(in).toTensor[Float]
+    val out1 = model.forward(in).toTensor[Float]
+    val outNew = modelNew.forward(in).toTensor[Float]
     val out2 = modelDnn.forward(in).toTensor[Float]
+    val out3 = dnn.forward(in).toTensor[Float]
 
-    val grad1 = modelBlas.backward(in, out1).toTensor[Float]
+    val grad1 = model.backward(in, out1).toTensor[Float]
     val grad2 = modelDnn.backward(in, out1).toTensor[Float]
+    val grad3 = dnn.backward(in, out1).toTensor[Float]
 
-    Equivalent.getunequals(out1, out2, 1e-5)
-    Equivalent.getunequals(grad1, grad2, 1e-5)
+    Equivalent.getunequals(out3, out2, 1e-5)
+    Equivalent.getunequals(grad3, grad2, 1e-5)
     println("done")
   }
 }

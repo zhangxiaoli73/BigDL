@@ -90,8 +90,16 @@ object TrainImageNet {
 
             curModel
           case MklDnn =>
-            nn.mkldnn.ResNet.graph(param.batchSize / Engine.nodeNumber(), param.classes,
-              T("depth" -> 50, "dataSet" -> ImageNet))
+            if (System.getProperty("dnnDefine", "false") == "true") {
+              nn.mkldnn.ResNet.graph(param.batchSize / Engine.nodeNumber(), param.classes,
+                T("depth" -> 50, "dataSet" -> ImageNet))
+            } else {
+              val curModel =
+                ResNet(classNum = param.classes, T("shortcutType" -> shortcut,
+                  "depth" -> param.depth, "optnet" -> param.optnet, "dataSet" -> dataSetType))
+              ResNet.modelInit(curModel)
+              curModel
+            }
         }
       }
 
