@@ -28,7 +28,7 @@ import com.intel.analytics.bigdl.numeric.NumericFloat
 import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
 import com.intel.analytics.bigdl.utils.RandomGenerator._
-import com.intel.analytics.bigdl.utils.{Engine, T, Table, ThreadPool}
+import com.intel.analytics.bigdl.utils._
 import org.apache.log4j.Logger
 import scopt.OptionParser
 
@@ -147,6 +147,9 @@ object ResNet {
 
         case conv: SpatialConvolution =>
           val n: Float = conv.kernelW * conv.kernelW * conv.nOutputPlane
+
+          RandomGenerator.RNG.setSeed(1)
+
           val weight = Tensor[Float].resize(conv.weight.size()).apply1 { _ =>
             RNG.normal(0, Math.sqrt(2.0f / n)).toFloat
           }
@@ -254,6 +257,9 @@ object ResNet {
       val (loopConfig, nFeatures, block) = cfg.get(depth).get
       iChannels = 64
 
+      val linear = Linear(nFeatures, classNum).setInitMethod(RandomNormal(0.0, 0.01), Zeros)
+        .setName("fc1000")
+
       model.add(Input(Array(batchSize, 3, 224, 224), Memory.Format.nchw))
         .add(SpatialConvolution(3, 64, 7, 7, 2, 2, 3, 3, propagateBack = false).setName("conv1"))
         .add(SbnDnn(64).setName("bn_conv1"))
@@ -264,8 +270,7 @@ object ResNet {
         .add(layer(block, 256, loopConfig._3, 2, name = "4"))
         .add(layer(block, 512, loopConfig._4, 2, name = "5"))
         .add(AvgPooling(7, 7, 1, 1).setName("pool5"))
-        .add(Linear(nFeatures, classNum).setInitMethod(RandomNormal(0.0, 0.01), Zeros).setName(
-          "fc1000"))
+        .add(linear)
         .add(ReorderMemory(HeapData(Array(batchSize, classNum), Memory.Format.nc)))
     } else {
       throw new IllegalArgumentException(s"Invalid dataset ${dataSet}")
@@ -281,10 +286,13 @@ object ResNet {
       graph.getSortedForwardExecutions.foreach(n => {
         n.element match {
           case conv: SpatialConvolution =>
+            RandomGenerator.RNG.setSeed(1)
+
             val n: Float = conv.kernelW * conv.kernelW * conv.nOutputPlane
             val weight = Tensor[Float].resize(conv.weight.size()).apply1 { _ =>
               RNG.normal(0, Math.sqrt(2.0f / n)).toFloat
             }
+
             val bias = Tensor[Float].resize(conv.bias.size()).apply1(_ => 0.0f)
             conv.weight.copy(weight)
             conv.bias.copy(bias)
@@ -385,9 +393,12 @@ object ResNet {
 
       val (loopConfig, nFeatures, block) = cfg.get(depth).get
       iChannels = 64
+      RandomGenerator.RNG.setSeed(1)
+      val linear = Linear(nFeatures, classNum).setInitMethod(RandomNormal(0.0, 0.01), Zeros)
+        .setName("fc1000")
 
       val input = Input(Array(batchSize, 3, 224, 224), Memory.Format.nchw).inputs()
-      val conv1 = SpatialConvolution(3, 64, 7, 7, 2, 2, 3, 3, propagateBack = true)
+      val conv1 = Convolution(3, 64, 7, 7, 2, 2, 3, 3, propagateBack = true)
         .setName("conv1").inputs(input)
       val bn1 = SbnDnn(64).setName("bn_conv1").inputs(conv1)
       val relu1 = ReLU().setName("conv1_relu").inputs(bn1)
@@ -397,8 +408,7 @@ object ResNet {
       val layer3 = layer(layer2, block, 256, loopConfig._3, 2, name = "4")
       val layer4 = layer(layer3, block, 512, loopConfig._4, 2, name = "5")
       val pool2 = AvgPooling(7, 7, 1, 1).setName("pool5").inputs(layer4)
-      val fc = Linear(nFeatures, classNum).setInitMethod(RandomNormal(0.0, 0.01), Zeros).setName(
-          "fc1000").inputs(pool2)
+      val fc = linear.inputs(pool2)
       val output = ReorderMemory(HeapData(Array(batchSize, classNum), Memory.Format.nc)).inputs(fc)
 
       val model = DnnGraph(Array(input), Array(output))
@@ -456,6 +466,9 @@ object Convolution {
     propagateBack: Boolean = true,
     optnet: Boolean = true,
     weightDecay: Double = 1e-4): SpatialConvolution = {
+
+    RandomGenerator.RNG.setSeed(1)
+
     val conv = SpatialConvolution(nInputPlane, nOutputPlane, kernelW, kernelH,
       strideW, strideH, padW, padH, nGroup, propagateBack)
     conv.setInitMethod(MsraFiller(false), Zeros)

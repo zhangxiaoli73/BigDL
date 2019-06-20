@@ -83,7 +83,8 @@ class BatchNormalization[T: ClassTag](
   val nDim = 2
   val channelDim = 2
   var runningMean = if (affine) Tensor[T](nOutput) else Tensor[T]()
-  var runningVar = if (affine) Tensor[T](nOutput).fill(ev.one) else Tensor[T]()
+  // var runningVar = if (affine) Tensor[T](nOutput).fill(ev.one) else Tensor[T]()
+  var runningVar = if (affine) Tensor[T](nOutput).fill(ev.zero) else Tensor[T]()
   var saveMean = if (affine) Tensor[T](nOutput) else Tensor[T]()
   var saveStd = if (affine) Tensor[T](nOutput).fill(ev.zero) else Tensor[T]()
 

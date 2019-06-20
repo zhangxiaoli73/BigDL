@@ -47,7 +47,7 @@ private[bigdl] class IRGraph[T: ClassTag](
     val outputFormats: Seq[Int] = Seq(Memory.Format.nc))
   (implicit ev: TensorNumeric[T]) extends AbstractModule[Activity, Activity, T] with Serializable {
 
-  @transient private var initPrim: Boolean = false
+  @transient var initPrim: Boolean = false
 
   require(inputFormats.length == inputs.length, s"IRGraph: inputFormats" +
     s"length ${inputFormats.length} should be same with input nodes length ${inputs.length}")
@@ -67,6 +67,8 @@ private[bigdl] class IRGraph[T: ClassTag](
         initPrimitives(input)
         graph.updateOutput(input)
       }))
+//      initPrimitives(input)
+//      graph.updateOutput(input)
     } else graph.updateOutput(input)
     output = graph.output
     output
@@ -80,6 +82,8 @@ private[bigdl] class IRGraph[T: ClassTag](
       Engine.dnnComputing.invokeAndWait2(Array(0).map(_ => () => {
         graph.updateGradInput(input, gradOutput)
       }))
+//      graph.updateGradInput(input, gradOutput)
+
     } else graph.updateGradInput(input, gradOutput)
     gradInput = graph.gradInput
     gradInput
@@ -93,6 +97,9 @@ private[bigdl] class IRGraph[T: ClassTag](
       Engine.dnnComputing.invokeAndWait2(Array(0).map(_ => () => {
         graph.accGradParameters(input, gradOutput)
       }))
+
+//      graph.accGradParameters(input, gradOutput)
+
     } else graph.accGradParameters(input, gradOutput)
   }
 

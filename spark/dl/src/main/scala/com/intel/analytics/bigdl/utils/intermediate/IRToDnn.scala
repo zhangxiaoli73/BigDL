@@ -128,7 +128,6 @@ private[bigdl] class IRToDnn extends ConvertBase[IRElement[Float], Module[Float]
 //    val name = node.getOp().name
 //    val subName = s"com.intel.analytics.bigdl.nn.${name.substring(2)}"
 //    return BlasWrapper(ReflectionUtils.reflectFromIR(node, Class.forName(subName)))
-
     require(t.format == DataFormat.NCHW, "Dnn SpatialMaxPooling only supports NCHW")
     val layer = ReflectionUtils.reflectFromIR(
       node, Class.forName(prefix + "MaxPooling")).asInstanceOf[MaxPooling]
@@ -188,7 +187,7 @@ private[bigdl] class IRToDnn extends ConvertBase[IRElement[Float], Module[Float]
       ReflectionUtils.setScales(node, layer)
 
       // reminder: assume batch_norm is converted from blas
-      layer.needScale = true
+      // layer.needScale = true
       layer
     }
   }

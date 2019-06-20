@@ -18,13 +18,13 @@ package com.intel.analytics.bigdl.utils.intermediate
 
 import com.intel.analytics.bigdl.mkl.Memory
 import com.intel.analytics.bigdl.models.resnet.ResNet.{DatasetType, ShortcutType}
-import com.intel.analytics.bigdl.models.resnet.{ResNet, Sbn}
+import com.intel.analytics.bigdl.models.resnet.{ResNet, Sbn, TestImageNet}
 import com.intel.analytics.bigdl.nn._
 import com.intel.analytics.bigdl.nn.abstractnn.DataFormat
 import com.intel.analytics.bigdl.nn.mkldnn.Phase.TrainingPhase
 import com.intel.analytics.bigdl.nn.mkldnn._
 import com.intel.analytics.bigdl.numeric.NumericFloat
-import com.intel.analytics.bigdl.tensor.Tensor
+import com.intel.analytics.bigdl.tensor.{DnnTensor, Tensor}
 import com.intel.analytics.bigdl.utils._
 import com.intel.analytics.bigdl.{Module, nn}
 
@@ -306,53 +306,125 @@ class IRconvertSpec extends BigDLSpecHelper {
     val model = resnet.ResNet(classNum = 1000, T("shortcutType" -> ShortcutType.B, "depth" -> 50,
       "optnet" -> false, "dataSet" -> DatasetType.ImageNet)).toGraph()
     ResNet.modelInit(model)
-
-    RandomGenerator.RNG.setSeed(1)
-    val modelNew = resnet.ResNet(classNum = 1000, T("shortcutType" -> ShortcutType.B, "depth" -> 50,
-      "optnet" -> false, "dataSet" -> DatasetType.ImageNet)).toGraph()
-    ResNet.modelInit(modelNew)
-
     val modelBlas = model.toGraph()
     val modelDnn = modelBlas.cloneModule().asInstanceOf[StaticGraph[Float]].
       setOutputFormats(Seq(Memory.Format.nc)).toIRgraph()
 
     RandomGenerator.RNG.setSeed(1)
     import com.intel.analytics.bigdl.nn.mkldnn
-    val dnn = mkldnn.ResNet(batchSize, classNum = 1000,
+    val dnn = mkldnn.ResNet.graph(batchSize, classNum = 1000,
       T("depth" -> 50, "optnet" -> false))
-    dnn.compile(Phase.TrainingPhase)
+
+    Engine.dnnComputing.invokeAndWait2(Array(0).map(_ => () => {
+      dnn.compile(Phase.TrainingPhase)
+    }))
 
     val p1 = modelDnn.getParametersTable()
     val p2 = dnn.getParametersTable()
 
-//    val keys = p1.keySet
-//    for (i <- keys) {
-//      val k = i.asInstanceOf[String]
-//      val t1 = p1[Table](k)
-//      val t2 = p2[Table](k)
-//      if (k == "res3b_branch2a") {
-//        val tmp = 0
-//      }
-//      println(k)
-//      // t1 should be(t2)
-//    }
+    val keys = p1.keySet
+    for (i <- keys) {
+      val k = i.asInstanceOf[String]
+      val t1 = p1[Table](k)
+      val t2 = p2[Table](k)
+      t1 should be(t2)
+    }
 
-
-
-     RandomGenerator.RNG.setSeed(100)
+    RandomGenerator.RNG.setSeed(100)
     val in = Tensor[Float](8, 3, 224, 224).rand(-1, 1)
 
-    val out1 = model.forward(in).toTensor[Float]
-    val outNew = modelNew.forward(in).toTensor[Float]
     val out2 = modelDnn.forward(in).toTensor[Float]
-    val out3 = dnn.forward(in).toTensor[Float]
+    Engine.dnnComputing.invokeAndWait2(Array(0).map(_ => () => {
+      dnn.forward(in).toTensor[Float]
+    }))
+    val out3 = dnn.output.toTensor[Float]   // forward(in).toTensor[Float]
 
-    val grad1 = model.backward(in, out1).toTensor[Float]
-    val grad2 = modelDnn.backward(in, out1).toTensor[Float]
-    val grad3 = dnn.backward(in, out1).toTensor[Float]
+    val gradOutput = out2.clone()
+    val grad2 = modelDnn.backward(in, gradOutput).toTensor[Float]
+    Engine.dnnComputing.invokeAndWait2(Array(0).map(_ => () => {
+      dnn.backward(in, gradOutput).toTensor[Float]
+    }))
+    val grad3 = dnn.gradInput.toTensor[Float] // dnn.backward(in, gradOutput).toTensor[Float]
 
-    Equivalent.getunequals(out3, out2, 1e-5)
-    Equivalent.getunequals(grad3, grad2, 1e-5)
+    Equivalent.getunequals(out2, out3, 1e-4, debug = false)
+    Equivalent.getunequals(grad2, grad3, 1e-4, debug = false)
+
+//    val bk = modelDnn.asInstanceOf[IRGraph[Float]].graph.asInstanceOf[DnnGraph].getExecutions() // modelDnn.asInstanceOf[DnnGraph].getExecutions() //
+//    val bkDnn = dnn.asInstanceOf[DnnGraph].getExecutions()
+
+//    val diff = 1 // if (bkDnn.length > bk.length + 1) 1 else 0
+//    var j = 3
+//    while (j < bkDnn.length - 1) {
+//      val blas = bk(j + diff).element
+//      val dnn = bkDnn(j).element
+//      if (!blas.asInstanceOf[Module[Float]].isInstanceOf[nn.mkldnn.CAddTable]) {
+//        println(blas + "--------------" + dnn)
+//        println(blas.asInstanceOf[MklDnnLayer].outputFormats()(0) + " "
+//          + blas.asInstanceOf[MklDnnLayer].gradInputFormats()(0))
+//
+//        println(dnn.asInstanceOf[MklDnnLayer].outputFormats()(0) + " "
+//          + dnn.asInstanceOf[MklDnnLayer].gradInputFormats()(0))
+//
+//        val outBlas = if (blas.output.asInstanceOf[Tensor[Float]]
+//          .isInstanceOf[DnnTensor[Float]]) {
+//          TestImageNet.toNCHW(blas.output.asInstanceOf[Tensor[Float]],
+//            blas.asInstanceOf[MklDnnLayer].outputFormats()(0))
+//        } else {
+//          blas.output.toTensor[Float]
+//        }
+//
+//        val outDnn = if (dnn.output.asInstanceOf[Tensor[Float]]
+//          .isInstanceOf[DnnTensor[Float]]) {
+//          TestImageNet.toNCHW(dnn.output.asInstanceOf[Tensor[Float]],
+//            dnn.asInstanceOf[MklDnnLayer].outputFormats()(0))
+//        } else {
+//          dnn.output.toTensor[Float]
+//        }
+//
+//        val gradBlas = if (blas.gradInput.asInstanceOf[Tensor[Float]]
+//          .isInstanceOf[DnnTensor[Float]]) {
+//          TestImageNet.toNCHW(blas.gradInput.asInstanceOf[Tensor[Float]],
+//            blas.asInstanceOf[MklDnnLayer].gradInputFormats()(0))
+//        } else {
+//          blas.gradInput.toTensor[Float]
+//        }
+//
+//        val gradDnn = if (dnn.gradInput.asInstanceOf[Tensor[Float]]
+//          .isInstanceOf[DnnTensor[Float]]) {
+//          TestImageNet.toNCHW(dnn.gradInput.asInstanceOf[Tensor[Float]],
+//            dnn.asInstanceOf[MklDnnLayer].gradInputFormats()(0))
+//        } else {
+//          dnn.gradInput.toTensor[Float]
+//        }
+//        println("output difference")
+//        val num = Equivalent.getunequalsDebug(outBlas, outDnn, 1e-4, debug = false)
+//        val gradElment = num.toFloat / outBlas.nElement()
+////        if (num > 10) {
+////          if (dnn.isInstanceOf[mkldnn.SpatialBatchNormalization]) {
+////            val bn1 = blas.asInstanceOf[mkldnn.SpatialBatchNormalization]
+////            val bn2 = dnn.asInstanceOf[mkldnn.SpatialBatchNormalization]
+////
+////            val in1 = bn1.inputBuffer
+////            val in2 = bn2.inputBuffer
+////            Equivalent.getunequalsDebug(in1, in2, 1e-6, debug = false)
+////
+////            val mean1 = bn1.meanTemp
+////            val mean2 = bn2.meanTemp
+////            Equivalent.getunequalsDebug(mean1, mean2, 1e-6, debug = false)
+////
+////            val var1 = bn1.varianceTemp
+////            val var2 = bn2.varianceTemp
+////            Equivalent.getunequalsDebug(var1, var2, 1e-6, debug = false)
+////          }
+////          val tmp = 0
+////        }
+//
+//        Equivalent.getunequalsDebug(gradBlas, gradDnn, 1e-4, debug = false)
+//        println(s"${dnn} done")
+//      }
+//      j += 1
+//    }
+
     println("done")
   }
 }

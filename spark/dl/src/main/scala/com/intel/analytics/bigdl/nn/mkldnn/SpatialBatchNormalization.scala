@@ -72,6 +72,7 @@ class SpatialBatchNormalization(
 
   val varianceTemp = Tensor[Float].resizeAs(runningVariance.dense)
   val meanTemp = Tensor[Float].resizeAs(runningMean.dense)
+  var inputBuffer = Tensor[Float]()
 
   // the blank shoud be here, otherwise the runningVarianceScaled will be a method
   {
@@ -237,6 +238,9 @@ class SpatialBatchNormalization(
   }
 
   override def updateOutput(input: Activity): Activity = {
+    inputBuffer = TestImageNet.toNCHW(input.toTensor[Float],
+      inputFormats()(0))
+
     if (updateOutputTensors == null) {
       if (this.isTraining()) {
         val buffer = new ArrayBuffer[Tensor[Float]]()
@@ -281,68 +285,72 @@ class SpatialBatchNormalization(
       runningMean.sync()
       runningVariance.sync()
 
-      // debug
-      val n = input.toTensor[Float].nElement()
-      val nChannels = input.toTensor[Float].size(2)
-      val frameSize = n / nChannels
-      val nFrame = input.toTensor[Float].size(3) * input.toTensor[Float].size(4)
-      val nBatch = input.toTensor[Float].size(1)
+      meanTemp.copy(mean)
+      varianceTemp.copy(variance)
 
-      val in = TestImageNet.toNCHW(input.toTensor[Float], inputFormats()(0))
-      val inputData = in.storage().array()
-      val inputOffset = in.storageOffset() - 1
 
-      val meanData = meanTemp.storage().array()
-      val meanOffset = meanTemp.storageOffset() - 1
-      var i = 0
-      var b = 0
-      while(b < nBatch) {
-        var c = 0
-        while (c < nChannels) {
-          var k = 0
-          var meanSum = 0f
-          while(k < nFrame) {
-            // println(i + " " + k + " " + c + " " + b)
-            meanSum += inputData(i + inputOffset)
-            k += 1
-            i += 1
-          }
-          meanData(c + meanOffset) += meanSum
-          c += 1
-        }
-        b += 1
-      }
-      meanTemp.div(frameSize)
-
-      val stdData = varianceTemp.storage().array()
-      val stdOffset = varianceTemp.storageOffset() - 1
-      b = 0
-      i = 0
-      while(b < nBatch) {
-        var c = 0
-        while(c < nChannels) {
-          var k = 0
-          var stdSum = 0f
-          while(k < nFrame) {
-            val diff = (inputData(i + inputOffset) - meanData(c + meanOffset))
-            stdSum += diff * diff
-            k += 1
-            i += 1
-          }
-          stdData(c + stdOffset) += stdSum
-          c += 1
-        }
-        b += 1
-      }
-
-      // varianceTemp.div(100000)
-      varianceTemp.div(frameSize)
-
-      i = 0
-      while (i < nChannels) {
-        stdData(i) = 1.0f / Math.sqrt(stdData(i) + eps).toFloat
-        i += 1
-      }
+//      // debug
+//      val n = input.toTensor[Float].nElement()
+//      val nChannels = input.toTensor[Float].size(2)
+//      val frameSize = n / nChannels
+//      val nFrame = input.toTensor[Float].size(3) * input.toTensor[Float].size(4)
+//      val nBatch = input.toTensor[Float].size(1)
+//
+//      val in = TestImageNet.toNCHW(input.toTensor[Float], inputFormats()(0))
+//      val inputData = in.storage().array()
+//      val inputOffset = in.storageOffset() - 1
+//
+//      val meanData = meanTemp.storage().array()
+//      val meanOffset = meanTemp.storageOffset() - 1
+//      var i = 0
+//      var b = 0
+//      while(b < nBatch) {
+//        var c = 0
+//        while (c < nChannels) {
+//          var k = 0
+//          var meanSum = 0f
+//          while(k < nFrame) {
+//            // println(i + " " + k + " " + c + " " + b)
+//            meanSum += inputData(i + inputOffset)
+//            k += 1
+//            i += 1
+//          }
+//          meanData(c + meanOffset) += meanSum
+//          c += 1
+//        }
+//        b += 1
+//      }
+//      meanTemp.div(frameSize)
+//
+//      val stdData = varianceTemp.storage().array()
+//      val stdOffset = varianceTemp.storageOffset() - 1
+//      b = 0
+//      i = 0
+//      while(b < nBatch) {
+//        var c = 0
+//        while(c < nChannels) {
+//          var k = 0
+//          var stdSum = 0f
+//          while(k < nFrame) {
+//            val diff = (inputData(i + inputOffset) - meanData(c + meanOffset))
+//            stdSum += diff * diff
+//            k += 1
+//            i += 1
+//          }
+//          stdData(c + stdOffset) += stdSum
+//          c += 1
+//        }
+//        b += 1
+//      }
+//
+//      // varianceTemp.div(100000)
+//      varianceTemp.div(frameSize)
+//
+//      i = 0
+//      while (i < nChannels) {
+//        stdData(i) = 1.0f / Math.sqrt(stdData(i) + eps).toFloat
+//        i += 1
+//      }
     }
 
     output

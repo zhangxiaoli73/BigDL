@@ -22,6 +22,7 @@ import com.intel.analytics.bigdl.nn.abstractnn.Activity
 import com.intel.analytics.bigdl.nn.mkldnn.Phase.TrainingPhase
 import com.intel.analytics.bigdl.numeric.NumericFloat
 import com.intel.analytics.bigdl.tensor.{DnnStorage, Tensor}
+import com.intel.analytics.bigdl.utils.Engine
 import com.intel.analytics.bigdl.utils.RandomGenerator._
 import org.apache.commons.lang3.SerializationUtils
 import org.scalatest.{FlatSpec, Ignore, Matchers}
@@ -310,11 +311,11 @@ class SpatialBatchNormalizationSpec extends FlatSpec with Matchers {
     val epsilon = 1e-3
     val batchSize = 2
 
-    RNG.setSeed(300)
+    RNG.setSeed(100)
     val input = Tensor[Float](Array(batchSize, 64, 112, 112)).rand(-1, 1)
     val gradOutput = Tensor().resizeAs(input).copy(input)
 
-//    RNG.setSeed(100)
+    RNG.setSeed(100)
     val initWeight = Tensor(channel).rand(-1, 1)
     val initBias = Tensor(channel).fill(0f)
 
@@ -348,19 +349,17 @@ class SpatialBatchNormalizationSpec extends FlatSpec with Matchers {
     val gradInput = bn.backward(input, gradOutput)
     val nnGradInput = nnBn.backward(input, gradOutput)
 
-    println(s"all number ${nnGradInput.toTensor[Float].nElement()}")
-
-    Equivalent.getunequals(Tools.dense(gradInput).toTensor, nnGradInput.toTensor,
-      1e-5)
-    Equivalent.getunequals(Tools.dense(gradWeight(0)).toTensor, nnGradWeight, 1e-5)
-
-//    Equivalent.nearequals(Tools.dense(gradInput).toTensor, nnGradInput.toTensor,
-//      1e-5) should be (true)
-//    Equivalent.nearequals(Tools.dense(gradWeight(0)).toTensor, nnGradWeight, 1e-5) should be (true)
+    Equivalent.nearequals(Tools.dense(gradInput).toTensor, nnGradInput.toTensor,
+      1e-3) should be (true)
+    Equivalent.nearequals(Tools.dense(gradWeight(0)).toTensor, nnGradWeight, 1e-3) should be (true)
   }
 
   "A nChw8c input" should "work correctly" in {
-    val (batchSize, channel, height, width) = (2, 256, 56, 56)
+    System.setProperty("bigdl.engineType", "mkldnn")
+    // Engine.init(1, 4, true)
+
+    val useThread = true
+    val (batchSize, channel, height, width) = (8, 64, 112, 112)
     val input = Tensor(batchSize, channel, height, width).rand(-1, 1)
     val gradOutput = Tensor(batchSize, channel, height, width).rand(-1, 1)
 
@@ -368,8 +367,8 @@ class SpatialBatchNormalizationSpec extends FlatSpec with Matchers {
     val reorder1 = ReorderMemory(HeapData(inputShape, Memory.Format.nChw8c))
     val reorder2 = ReorderMemory(HeapData(inputShape, Memory.Format.nchw))
 
-    val initWeight = Tensor(channel).rand(-1, 1)
-    val initBias = Tensor(channel).rand(-1, 1)
+    val initWeight = Tensor(channel).fill(1.0f)
+    val initBias = Tensor(channel).fill(0.0f)
 
     val dnn = Sequential()
       .add(reorder1)
@@ -378,16 +377,47 @@ class SpatialBatchNormalizationSpec extends FlatSpec with Matchers {
 
     dnn.compile(TrainingPhase, Array(HeapData(inputShape, Memory.Format.nchw)))
 
+    val dnnNew = dnn.cloneModule()
+    if (useThread) {
+      Engine.dnnComputing.invokeAndWait2(Array(0).map(_ => () => {
+        dnnNew.compile(TrainingPhase, Array(HeapData(inputShape, Memory.Format.nchw)))
+      }))
+    } else {
+      dnnNew.compile(TrainingPhase, Array(HeapData(inputShape, Memory.Format.nchw)))
+    }
+
+    val dnnClone = dnn.cloneModule()
+    dnnClone.compile(TrainingPhase, Array(HeapData(inputShape, Memory.Format.nchw)))
+
     val blas = nn.Sequential().add(
         nn.SpatialBatchNormalization(channel, 1e-3, initWeight = initWeight, initBias = initBias))
 
     dnn.forward(input)
+    dnnClone.forward(input)
+    if (useThread) {
+    Engine.dnnComputing.invokeAndWait2(Array(0).map(_ => () => {
+      dnnNew.forward(input)
+    }))
+    } else dnnNew.forward(input)
     blas.forward(input)
 
     dnn.backward(input, gradOutput)
+    dnnClone.backward(input, gradOutput)
+    if (useThread) {
+      Engine.dnnComputing.invokeAndWait2(Array(0).map(_ => () => {
+        dnnNew.backward(input, gradOutput)
+      }))
+    } else dnnNew.backward(input, gradOutput)
+
     blas.backward(input, gradOutput)
 
     val gradWeight = Tools.dense(dnn.parameters()._2(0)).toTensor
+
+    Equivalent.getunequalsDebug(dnn.output.toTensor, dnnNew.output.toTensor, 1e-6, debug = false)
+    Equivalent.getunequalsDebug(dnn.gradInput.toTensor, dnnNew.gradInput.toTensor, 1e-6, debug = false)
+
+    Equivalent.getunequalsDebug(dnn.output.toTensor, dnnClone.output.toTensor, 1e-6, debug = false)
+    Equivalent.getunequalsDebug(dnn.gradInput.toTensor, dnnClone.gradInput.toTensor, 1e-6, debug = false)
 
     Equivalent.nearequals(dnn.output.toTensor, blas.output.toTensor, 1e-4) should be (true)
     Equivalent.nearequals(dnn.gradInput.toTensor, blas.gradInput.toTensor, 1e-4) should be (true)

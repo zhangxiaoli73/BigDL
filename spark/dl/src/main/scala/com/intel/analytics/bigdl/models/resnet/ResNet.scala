@@ -24,7 +24,7 @@ import com.intel.analytics.bigdl.numeric.NumericFloat
 import com.intel.analytics.bigdl.optim.L2Regularizer
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
 import com.intel.analytics.bigdl.tensor.{Storage, Tensor}
-import com.intel.analytics.bigdl.utils.Table
+import com.intel.analytics.bigdl.utils.{RandomGenerator, Table}
 import com.intel.analytics.bigdl.utils.RandomGenerator._
 import org.apache.log4j.Logger
 
@@ -49,6 +49,9 @@ object Convolution {
      (implicit ev: TensorNumeric[T]): SpatialConvolution[T] = {
     val wReg = L2Regularizer[T](weightDecay)
     val bReg = L2Regularizer[T](weightDecay)
+
+    RandomGenerator.RNG.setSeed(1)
+
     val conv = if (optnet) {
       SpatialShareConvolution[T](nInputPlane, nOutputPlane, kernelW, kernelH,
         strideW, strideH, padW, padH, nGroup, propagateBack, wReg, bReg)
@@ -65,7 +68,7 @@ object Sbn {
   def apply[@specialized(Float, Double) T: ClassTag](
     nOutput: Int,
     eps: Double = 1e-3,
-    momentum: Double = 0.1,
+    momentum: Double = 0.9,
     affine: Boolean = true)
   (implicit ev: TensorNumeric[T]): SpatialBatchNormalization[T] = {
     SpatialBatchNormalization[T](nOutput, eps, momentum, affine).setInitMethod(Ones, Zeros)
@@ -131,6 +134,9 @@ object ResNet {
           if (spatialConvolution.isInstanceOf[SpatialConvolution[Float]]) =>
           val curModel = spatialConvolution.asInstanceOf[SpatialConvolution[Float]]
           val n: Float = curModel.kernelW * curModel.kernelW * curModel.nOutputPlane
+
+          RandomGenerator.RNG.setSeed(1)
+
           curModel.weight.apply1(_ => RNG.normal(0, Math.sqrt(2.0f / n)).toFloat)
           curModel.bias.apply1(_ => 0.0f)
         case spatialBatchNormalization
@@ -258,19 +264,21 @@ object ResNet {
       iChannels = 64
       logger.info(" | ResNet-" + depth + " ImageNet")
 
+      val linear = Linear(nFeatures, classNum, true, L2Regularizer(1e-4), L2Regularizer(1e-4))
+        .setInitMethod(RandomNormal(0.0, 0.01), Zeros)
+
       model.add(Convolution(3, 64, 7, 7, 2, 2, 3, 3,
         optnet = optnet, propagateBack = true).setName("conv1"))
          .add(Sbn(64).setName("bn_conv1"))
          .add(ReLU(false).setName("conv1_relu"))
-         .add(SpatialMaxPooling(3, 3, 2, 2, 1, 1).setName("pool1"))
+         .add(SpatialMaxPooling(3, 3, 2, 2, 0, 0).ceil().setName("pool1"))
          .add(layer(block, 64, loopConfig._1, name = "2"))
-        .add(layer(block, 128, loopConfig._2, 2, name = "3"))
-        .add(layer(block, 256, loopConfig._3, 2, name = "4"))
-        .add(layer(block, 512, loopConfig._4, 2, name = "5"))
-        .add(SpatialAveragePooling(7, 7, 1, 1))
-        .add(View(nFeatures).setNumInputDims(3))
-        .add(Linear(nFeatures, classNum, true, L2Regularizer(1e-4), L2Regularizer(1e-4))
-          .setInitMethod(RandomNormal(0.0, 0.01), Zeros))
+         .add(layer(block, 128, loopConfig._2, 2, name = "3"))
+         .add(layer(block, 256, loopConfig._3, 2, name = "4"))
+         .add(layer(block, 512, loopConfig._4, 2, name = "5"))
+         .add(SpatialAveragePooling(7, 7, 1, 1))
+         .add(View(nFeatures).setNumInputDims(3))
+          .add(linear.setName("fc1000"))
     } else {
       throw new IllegalArgumentException(s"Invalid dataset ${dataSet}")
     }
@@ -377,7 +385,7 @@ object ResNet {
         optnet = optnet, propagateBack = true).inputs(input)
       val bn = Sbn(64).inputs(conv1)
       val relu = ReLU(false).inputs(bn)
-      val pool = SpatialMaxPooling(3, 3, 2, 2, 1, 1).inputs(relu)
+      val pool = SpatialMaxPooling(3, 3, 2, 2, 0, 0).ceil().inputs(relu)
       val layer1 = layer(block, 64, loopConfig._1)(pool)
       val layer2 = layer(block, 128, loopConfig._2, 2)(layer1)
       val layer3 = layer(block, 256, loopConfig._3, 2)(layer2)
