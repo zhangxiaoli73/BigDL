@@ -124,8 +124,8 @@ class DnnGraph(
     }
   }
   def getExecutions(): Array[Node[AbstractModule[Activity, Activity, Float]]] = {
-    // backwardExecution
-    forwardExecution
+    backwardExecution
+    // forwardExecution
   }
 
   override def buildBackwardGraph(): this.type = {

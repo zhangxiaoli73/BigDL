@@ -65,9 +65,9 @@ object TestImageNet {
       import com.intel.analytics.bigdl.models.resnet
       val seqModel = ResNet(classNum = 1000, T("shortcutType" -> ShortcutType.B, "depth" -> 50,
         "optnet" -> false, "dataSet" -> DatasetType.ImageNet))
-      // ResNet.modelInit(seqModel)
+      ResNet.modelInit(seqModel)
       val model = seqModel.toGraph()
-      println(seqModel)
+      // println(seqModel)
       val modelDnn = ConversionUtils.convert(model.cloneModule().asInstanceOf[StaticGraph[Float]]
         .setOutputFormats(Seq(Memory.Format.nc)))
 
@@ -94,7 +94,6 @@ object TestImageNet {
         val out2 = modelDnn.forward(input).toTensor[Float]
 
         Equivalent.getunequals(out1, out2, 1e-5)
-
 //        criterion.forward(out1, target)
 //        val cri = criterion.backward(out1, target)
          val cri = out1
@@ -139,16 +138,16 @@ object TestImageNet {
             }
 
             println("output difference")
-            val num = Equivalent.getunequals(outBlas, outDnn, 1e-3)
+            val num = Equivalent.getunequals(outBlas, outDnn, 1e-4)
             val outputElment = num.toFloat / outBlas.nElement()
             if (outputElment > 0.05) {
               val tmp = 0
             }
             println("gradInput difference")
-            val numGrad = Equivalent.getunequals(gradBlas, gradDnn, 1e-3)
+            val numGrad = Equivalent.getunequals(gradBlas, gradDnn, 1e-4)
             val gradElment = numGrad.toFloat / gradBlas.nElement()
             if (gradElment > 0.05) {
-              Equivalent.getunequals(gradBlas, gradDnn, 1e-3, debug = true)
+              Equivalent.getunequals(gradBlas, gradDnn, 1e-3, debug = false)
               val tmp = 0
             }
             //            if (dnn.getName() == "res2b_branch2a") {

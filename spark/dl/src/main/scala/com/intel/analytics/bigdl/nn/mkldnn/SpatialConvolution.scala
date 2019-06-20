@@ -167,6 +167,7 @@ class SpatialConvolution(
 
   var inputBuffer = Tensor[Float]()
   var gradOutputBuffer = Tensor[Float]()
+  var gradInputBuffer = Tensor[Float]()
 
   // get padding type
   private val paddingType: PaddingType.Value = getPaddingType()
@@ -572,6 +573,30 @@ class SpatialConvolution(
 
     MklDnnOps.streamSubmit(runtime.stream, 1, updateGradInputPrimitives,
       updateGradInputPrimitives.length, updateGradInputMemoryPrimitives, updateGradInputTensors)
+
+    if (this.getName() == "res5c_branch2a") {
+      import com.intel.analytics.bigdl.nn
+      val layer = nn.SpatialConvolution[Float](
+        nInputPlane, nOutputPlane, kernelW, kernelH,
+        strideW, strideH, padW, padH, nGroup, propagateBack,
+        wRegularizer, bRegularizer, initWeight, initBias,
+        initGradWeight, initGradBias, withBias, format)
+
+      val p1 = layer.getParameters()
+      val p2 = this.getParameters()
+      p1._1.copy(p2._1)
+      p1._2.copy(p2._2)
+
+      val out = layer.forward(inputBuffer)
+      val gradin = layer.backward(inputBuffer, gradOutputBuffer)
+
+      gradInputBuffer = TestImageNet.toNCHW(gradInput.toTensor, gradInputFormats()(0))
+
+      println("internal debug")
+      Equivalent.getunequals(gradin, gradInputBuffer, 1e-5)
+
+      val tmp = 0
+    }
 
     gradInput
   }

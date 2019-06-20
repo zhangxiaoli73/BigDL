@@ -196,7 +196,15 @@ trait MklDnnLayer extends AbstractModule[Activity, Activity, Float] with MklDnnM
         }
       }
       updateOutputTensors = buffer.toArray
-      cachedInput = input
+      cachedInput = if (input.isTensor && this.isInstanceOf[ReLU]) {
+        if (input.toTensor[Float].dim() > 2) {
+          TestImageNet.toNCHW(input.toTensor, inputFormats()(0))
+        } else {
+          input
+        }
+      } else {
+        input
+      }
     }
     MklDnnOps.streamSubmit(
       runtime.stream, 1, updateOutputPrimitives, updateOutputPrimitives.length,
@@ -234,8 +242,25 @@ trait MklDnnLayer extends AbstractModule[Activity, Activity, Float] with MklDnnM
         }
       }
       updateGradInputTensors = buffer.toArray
-      cachedInput = input
-      cachedGradOutput = gradOutput
+      cachedInput = if (input.isTensor && this.isInstanceOf[ReLU]) {
+        if (input.toTensor[Float].dim() > 2) {
+          TestImageNet.toNCHW(input.toTensor[Float], inputFormats()(0))
+        } else {
+          input
+        }
+      } else {
+        input
+      }
+
+      cachedGradOutput = if (input.isTensor && this.isInstanceOf[ReLU]) {
+        if (input.toTensor[Float].dim() > 2) {
+          TestImageNet.toNCHW(gradOutput.toTensor[Float], gradOutputFormats()(0))
+        } else {
+          gradOutput
+        }
+      } else {
+        gradOutput
+      }
     }
     MklDnnOps.streamSubmit(runtime.stream, 1, updateGradInputPrimitives,
       updateGradInputPrimitives.length,
