@@ -125,8 +125,8 @@ class StaticGraph[T: ClassTag](
   }
 
   def getExecutions(): Array[Node[AbstractModule[Activity, Activity, T]]] = {
-    backwardExecution
-    // forwardExecution
+    // backwardExecution
+    forwardExecution
   }
   private def backwardExecution(input: Activity, gradOutput: Activity,
     executeBackward: Boolean): Activity = {

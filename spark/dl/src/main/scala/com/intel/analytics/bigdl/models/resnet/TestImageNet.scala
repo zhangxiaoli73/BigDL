@@ -103,8 +103,14 @@ object TestImageNet {
 
         Equivalent.getunequals(grad1, grad2, 1e-5)
 
-        model.zeroGradParameters()
-        modelDnn.zeroGradParameters()
+        // model.zeroGradParameters()
+        // modelDnn.zeroGradParameters()
+
+        val p1 = model.getParameters()
+        val p2 = modelDnn.getParameters()
+
+        Equivalent.getunequals(p1._1, p2._1, 1e-5)
+        Equivalent.getunequals(p1._2, p2._2, 1e-4)
 
         val bk = model.asInstanceOf[StaticGraph[Float]].getExecutions()
         val bkDnn = modelDnn.asInstanceOf[IRGraph[Float]].graph.asInstanceOf[DnnGraph].getExecutions()
@@ -114,8 +120,8 @@ object TestImageNet {
         while (j < bk.length - 1) {
           val blas = bk(j).element
           val dnn = bkDnn(j + diff).element
+          println(blas + "-----------------" + dnn)
           if (!blas.asInstanceOf[Module[Float]].isInstanceOf[nn.CAddTable[Float, _]]) {
-            println(blas + "--------------" + dnn)
             println(dnn.asInstanceOf[MklDnnLayer].outputFormats()(0) + " "
               + dnn.asInstanceOf[MklDnnLayer].gradInputFormats()(0))
 
@@ -140,14 +146,31 @@ object TestImageNet {
             println("output difference")
             val num = Equivalent.getunequals(outBlas, outDnn, 1e-4)
             val outputElment = num.toFloat / outBlas.nElement()
-            if (outputElment > 0.05) {
+            if (outputElment > 0.01) {
+              if (dnn.getName() == "res3c_branch2a") {
+                val p1 = blas.getParameters()
+                val p2 = dnn.getParameters()
+
+                Equivalent.getunequals(p1._1, p2._1, 1e-6)
+                Equivalent.getunequals(p1._2, p2._2, 1e-6)
+
+                val inputs = dnn.asInstanceOf[nn.mkldnn.SpatialConvolution].inputBuffer
+
+                val previousOut = blas.output.toTensor[Float].clone()
+                val outTemp = blas.forward(inputs).toTensor[Float]
+
+                Equivalent.getunequals(previousOut, outTemp, 1e-4)
+                Equivalent.getunequals(previousOut, outDnn, 1e-4)
+                Equivalent.getunequals(outTemp, outDnn, 1e-4)
+              }
+
               val tmp = 0
             }
             println("gradInput difference")
             val numGrad = Equivalent.getunequals(gradBlas, gradDnn, 1e-4)
             val gradElment = numGrad.toFloat / gradBlas.nElement()
             if (gradElment > 0.05) {
-              Equivalent.getunequals(gradBlas, gradDnn, 1e-3, debug = false)
+              // Equivalent.getunequals(gradBlas, gradDnn, 1e-3, debug = false)
               val tmp = 0
             }
             //            if (dnn.getName() == "res2b_branch2a") {
