@@ -33,7 +33,7 @@ import scala.reflect.ClassTag
 object RestNetCaffe {
   var iChannels = 0
 
-  def graph(classNum: Int, opt: Table = T()): Graph[Float] = {
+  def graph(classNum: Int, opt: Table = T(), blasPool: Boolean = false): Graph[Float] = {
     def modelInit(graph: Graph[Float]): Unit = {
       graph.getSortedForwardExecutions.foreach(n => {
         n.element match {
@@ -148,7 +148,14 @@ object RestNetCaffe {
         propagateBack = true).setName("conv1").inputs(input)
       val bn1 = SbnDnn(64).setName("bn_conv1").inputs(conv1)
       val relu1 = nn.ReLU[Float]().setName("conv1_relu").inputs(bn1)
-      val pool1 = nn.SpatialMaxPooling[Float](3, 3, 2, 2).ceil().setName("pool1").inputs(relu1)
+
+      val pool1 = if (blasPool) {
+        // use blas pooling parameters
+        nn.SpatialMaxPooling[Float](3, 3, 2, 2, 1, 1).setName("pool1").inputs(relu1)
+      } else {
+        nn.SpatialMaxPooling[Float](3, 3, 2, 2).ceil().setName("pool1").inputs(relu1)
+      }
+
       val layer1 = layer(pool1, block, 64, loopConfig._1, name = "2")
       val layer2 = layer(layer1, block, 128, loopConfig._2, 2, name = "3")
       val layer3 = layer(layer2, block, 256, loopConfig._3, 2, name = "4")
@@ -157,6 +164,10 @@ object RestNetCaffe {
       val view = nn.View[Float](nFeatures).setNumInputDims(3).inputs(pool2)
 
       // RandomGenerator.RNG.setSeed(1)
+
+      // todo: linear also has regularizer
+//      val output = nn.Linear[Float](nFeatures, classNum, true, L2Regularizer(1e-4),
+//        L2Regularizer(1e-4)).setInitMethod(RandomNormal(0.0, 0.01), Zeros).setName("fc1000").inputs(view)
 
       val output = nn.Linear[Float](nFeatures, classNum, true).setInitMethod(
         RandomNormal(0.0, 0.01), Zeros).setName("fc1000").inputs(view)
@@ -216,9 +227,9 @@ object ConvolutionCaffe {
    propagateBack: Boolean = true,
    optnet: Boolean = true,
    weightDecay: Double = 1e-4): nn.SpatialConvolution[Float] = {
-
-    val wReg = L2Regularizer[Float](weightDecay)
-    val bReg = L2Regularizer[Float](weightDecay)
+    val modelType = System.getProperty("modelType", "caffeDnn")
+    val wReg = if (modelType == "weightRegu") L2Regularizer[Float](weightDecay) else null
+    val bReg = if (modelType == "weightRegu") L2Regularizer[Float](weightDecay) else null
 
     val conv = nn.SpatialConvolution[Float](nInputPlane, nOutputPlane, kernelW, kernelH,
       strideW, strideH, padW, padH, nGroup, propagateBack, wReg, bReg)

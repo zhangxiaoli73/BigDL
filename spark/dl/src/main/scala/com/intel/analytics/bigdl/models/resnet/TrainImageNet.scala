@@ -68,35 +68,17 @@ object TrainImageNet {
       val model = if (param.modelSnapshot.isDefined) {
         Module.load[Float](param.modelSnapshot.get)
       } else {
-        RestNetCaffe.graph(param.classes)
-/*
-        Engine.getEngineType() match {
-          case MklBlas =>
-            RestNetCaffe.graph(param.classes)
-//            val curModel =
-//              ResNet(classNum = param.classes, T("shortcutType" -> shortcut, "depth" -> param.depth,
-//                "optnet" -> param.optnet, "dataSet" -> dataSetType))
-//            if (param.optnet) {
-//              ResNet.shareGradInput(curModel)
-//            }
-//            ResNet.modelInit(curModel)
-//
-//            /* Here we set parallism specificall for BatchNormalization and its Sub Layers, this is
-//            very useful especially when you want to leverage more computing resources like you want
-//            to use as many cores as possible but you cannot set batch size too big for each core due
-//            to the memory limitation, so you can set batch size per core smaller, but the smaller
-//            batch size will increase the instability of convergence, the synchronization among BN
-//            layers basically do the parameters synchronization among cores and thus will avoid the
-//            instability while improves the performance a lot. */
-//            val parallisim = Engine.coreNumber
-//            setParallism(curModel, parallisim)
-//
-//            curModel
-          case MklDnn =>
-            nn.mkldnn.ResNet.graph(param.batchSize / Engine.nodeNumber(), param.classes,
-              T("depth" -> 50, "dataSet" -> ImageNet))
+        val modelType = System.getProperty("modelType", "caffeDnn")
+        if (modelType == "caffeDnn") {
+          nn.mkldnn.ResNet.graph(param.batchSize / Engine.nodeNumber(), param.classes,
+            T("depth" -> 50, "dataSet" -> ImageNet))
+        } else if (modelType == "weightRegu") {
+          RestNetCaffe.graph(param.classes)
+        } else if (modelType == "blasPool") {
+          RestNetCaffe.graph(param.classes, blasPool = true)
+        } else {
+          throw new IllegalArgumentException(s"unknown model type ${modelType}")
         }
-*/
       }
 
       println(model)

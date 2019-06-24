@@ -17,6 +17,7 @@
 package com.intel.analytics.bigdl.utils.intermediate
 
 import com.intel.analytics.bigdl.mkl.Memory
+import com.intel.analytics.bigdl.models.resnet.ResNet.DatasetType
 import com.intel.analytics.bigdl.nn._
 import com.intel.analytics.bigdl.nn.abstractnn.DataFormat
 import com.intel.analytics.bigdl.nn.mkldnn.Phase.TrainingPhase
@@ -292,12 +293,10 @@ class IRconvertSpec extends BigDLSpecHelper {
     var p1 = modelDnn.getParametersTable()
     var p2 = dnn.getParametersTable()
     var keys = p1.keySet
-
     for (i <- keys) {
       val k = i.asInstanceOf[String]
       val t1 = p1[Table](k)
       val t2 = p2[Table](k)
-      // println(k)
       t1 should be(t2)
     }
 
@@ -328,10 +327,39 @@ class IRconvertSpec extends BigDLSpecHelper {
       val k = i.asInstanceOf[String]
       val t1 = p1[Table](k)
       val t2 = p2[Table](k)
-      // println(k)
       t1 should be(t2)
     }
+  }
 
-    println("done")
+  "dnn resnet50 blas pool" should "be same with blas" in {
+    System.setProperty("modelType", "blasPool")
+    Engine.init(1, 4, true)
+
+    import com.intel.analytics.bigdl.models.resnet
+    import com.intel.analytics.bigdl.nn.mkldnn.Phase
+    import com.intel.analytics.bigdl.nn.mkldnn
+
+    val batchSize = 2
+    RandomGenerator.RNG.setSeed(1)
+    val modelSeq = resnet.ResNet(1000, T("shortcutType" -> resnet.ResNet.ShortcutType.B,
+      "depth" -> 50, "optnet" -> false, "dataSet" -> DatasetType.ImageNet))
+    resnet.ResNet.modelInit(modelSeq)
+    val model = modelSeq.toGraph()
+
+    RandomGenerator.RNG.setSeed(1)
+    val modelCaffe = resnet.RestNetCaffe.graph(1000, blasPool = true).toGraph()
+
+    RandomGenerator.RNG.setSeed(100)
+    val in = Tensor[Float](batchSize, 3, 224, 224).rand(-1, 1)
+
+    val out2 = model.forward(in).toTensor[Float]
+    val out3 = modelCaffe.forward(in).toTensor[Float]
+
+    val gradOutput = out2.clone()
+    val grad2 = model.backward(in, gradOutput).toTensor[Float]
+    val grad3 = modelCaffe.backward(in, gradOutput).toTensor[Float]
+
+    Equivalent.getunequals(out2, out3, 1e-6)
+    Equivalent.getunequals(grad2, grad3, 1e-6)
   }
 }
