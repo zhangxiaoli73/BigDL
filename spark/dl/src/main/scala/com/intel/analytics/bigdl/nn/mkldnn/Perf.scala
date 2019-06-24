@@ -28,7 +28,7 @@ import com.intel.analytics.bigdl.numeric.NumericFloat
 import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
 import com.intel.analytics.bigdl.utils.RandomGenerator._
-import com.intel.analytics.bigdl.utils.{Engine, T, Table, ThreadPool}
+import com.intel.analytics.bigdl.utils._
 import org.apache.log4j.Logger
 import scopt.OptionParser
 
@@ -281,6 +281,9 @@ object ResNet {
       graph.getSortedForwardExecutions.foreach(n => {
         n.element match {
           case conv: SpatialConvolution =>
+
+            // RandomGenerator.RNG.setSeed(1)
+
             val n: Float = conv.kernelW * conv.kernelW * conv.nOutputPlane
             val weight = Tensor[Float].resize(conv.weight.size()).apply1 { _ =>
               RNG.normal(0, Math.sqrt(2.0f / n)).toFloat
@@ -304,10 +307,10 @@ object ResNet {
       })
     }
 
-    val depth = opt.get("depth").getOrElse(18)
+    val depth = opt.get("depth").getOrElse(50)
     val shortCutType = opt.get("shortcutType")
     val shortcutType = shortCutType.getOrElse(ShortcutType.B).asInstanceOf[ShortcutType]
-    val dataSet = opt.getOrElse[DatasetType]("dataSet", DatasetType.CIFAR10)
+    val dataSet = opt.getOrElse[DatasetType]("dataSet", DatasetType.ImageNet)
     val optnet = opt.get("optnet").getOrElse(true)
 
     def shortcut(input: ModuleNode[Float], nInputPlane: Int, nOutputPlane: Int,
@@ -397,6 +400,9 @@ object ResNet {
       val layer3 = layer(layer2, block, 256, loopConfig._3, 2, name = "4")
       val layer4 = layer(layer3, block, 512, loopConfig._4, 2, name = "5")
       val pool2 = AvgPooling(7, 7, 1, 1).setName("pool5").inputs(layer4)
+
+      // RandomGenerator.RNG.setSeed(1)
+
       val fc = Linear(nFeatures, classNum).setInitMethod(RandomNormal(0.0, 0.01), Zeros).setName(
           "fc1000").inputs(pool2)
       val output = ReorderMemory(HeapData(Array(batchSize, classNum), Memory.Format.nc)).inputs(fc)

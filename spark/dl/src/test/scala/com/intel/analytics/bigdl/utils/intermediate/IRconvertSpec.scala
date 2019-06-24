@@ -266,4 +266,72 @@ class IRconvertSpec extends BigDLSpecHelper {
     dnn.release()
     System.clearProperty("bigdl.engineType")
   }
+
+  "dnn resnet50" should "be same with blas" in {
+    System.setProperty("bigdl.engineType", "mkldnn")
+    Engine.init(1, 4, true)
+
+    import com.intel.analytics.bigdl.models.resnet
+    import com.intel.analytics.bigdl.nn.mkldnn.Phase
+    import com.intel.analytics.bigdl.nn.mkldnn
+
+    val batchSize = 8
+    RandomGenerator.RNG.setSeed(1)
+    val model = resnet.RestNetCaffe.graph(1000).toGraph()
+    val modelBlas = model.toGraph()
+    val modelDnn = modelBlas.cloneModule().asInstanceOf[StaticGraph[Float]].
+      setOutputFormats(Seq(Memory.Format.nc)).toIRgraph()
+
+    RandomGenerator.RNG.setSeed(1)
+    val dnn = mkldnn.ResNet.graph(batchSize, classNum = 1000,
+      T("depth" -> 50, "optnet" -> false))
+    Engine.dnnComputing.invokeAndWait2(Array(0).map(_ => () => {
+      dnn.compile(Phase.TrainingPhase)
+    }))
+
+    var p1 = modelDnn.getParametersTable()
+    var p2 = dnn.getParametersTable()
+    var keys = p1.keySet
+
+    for (i <- keys) {
+      val k = i.asInstanceOf[String]
+      val t1 = p1[Table](k)
+      val t2 = p2[Table](k)
+      // println(k)
+      t1 should be(t2)
+    }
+
+    RandomGenerator.RNG.setSeed(100)
+    val in = Tensor[Float](8, 3, 224, 224).rand(-1, 1)
+
+    val out2 = modelDnn.forward(in).toTensor[Float]
+    Engine.dnnComputing.invokeAndWait2(Array(0).map(_ => () => {
+      dnn.forward(in).toTensor[Float]
+    }))
+    val out3 = dnn.output.toTensor[Float]
+
+    val gradOutput = out2.clone()
+    val grad2 = modelDnn.backward(in, gradOutput).toTensor[Float]
+    Engine.dnnComputing.invokeAndWait2(Array(0).map(_ => () => {
+      dnn.backward(in, gradOutput).toTensor[Float]
+    }))
+    val grad3 = dnn.gradInput.toTensor[Float]
+
+    Equivalent.getunequals(out2, out3, 1e-6)
+    Equivalent.getunequals(grad2, grad3, 1e-6)
+
+    p1 = modelDnn.getParametersTable()
+    p2 = dnn.getParametersTable()
+    keys = p1.keySet
+
+    for (i <- keys) {
+      val k = i.asInstanceOf[String]
+      val t1 = p1[Table](k)
+      val t2 = p2[Table](k)
+      // println(k)
+      t1 should be(t2)
+    }
+
+    println("done")
+  }
 }
