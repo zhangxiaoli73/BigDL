@@ -76,6 +76,8 @@ object TrainImageNet {
           RestNetCaffe.graph(param.classes)
         } else if (modelType == "blasPool") {
           RestNetCaffe.graph(param.classes, blasPool = true)
+        } else if (modelType == "caffeBlas") {
+          RestNetCaffe.graph(param.classes, blasPool = false)
         } else {
           throw new IllegalArgumentException(s"unknown model type ${modelType}")
         }

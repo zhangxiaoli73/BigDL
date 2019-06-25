@@ -25,6 +25,7 @@ import com.intel.analytics.bigdl.nn.mkldnn.Phase.{InferencePhase, TrainingPhase}
 import com.intel.analytics.bigdl.nn.mkldnn.ResNet.DatasetType.ImageNet
 import com.intel.analytics.bigdl.nn.mkldnn.models.Vgg_16
 import com.intel.analytics.bigdl.numeric.NumericFloat
+import com.intel.analytics.bigdl.optim.L2Regularizer
 import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
 import com.intel.analytics.bigdl.utils.RandomGenerator._
@@ -462,8 +463,12 @@ object Convolution {
     propagateBack: Boolean = true,
     optnet: Boolean = true,
     weightDecay: Double = 1e-4): SpatialConvolution = {
+
+    // use regulizer
+    val wReg = L2Regularizer[Float](weightDecay)
+    val bReg = L2Regularizer[Float](weightDecay)
     val conv = SpatialConvolution(nInputPlane, nOutputPlane, kernelW, kernelH,
-      strideW, strideH, padW, padH, nGroup, propagateBack)
+      strideW, strideH, padW, padH, nGroup, propagateBack, wReg, bReg)
     conv.setInitMethod(MsraFiller(false), Zeros)
     conv
   }
