@@ -437,11 +437,62 @@ class TransformerLayerSpec extends FlatSpec with Matchers {
 
     val input1 = Tensor[Float](T(T(3, 1, 2, 3, 4, 5), T(6, 7, 8, 9, 10, 11))).add(1.0f)
     val input2 = Tensor[Float](T(T(4, 5, 7, 9, 10, 11), T(4, 12, 6, 3, 2, 15))).add(1.0f)
+
+    transformer.forward(T(input1, input2)).toTensor[Float]
+    transformer.forward(T(input1, input2)).toTensor[Float]
     val output = transformer.forward(T(input1, input2)).toTensor[Float]
 
     require(output.almostEqual(expectedOutput, 1e-5) == true)
 
     val gradInput = transformer.backward(T(input1, input2), output)
+  }
+
+  "tranformer for translation 111" should "work correctly" in {
+    val vocabSize = 16
+    val hiddenSize = 4
+    val filterSize = 8
+    val numHeads = 1
+    val num_hidden_layers = 1
+    val postprocessDropout = 1.0f
+    val attentionDropout = 1.0f
+    val reluDropout = 1.0f
+    val transformer = new Transformer[Float](vocabSize,
+      hiddenSize, numHeads, filterSize, num_hidden_layers,
+      postprocessDropout, attentionDropout, reluDropout, withShareWeightsLinear = true,
+      transformerType = Translation)
+
+    val input1 = Tensor[Float](T(T(3, 1, 2, 3, 4, 5), T(6, 7, 8, 9, 10, 11))).add(1.0f)
+    val input2 = Tensor[Float](T(T(4, 5, 7, 9, 10, 11), T(4, 12, 6, 3, 2, 15))).add(1.0f)
+
+    transformer.forward(T(input1, input2)).toTensor[Float]
+    transformer.forward(T(input1, input2)).toTensor[Float]
+    val output = transformer.getSymbols(20)
+
+    println("done")
+  }
+
+  "PositionEncode" should "work correctly with hidden size = 8" in {
+    val layer = new PositionEncode[Float]()
+
+    val input = Tensor[Float](2, 6, 8)
+    val output = layer.forward(input)
+
+    val outputExpected = Tensor[Float](
+      T(T(0.0000000e+00, 0.0000000e+00, 0.0000000e+00, 0.0000000e+00,
+        1.0000000e+00, 1.0000000e+00, 1.0000000e+00, 1.0000000e+00),
+        T(8.4147096e-01, 4.6399228e-02, 2.1544332e-03, 9.9999990e-05,
+        5.4030228e-01, 9.9892300e-01, 9.9999768e-01, 1.0000000e+00),
+        T(9.0929741e-01, 9.2698507e-02, 4.3088561e-03, 1.9999998e-04,
+          -4.1614681e-01, 9.9569422e-01, 9.9999070e-01, 1.0000000e+00),
+        T(1.4112000e-01, 1.3879810e-01, 6.4632590e-03, 2.9999996e-04,
+          -9.8999250e-01, 9.9032068e-01, 9.9997914e-01, 9.9999994e-01),
+        T(-7.5680250e-01, 1.8459874e-01, 8.6176321e-03, 3.9999996e-04,
+          -6.5364361e-01, 9.8281395e-01, 9.9996287e-01, 9.9999994e-01),
+        T(-9.5892429e-01, 2.3000173e-01, 1.0771966e-02, 4.9999997e-04,
+        2.8366217e-01, 9.7319025e-01, 9.9994200e-01, 9.9999988e-01))
+    )
+
+    output should be(outputExpected)
   }
 
   "AttentionBiasConstant" should "work correctly" in {
@@ -586,8 +637,6 @@ class TransformerLayerSpec extends FlatSpec with Matchers {
     val gradInput = layer2.backward(output, o2)
     assert(output.almostEqual(gradInput, 1e-8) == true)
   }
-
-
 }
 
 class SelfAttentionMaskSerialTest extends ModuleSerializationTest {

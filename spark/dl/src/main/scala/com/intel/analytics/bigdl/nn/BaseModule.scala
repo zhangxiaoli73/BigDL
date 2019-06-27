@@ -28,6 +28,8 @@ import scala.reflect.ClassTag
 private[nn] abstract class BaseModule[T: ClassTag]()(implicit ev: TensorNumeric[T])
   extends AbstractModule[Activity, Activity, T] {
 
+  private[bigdl] var predictModel: Module[T] = null
+
   private[bigdl] var model : Module[T] = buildModel()
 
   def buildModel(): Module[T]
