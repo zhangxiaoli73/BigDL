@@ -395,7 +395,8 @@ object ResNet {
         .setName("conv1").inputs(input)
       val bn1 = SbnDnn(64).setName("bn_conv1").inputs(conv1)
       val relu1 = ReLU().setName("conv1_relu").inputs(bn1)
-      val pool1 = MaxPooling(3, 3, 2, 2).setName("pool1").inputs(relu1)
+      val pool1 = MaxPooling(3, 3, 2, 2, 1, 1).floor().setName("pool1").inputs(relu1)
+      // val pool1 = MaxPooling(3, 3, 2, 2).setName("pool1").inputs(relu1)
       val layer1 = layer(pool1, block, 64, loopConfig._1, name = "2")
       val layer2 = layer(layer1, block, 128, loopConfig._2, 2, name = "3")
       val layer3 = layer(layer2, block, 256, loopConfig._3, 2, name = "4")
@@ -465,8 +466,8 @@ object Convolution {
     weightDecay: Double = 1e-4): SpatialConvolution = {
 
     // use regulizer
-    val wReg = L2Regularizer[Float](weightDecay)
-    val bReg = L2Regularizer[Float](weightDecay)
+    val wReg = null // L2Regularizer[Float](weightDecay)
+    val bReg = null // L2Regularizer[Float](weightDecay)
     val conv = SpatialConvolution(nInputPlane, nOutputPlane, kernelW, kernelH,
       strideW, strideH, padW, padH, nGroup, propagateBack, wReg, bReg)
     conv.setInitMethod(MsraFiller(false), Zeros)
