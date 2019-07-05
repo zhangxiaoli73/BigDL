@@ -66,9 +66,9 @@ class Transformer[T: ClassTag](
   private val linearSharedWeigths = TimeDistributed(
     new Linear(inputSize = hiddenSize, outputSize = vocabSize, withBias = false))
 
-//  private val embeddingLayer = Sequential[T]().add(
-//    LookupTable[T](vocabSize, hiddenSize, paddingValue = paddingValue,
-//      maskZero = true).setName("embedding")).add(MulConstant(math.sqrt(hiddenSize)))
+  private val embeddingLayer = Sequential[T]().add(
+    LookupTable[T](vocabSize, hiddenSize, paddingValue = paddingValue,
+      maskZero = true).setName("embedding")).add(MulConstant(math.sqrt(hiddenSize)))
 
   override def buildModel(): Module[T] = {
     transformerType match {
@@ -79,9 +79,6 @@ class Transformer[T: ClassTag](
 
   private def buildTranslation(): Module[T] = {
     val mask = new PaddingMask()
-    val embeddingLayer = Sequential[T]().add(
-      LookupTable[T](vocabSize, hiddenSize, paddingValue = paddingValue,
-        maskZero = true).setName("embedding")).add(MulConstant(math.sqrt(hiddenSize)))
     // input: int tensor with shape [batch_size, input_length].
     val inputNode = Input()
     // target: int tensor with shape [batch_size, target_length].
@@ -147,58 +144,47 @@ class Transformer[T: ClassTag](
   private var rangeBuffer = Tensor[T]()
   private var timeBuffer = Tensor[T]()
 
-  def getSymbols(maxDecodeLength: Int): Unit = {
+  def setSymbols(maxDecodeLength: Int, encoder_outputs: Tensor[T],
+    encoder_decoder_attention_bias: Tensor[T], ids: Tensor[T], i: Int): Unit = {
     val length = maxDecodeLength + 1
     TransformerOperation.initRangeTensor(length, rangeBuffer)
     timeBuffer.resize(length, hiddenSize)
     TransformerOperation.getPositionEncode(length, hiddenSize,
       rangeBuffer = rangeBuffer, outBuffer = timeBuffer)
-
     val timeSignal = TransformerOperation.getPositionEncode(length, hiddenSize,
       rangeBuffer = rangeBuffer, outBuffer = timeBuffer)
-
     // size (1, 1, maxDecodeLength, maxDecodeLength)
     val decoderSelfAttentionBias = Tensor[T](1, 1, maxDecodeLength, maxDecodeLength)
     TransformerOperation.attentionBiasLowerTriangle(maxDecodeLength, decoderSelfAttentionBias)
 
-    val self_attention_bias = decoderSelfAttentionBias.select(3, 4)
-    self_attention_bias.
+    val idsSize = ids.size()
+    val decoder_input = ids.select(2, idsSize(2))
+    val decoder_input_embedding = embeddingLayer.forward(decoder_input).toTensor[T].clone()
 
     val timeSize = timeSignal.size()
-    val decoderInput = timeSignal.select(2, timeSize(timeSignal.dim() - 1))
+    val timingTemp = timeSignal.select(1, i + 1)
+    val decoder_input_add = decoder_input_embedding.add(timingTemp)
 
-    val encoder_outputs = Tensor[T]()
-    val encoder_decoder_attention_bias = Tensor[T]()
+    // todo: check decoder_self_attention_bias[:, :, i:i + 1, :i + 1]
+    val self_attention_bias = decoderSelfAttentionBias.select(i, i + 1)
 
-    val in1 = Input()
-    val in2 = Input()
-    val in3 = Input()
-    val in4 = Input()
-    val blockModel = Graph(Array(in1, in2, in3, in4),
-      block(numHiddenlayers, in1, in2, in3, in4, blockType = "predict"))
+    val decoderInputNode = Input()
+    val decoderSelfAttentionBiasNode = Input()
+    val encoderOutputNode = Input()
+    val encoderAttentionBiasNode = Input()
 
-//    /**
-//      * return logits with shape [batch_size * beam_size, vocab_size]
-//      * @param ids Current decoded sequences.
-//      * @ int tensor with shape [batch_size * beam_size, i + 1]
-//      * @param i Loop index
-//      */
-//    def symbolsToLogitsFN(ids: Tensor[Int], i: Int): Unit = {
-//      val timeSize = ids.size()
-//      val decoderInput =  ids.select(2, timeSize(ids.dim() - 1)) // ids[:, -1:]
-//
-//      // Preprocess decoder input by getting embeddings and adding timing signal.
-//      val embeddingDecoderInput = embeddingLayer.forward(decoderInput)
-//      val decoder_input += timing_signal[i:i + 1]
-//
-//      val self_attention_bias = decoderSelfAttentionBias[:, :, i:i + 1, :i + 1]
-//      val decoder_outputs = blockModel.forward(T(decoder_input,
-//        self_attention_bias, encoder_outputs, encoder_decoder_attention_bias))
-//
-//      logits = linearSharedWeigths.forward(decoder_outputs)
-//      logits = tf.squeeze(logits, axis=[1])
-//      return logits, cache
-//    }
+    val model = Graph(Array(decoderInputNode, decoderSelfAttentionBiasNode,
+      encoderOutputNode, encoderAttentionBiasNode),
+      Array(block(numHiddenlayers, decoderInputNode, encoderAttentionBiasNode,
+      encoderOutputNode, encoderAttentionBiasNode, blockType = "predict")))
+
+    val decoder_outputs = model.forward(T(decoder_input_add, encoder_outputs,
+      self_attention_bias, encoder_decoder_attention_bias)).toTensor[T]
+
+    val logits = this.linearSharedWeigths.forward(decoder_outputs)
+    // logits = tf.squeeze(logits, axis=[1])
+
+
   }
 
 

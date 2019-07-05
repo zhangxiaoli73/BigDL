@@ -466,7 +466,7 @@ class TransformerLayerSpec extends FlatSpec with Matchers {
 
     transformer.forward(T(input1, input2)).toTensor[Float]
     transformer.forward(T(input1, input2)).toTensor[Float]
-    val output = transformer.getSymbols(20)
+    // val output = transformer.getSymbols(20)
 
     println("done")
   }
