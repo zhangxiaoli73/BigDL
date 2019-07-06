@@ -145,7 +145,7 @@ class Transformer[T: ClassTag](
   private var timeBuffer = Tensor[T]()
 
   def setSymbols(maxDecodeLength: Int, encoder_outputs: Tensor[T],
-    encoder_decoder_attention_bias: Tensor[T], ids: Tensor[T], i: Int): Unit = {
+    encoder_decoder_attention_bias: Tensor[T], ids: Tensor[T], i: Int): Tensor[T] = {
     val length = maxDecodeLength + 1
     TransformerOperation.initRangeTensor(length, rangeBuffer)
     timeBuffer.resize(length, hiddenSize)
@@ -184,6 +184,7 @@ class Transformer[T: ClassTag](
     val logits = this.linearSharedWeigths.forward(decoder_outputs)
     // logits = tf.squeeze(logits, axis=[1])
 
+    logits
 
   }
 
