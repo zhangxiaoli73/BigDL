@@ -61,16 +61,41 @@ class Transformer[T: ClassTag](
    val paddingValue: Double = 0,
    val withShareWeightsLinear: Boolean = false,
    val transformerType: TransformerType = LanguageModel)
-  (implicit ev: TensorNumeric[T]) extends BaseModule[T] {
+  (implicit ev: TensorNumeric[T]) extends AbstractModule[Activity, Activity, T] {
 
-  private val linearSharedWeigths = TimeDistributed(
-    new Linear(inputSize = hiddenSize, outputSize = vocabSize, withBias = false))
 
   private val embeddingLayer = Sequential[T]().add(
     LookupTable[T](vocabSize, hiddenSize, paddingValue = paddingValue,
       maskZero = true).setName("embedding")).add(MulConstant(math.sqrt(hiddenSize)))
+  private val linearSharedWeigths = TimeDistributed(
+    new Linear(inputSize = hiddenSize, outputSize = vocabSize, withBias = false))
 
-  override def buildModel(): Module[T] = {
+  private[bigdl] var decoderStack: Module[T] = createDecoder()
+  private[bigdl] var encoderStack: Module[T] = createEncoder()
+  private[bigdl] var predictModel: Module[T] = null
+
+  private[bigdl] var model : Module[T] = buildModel()
+
+  private def createDecoder(): Module[T] = {
+    val decoderInputNode = Input()
+    val decoderSelfAttentionBiasNode = Input()
+    val encoderOutputNode = Input()
+    val encoderAttentionBiasNode = Input()
+    Graph(Array(decoderInputNode, decoderSelfAttentionBiasNode,
+      encoderOutputNode, encoderAttentionBiasNode),
+      Array(block(numHiddenlayers, decoderInputNode, decoderSelfAttentionBiasNode,
+        encoderOutputNode, encoderAttentionBiasNode, blockType = "decoder")))
+  }
+
+  private def createEncoder(): Module[T] = {
+    val encoderInputNode = Input()
+    val encoderAttentionBiasNode = Input()
+    Graph(Array(encoderInputNode, encoderAttentionBiasNode),
+      Array(block(numHiddenlayers, encoderInputNode, encoderAttentionBiasNode,
+        blockType = "encoder")))
+  }
+
+  private def buildModel(): Module[T] = {
     transformerType match {
       case LanguageModel => buildLM()
       case Translation => buildTranslation()
@@ -131,16 +156,6 @@ class Transformer[T: ClassTag](
     output.toTensor[T]
   }
 
-//  private def predict(encoderOutputs: Tensor[T], attentionBias: Tensor[T]): Activity = {
-//    val batchSize = encoderOutputs.size(1)
-//    val inputLength = encoderOutputs.size(2)
-//
-//    val maxDecodeLength = inputLength // todo: no extra_decode_length
-//
-//
-//
-//  }
-
   private var rangeBuffer = Tensor[T]()
   private var timeBuffer = Tensor[T]()
 
@@ -153,39 +168,34 @@ class Transformer[T: ClassTag](
       rangeBuffer = rangeBuffer, outBuffer = timeBuffer)
     val timeSignal = TransformerOperation.getPositionEncode(length, hiddenSize,
       rangeBuffer = rangeBuffer, outBuffer = timeBuffer)
+
     // size (1, 1, maxDecodeLength, maxDecodeLength)
     val decoderSelfAttentionBias = Tensor[T](1, 1, maxDecodeLength, maxDecodeLength)
     TransformerOperation.attentionBiasLowerTriangle(maxDecodeLength, decoderSelfAttentionBias)
 
     val idsSize = ids.size()
-    val decoder_input = ids.select(2, idsSize(2))
+    val decoder_input = ids.select(2, idsSize(1))
+    decoder_input.resize(Array(decoder_input.size(1), 1))
     val decoder_input_embedding = embeddingLayer.forward(decoder_input).toTensor[T].clone()
 
     val timeSize = timeSignal.size()
     val timingTemp = timeSignal.select(1, i + 1)
     val decoder_input_add = decoder_input_embedding.add(timingTemp)
 
-    // todo: check decoder_self_attention_bias[:, :, i:i + 1, :i + 1]
-    val self_attention_bias = decoderSelfAttentionBias.select(i, i + 1)
+    val self_attention_bias = decoderSelfAttentionBias.select(3, i + 1)
+      .select(3, i + 1).resize(Array(1, 1, 1, i + 1))
 
-    val decoderInputNode = Input()
-    val decoderSelfAttentionBiasNode = Input()
-    val encoderOutputNode = Input()
-    val encoderAttentionBiasNode = Input()
+    val decoder_outputs = decoderStack.forward(T(decoder_input_add,
+      self_attention_bias, encoder_outputs, encoder_decoder_attention_bias)).toTensor[T]
 
-    val model = Graph(Array(decoderInputNode, decoderSelfAttentionBiasNode,
-      encoderOutputNode, encoderAttentionBiasNode),
-      Array(block(numHiddenlayers, decoderInputNode, encoderAttentionBiasNode,
-      encoderOutputNode, encoderAttentionBiasNode, blockType = "predict")))
-
-    val decoder_outputs = model.forward(T(decoder_input_add, encoder_outputs,
-      self_attention_bias, encoder_decoder_attention_bias)).toTensor[T]
-
+    if (withShareWeightsLinear) {
+      val embeddingLayer = model.apply("embedding").get
+      val embeddingParams = embeddingLayer.getParameters()
+      val linearParams = linearSharedWeigths.getParameters()
+      linearParams._1.copy(embeddingParams._1)
+    }
     val logits = this.linearSharedWeigths.forward(decoder_outputs)
-    // logits = tf.squeeze(logits, axis=[1])
-
-    logits
-
+    logits.squeeze(2)
   }
 
 
@@ -225,6 +235,42 @@ class Transformer[T: ClassTag](
     } else gradOutput
     gradInput = model.updateGradInput(input, grad)
     gradInput
+  }
+
+  override def accGradParameters(input: Activity, gradOutput: Activity): Unit = {
+    model.accGradParameters(input, gradOutput)
+  }
+
+  override def training(): this.type = {
+    train = true
+    model.training()
+    this
+  }
+
+  override def evaluate(): this.type = {
+    train = false
+    model.evaluate()
+    this
+  }
+
+  override def getExtraParameter(): Array[Tensor[T]] = {
+    model.getExtraParameter()
+  }
+
+  override def getTimes(): Array[(AbstractModule[_ <: Activity, _ <: Activity, T], Long, Long)] = {
+    model.getTimes()
+  }
+
+  override def resetTimes(): Unit = {
+    model.resetTimes()
+  }
+
+  override def parameters(): (Array[Tensor[T]], Array[Tensor[T]]) = {
+    model.parameters()
+  }
+
+  override def getParametersTable(): Table = {
+    model.getParametersTable()
   }
 
   private[nn] def encode(inputs: ModuleNode[T], attentionBias: ModuleNode[T]): ModuleNode[T] = {
@@ -315,7 +361,8 @@ class Transformer[T: ClassTag](
 
   override def clearState(): this.type = {
     if (withShareWeightsLinear) linearSharedWeigths.clearState()
-    super.clearState()
+    model.clearState()
+    this
   }
 }
 
