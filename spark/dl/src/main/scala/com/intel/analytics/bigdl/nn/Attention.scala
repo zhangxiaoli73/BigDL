@@ -21,6 +21,7 @@ import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
 import com.intel.analytics.bigdl.utils.{T, Table}
 import com.intel.analytics.bigdl.nn
+import scala.language.existentials
 
 import scala.reflect.ClassTag
 
@@ -93,42 +94,35 @@ class Attention[T: ClassTag](
   override def updateOutput(input: Activity): Activity = {
     val inputTable = input.toTable
 
-    val (inputX, inputY, inputBias, inputK, inputV) = if (inputTable.length() == 2) {
+    val (inputX, inputY, inputBias, cache) = if (inputTable.length() == 3) {
       // self attention
-      (inputTable[Tensor[T]](1), inputTable[Tensor[T]](1), inputTable[Tensor[T]](2), null, null)
-    } else if (inputTable.length() == 3) {
-      (inputTable[Tensor[T]](1), inputTable[Tensor[T]](2), inputTable[Tensor[T]](3), null, null)
-    } else if (inputTable.length() == 5) {
-      (inputTable[Tensor[T]](1), inputTable[Tensor[T]](2),
-        inputTable[Tensor[T]](3), inputTable[Tensor[T]](4), inputTable[Tensor[T]](5))
+      (inputTable[Tensor[T]](1), inputTable[Tensor[T]](2), inputTable[Tensor[T]](3), T())
+    } else if (inputTable.length() == 4) {
+      (inputTable[Tensor[T]](1), inputTable[Tensor[T]](2), inputTable[Tensor[T]](3), inputTable[Table](4))
     } else {
       throw new UnsupportedOperationException(
         s"Attention layer inputs should be 2, 3 or 5, but get ${inputTable.length()}")
     }
 
-    val query = queryLayer.forward(inputBias).toTensor[T]
-    val key = {
-      val out = keyLayer.forward(inputBias).toTensor[T]
-      join1.forward(T(out, inputK))
-    }
-    val value = {
-      val out = valueLayer.forward(inputBias).toTensor[T]
-      join2.forward(T(out, inputV))
-    }
+    val query = queryLayer.forward(inputX).toTensor[T]
 
+    val (inputK, inputV) = if (cache.length() > 0) {
+      (cache.apply[Tensor[T]](this.getName() + "_k"),
+        cache.apply[Tensor[T]](this.getName() + "_v"))
+    } else (null, null)
 
-//    val key = if (inputK.dim() > 0) {
-//      val out = keyLayer.forward(inputBias).toTensor[T]
-//      join1.forward(T(out, inputK))
-//    } else {
-//      keyLayer.forward(inputBias).toTensor[T]
-//    }
-//    val value = if (inputV.dim() > 0) {
-//      val out = valueLayer.forward(inputBias).toTensor[T]
-//      join2.forward(T(out, inputV))
-//    } else {
-//      valueLayer.forward(inputBias).toTensor[T]
-//    }
+    val key = if (inputK != null) {
+      join1.forward(T(keyLayer.forward(inputY).toTensor[T], inputK))
+    } else keyLayer.forward(inputY).toTensor[T]
+    val value = if (inputV != null) {
+      join2.forward(T(valueLayer.forward(inputY).toTensor[T], inputV))
+    } else valueLayer.forward(inputY).toTensor[T]
+
+    // update cache
+    if (cache.length() > 0) {
+      cache.update(this.getName() + "_k", key)
+      cache.update(this.getName() + "_v", value)
+    }
 
     output = model.updateOutput(T(query, key, value, inputBias))
     output

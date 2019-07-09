@@ -86,9 +86,9 @@ class Transformer[T: ClassTag](
     val cacheAttention = Input()
 
     Graph(Array(decoderInputNode, decoderSelfAttentionBiasNode,
-      encoderOutputNode, encoderAttentionBiasNode),
+      encoderOutputNode, encoderAttentionBiasNode, cacheAttention),
       Array(block(numHiddenlayers, decoderInputNode, decoderSelfAttentionBiasNode,
-        encoderOutputNode, encoderAttentionBiasNode, blockType = "decoder")))
+        encoderOutputNode, encoderAttentionBiasNode, cacheAttention, blockType = "decoder")))
   }
 
   private def createEncoder(): Module[T] = {
@@ -138,7 +138,7 @@ class Transformer[T: ClassTag](
     val attentionMask = mask.inputs(predictNode)
     val embeddingForPredict = embeddingLayer.inputs(predictNode)
     predictModel = Graph(predictNode,
-      encoderGraph.inputs(embeddingForPredict, attentionMask))
+      Array(encoderGraph.inputs(embeddingForPredict, attentionMask), attentionMask))
 
     // create training model
     val outputNode = decode(embeddingOutput,
@@ -194,6 +194,20 @@ class Transformer[T: ClassTag](
               encoder_outputs: Tensor[T], encoder_decoder_attention_bias: Tensor[T],
               list1: List[Tensor[T]], list2: List[Tensor[T]]):
    (Tensor[T], Tensor[T], Tensor[T], List[Tensor[T]], List[Tensor[T]]) = {
+
+    require(list1.length == list2.length, "k, v length must be same")
+
+    val cache = T()
+    for(m <- 0 to (list1.length - 1)) {
+      if (i == 0) {
+        cache.update(s"decoder_self_attention_${m}/self_attention_k", null)
+        cache.update(s"decoder_self_attention_${m}/self_attention_v", null)
+      } else {
+        cache.update(s"decoder_self_attention_${m}/self_attention_k", list1(m))
+        cache.update(s"decoder_self_attention_${m}/self_attention_v", list2(m))
+      }
+    }
+
     val length = maxDecodeLength + 1
     TransformerOperation.initRangeTensor(length, rangeBuffer)
     timeBuffer.resize(length, hiddenSize)
@@ -207,9 +221,12 @@ class Transformer[T: ClassTag](
     TransformerOperation.attentionBiasLowerTriangle(maxDecodeLength, decoderSelfAttentionBias)
 
     val idsSize = Ids.size()
-    val decoder_input = Ids.select(2, idsSize(1))
+    val decoder_input = if (i == 0) {
+      Ids.select(2, idsSize(1)).add(ev.one)
+    } else Ids.select(2, idsSize(1))
     decoder_input.resize(Array(decoder_input.size(1), 1))
-    val decoder_input_embedding = embeddingLayer.forward(decoder_input).toTensor[T].clone()
+    println(s"iiiiiii ${i}")
+    val decoder_input_embedding = embeddingLayer.forward(decoder_input).toTensor[T]
 
     val timeSize = timeSignal.size()
     val timingTemp = timeSignal.select(1, i + 1)
@@ -219,12 +236,20 @@ class Transformer[T: ClassTag](
       .select(3, i + 1).resize(Array(1, 1, 1, i + 1))
 
     val decoder_outputs = decoderStack.forward(T(decoder_input_add,
-      self_attention_bias, encoder_outputs, encoder_decoder_attention_bias)).toTensor[T]
+      self_attention_bias, encoder_outputs, encoder_decoder_attention_bias, cache)).toTensor[T]
 
     shareWeights(withShareWeightsLinear)
     val logits = this.linearSharedWeigths.forward(decoder_outputs).toTensor[T]
 
-    (logits.squeeze(2), encoder_outputs, encoder_decoder_attention_bias, list1, list2)
+    // debug
+    val listK = new ArrayBuffer[Tensor[T]]
+    val listV = new ArrayBuffer[Tensor[T]]
+
+    for(m <- 0 to (list1.length - 1)) {
+      listK.append(cache.apply[Tensor[T]](s"decoder_self_attention_${m}/self_attention_k"))
+      listV.append(cache.apply[Tensor[T]](s"decoder_self_attention_${m}/self_attention_v"))
+    }
+    (logits.squeeze(2), encoder_outputs, encoder_decoder_attention_bias, listK.toList, listV.toList)
   }
 
   private def predictTranslation(encoder_outputs: Tensor[T],
@@ -307,7 +332,7 @@ class Transformer[T: ClassTag](
       val selfAttention = new Attention[T](hiddenSize, numHeads, attentionDropout)
       val selfAttentionModel = processSelfAttention(
         selfAttention, input, decoderSelfAttentionBias,
-        s"${blockType}_self_attention_${i}")
+        s"${blockType}_self_attention_${i}", cacheAttention)
       input = selfAttentionModel
 
       if (encoderOutput != null && encoderAttentionBias != null) {
