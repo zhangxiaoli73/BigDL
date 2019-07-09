@@ -76,7 +76,12 @@ class Transformer[T: ClassTag](
     LookupTable[T](vocabSize, hiddenSize, paddingValue = paddingValue,
       maskZero = true).setName("embedding")).add(MulConstant(math.sqrt(hiddenSize)))
 
-  private[bigdl] var model : Module[T] = buildModel()
+  private[bigdl] var model : Module[T] = {
+    transformerType match {
+      case LanguageModel => buildLM()
+      case Translation => buildTranslation()
+    }
+  }
 
   private def createDecoder(): Module[T] = {
     val decoderInputNode = Input()
@@ -97,13 +102,6 @@ class Transformer[T: ClassTag](
     Graph(Array(encoderInputNode, encoderAttentionBiasNode),
       Array(block(numHiddenlayers, encoderInputNode, encoderAttentionBiasNode,
         blockType = "encoder")))
-  }
-
-  private def buildModel(): Module[T] = {
-    transformerType match {
-      case LanguageModel => buildLM()
-      case Translation => buildTranslation()
-    }
   }
 
   private def buildTranslation(): Module[T] = {
@@ -221,11 +219,10 @@ class Transformer[T: ClassTag](
     TransformerOperation.attentionBiasLowerTriangle(maxDecodeLength, decoderSelfAttentionBias)
 
     val idsSize = Ids.size()
-    val decoder_input = if (i == 0) {
-      Ids.select(2, idsSize(1)).add(ev.one)
-    } else Ids.select(2, idsSize(1))
+    val decoder_input = Ids.select(2, idsSize(1))
     decoder_input.resize(Array(decoder_input.size(1), 1))
-    println(s"iiiiiii ${i}")
+    // todo: should add one in beam search
+    decoder_input.add(ev.one)
     val decoder_input_embedding = embeddingLayer.forward(decoder_input).toTensor[T]
 
     val timeSize = timeSignal.size()
@@ -451,7 +448,7 @@ object Transformer extends ModuleSerializable {
     new Transformer(vocabSize, hiddenSize, numHeads,
       filterSize, numHiddenlayers,
       embeddingDropout, attentionDropout, ffnDropout, paddingValue,
-      withShareWeightsLinear = withShareWeightsLinear, transformerType = transformerType, beamSearch)
+      withShareWeightsLinear, transformerType = transformerType, beamSearch)
   }
 
   override def doLoadModule[T: ClassTag](context: DeserializeContext)

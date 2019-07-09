@@ -659,12 +659,13 @@ class TransformerLayerSpec extends FlatSpec with Matchers {
       T(T(T( 6.18539155e-01, -4.43171918e-01, 1.81053495e+00, -1.30572689e+00,
         -3.44987214e-01, -2.30839744e-01))))
     )
-    val ids = Tensor[Float](T(T(2), T(1), T(3), T(2), T(3), T(1))).add(1.0f)
+    val ids = Tensor[Float](T(T(2), T(1), T(3), T(2), T(3), T(1)))
     val maxDecodeLength = 10
 
+    transformer.evaluate()
     val logits = transformer.symbols(ids, 0,
       maxDecodeLength, encoder_outputs,
-      encoder_decoder_attention_bias, null, null)
+      encoder_decoder_attention_bias, List(), List())
 
     val expectedOutput = Tensor[Float](
       T(T(-0.15447775, -0.11302006, 0.9264371, 0.38503933),

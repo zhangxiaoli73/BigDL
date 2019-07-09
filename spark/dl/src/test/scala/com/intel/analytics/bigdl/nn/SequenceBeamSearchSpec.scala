@@ -29,14 +29,13 @@ class SequenceBeamSearchSpec extends FlatSpec with Matchers{
     val alpha: Float = 0.0f
     val eosId = 1.0f
     val numHiddenLayers = 2
-    val hiddenSize = 6
+    val hiddenSize = 5
     val inputLength = 6
 
     def symbolsToLogitsFn(Ids: Tensor[Float], i: Int, maxDecoderLen: Int,
      encoder: Tensor[Float], Bias: Tensor[Float], list1: List[Tensor[Float]],
      list2: List[Tensor[Float]]):
     (Tensor[Float], Tensor[Float], Tensor[Float], List[Tensor[Float]], List[Tensor[Float]]) = {
-
       val tensor = Tensor(Array(0.14f, 0.62f, 0.02f, 0.93f,
         0.59f, 0.48f, 0.27f, 0.70f,
         0.11f, 0.30f, 0.35f, 0.15f,
