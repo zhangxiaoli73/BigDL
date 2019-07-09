@@ -15,25 +15,30 @@
  */
 package com.intel.analytics.bigdl.nn
 
-import com.intel.analytics.bigdl.Module
-import com.intel.analytics.bigdl.nn.abstractnn.{Activity, TensorModule}
+import com.intel.analytics.bigdl._
+import com.intel.analytics.bigdl.nn.abstractnn.{AbstractModule, Activity, TensorModule}
 import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
 import com.intel.analytics.bigdl.utils.{T, Table}
-import com.intel.analytics.bigdl.nn
-import scala.language.existentials
 
+import scala.language.existentials
 import scala.reflect.ClassTag
 
 /**
- * Implementation of multiheaded attention and self-attention layers.
- * @param hiddenSize hidden size
- * @param numHeads heads number
- * @param attentionDropout
- */
-class Attention[T: ClassTag](
-  val hiddenSize: Int, val numHeads: Int, val attentionDropout: Float)
- (implicit ev: TensorNumeric[T]) extends BaseModule[T] {
+  * Implementation of multiheaded attention and self-attention layers.
+  *
+  * @param hiddenSize hidden size
+  * @param numHeads heads number
+  * @param attentionDropout
+  */
+class AttentionCache[T: ClassTag](
+                                   val hiddenSize: Int, val numHeads: Int, val attentionDropout: Float)
+                                 (implicit ev: TensorNumeric[T]) extends AbstractModule[Activity, Activity, T] {
+
+  // for prediction
+  private val join1 = nn.JoinTable[T](dimension = 2, nInputDims = -1)
+  private val join2 = nn.JoinTable[T](dimension = 2, nInputDims = -1)
+  private var graph: Graph[T] = null
 
   private val queryLayer = TransformerOperation.dense(
     hiddenSize, hiddenSize, false, name = s"${this.getName()}_q")
@@ -42,38 +47,29 @@ class Attention[T: ClassTag](
   private val valueLayer = TransformerOperation.dense(
     hiddenSize, hiddenSize, false, name = s"${this.getName()}_v")
 
-  private val join1 = nn.JoinTable[T](dimension = 1, nInputDims = -1)
-  private val join2 = nn.JoinTable[T](dimension = 1, nInputDims = -1)
-
-  override def buildModel(): Module[T] = {
+  private[bigdl] val model : Module[T] = {
     // InputX with shape (batch_size, length_x, hidden_size).
     // InputY with shape (batch_size, length_x, hidden_size)
     // for self attention, InputX and InputY should be the same.
     // Bias is attention bias that will be added to the result of the dot product.
-//    val inputX = Input()
-//    val inputY = Input()
-//    val inputBias = Input()
-//
-//    // Layers for linearly projecting the queries, keys, and values.
-//    val queryLayer = TransformerOperation.dense(
-//      hiddenSize, hiddenSize, false, name = s"${this.getName()}_q").inputs(inputX)
-//    val keyLayer = TransformerOperation.dense(
-//      hiddenSize, hiddenSize, false, name = s"${this.getName()}_k").inputs(inputY)
-//    val valueLayer = TransformerOperation.dense(
-//      hiddenSize, hiddenSize, false, name = s"${this.getName()}_v").inputs(inputY)
-
-    val queryLayer = Input()
-    val keyLayer = Input()
-    val valueLayer = Input()
+    val inputX = Input()
+    val inputY = Input()
     val inputBias = Input()
 
-    val querySplit = new SplitHeads(hiddenSize, numHeads, true).inputs(queryLayer)
-    val keySplit = new SplitHeads(hiddenSize, numHeads).inputs(keyLayer)
-    val valueSplit = new SplitHeads(hiddenSize, numHeads).inputs(valueLayer)
+    val querySplit = new SplitHeads(hiddenSize, numHeads, true)
+      .inputs(queryLayer.inputs(inputX))
+    val keySplit = new SplitHeads(hiddenSize, numHeads)
+      .inputs(keyLayer.inputs(inputY))
+    val valueSplit = new SplitHeads(hiddenSize, numHeads)
+      .inputs(valueLayer.inputs(inputY))
 
-    val contiguousQ = new Contiguous[T]().inputs(querySplit)
-    val contiguousK = new Contiguous[T]().inputs(keySplit)
-    val contiguousV = new Contiguous[T]().inputs(valueSplit)
+    val inputQ = Input()
+    val inputK = Input()
+    val inputV = Input()
+
+    val contiguousQ = new Contiguous[T]().inputs(inputQ)
+    val contiguousK = new Contiguous[T]().inputs(inputK)
+    val contiguousV = new Contiguous[T]().inputs(inputV)
 
     val matmul = MM(transB = true).inputs(contiguousQ, contiguousK)
     val cadd = CAddTable().inputs(matmul, inputBias)
@@ -87,22 +83,32 @@ class Attention[T: ClassTag](
     val outputLayer = TransformerOperation.dense(
       hiddenSize, hiddenSize, false, name = s"${this.getName()}_output_transform")
       .inputs(combineHeads)
-    val graph = Graph(Array(queryLayer, keyLayer, valueLayer, inputBias), Array(outputLayer))
-    graph
+    graph = Graph(Array(inputQ, inputK, inputV, inputBias), Array(outputLayer))
+    graph.cloneModule()
+    //
+    //    val m = Graph(Array(inputX, inputY, inputBias),
+    //      Array(graph.inputs(querySplit, keySplit, valueSplit, inputBias)))
+    //    m
   }
 
-  override def updateOutput(input: Activity): Activity = {
-    val inputTable = input.toTable
+  private def updateOutput(input: Activity): Activity = {
+    //    require(input.toTable.length() == 4 && !this.isTraining(),
+    //      "Only support 4 inputs for model inference")
+    if (input.toTable.length() == 3) {
 
-    val (inputX, inputY, inputBias, cache) = if (inputTable.length() == 3) {
-      // self attention
-      (inputTable[Tensor[T]](1), inputTable[Tensor[T]](2), inputTable[Tensor[T]](3), T())
-    } else if (inputTable.length() == 4) {
-      (inputTable[Tensor[T]](1), inputTable[Tensor[T]](2), inputTable[Tensor[T]](3), inputTable[Table](4))
-    } else {
-      throw new UnsupportedOperationException(
-        s"Attention layer inputs should be 2, 3 or 5, but get ${inputTable.length()}")
     }
+    val inputTable = input.toTable
+    val inputX = inputTable[Tensor[T]](1)
+    val inputY = inputTable[Tensor[T]](2)
+    val inputBias = inputTable[Tensor[T]](3)
+    /**
+      * cache: (Used during prediction) dictionary with tensors containing results of
+      * previous attentions. The dictionary must have the items:
+      * {"k": tensor with shape [batch_size, i, key_channels],
+      * "v": tensor with shape [batch_size, i, value_channels]}
+      * where i is the current decoded length.
+      */
+    val cache = inputTable[Table](4)
 
     val query = queryLayer.forward(inputX).toTensor[T]
 
@@ -123,89 +129,61 @@ class Attention[T: ClassTag](
       cache.update(this.getName() + "_k", key)
       cache.update(this.getName() + "_v", value)
     }
-
-    output = model.updateOutput(T(query, key, value, inputBias))
-    output
-  }
-}
-// Combine tensor that has been splitted.
-//  input should be tensor with shape (batch_size, num_heads, length, hidden_size/num_heads)
-// output should be tensor with shape (batch_size, length, hidden_size)
-private[nn] class CombineHeads[T: ClassTag](implicit ev: TensorNumeric[T])
-  extends TensorModule[T] {
-
-  private val permutations: (Int, Int) = (2, 3)
-
-  override def updateOutput(input: Tensor[T]): Tensor[T] = {
-    val batchSize = input.size(1)
-    val length = input.size(3)
-    val hiddenSize = input.size(2) * input.size(4)
-
-    output.resizeAs(input).copy(input)
-    output = output.transpose(permutations._1, permutations._2)
-      .reshape(Array(batchSize, length, hiddenSize))
+    output = graph.updateOutput(T(query, key, value, inputBias))
     output
   }
 
-  override def updateGradInput(input: Tensor[T], gradOutput: Tensor[T]): Tensor[T] = {
-    val size = Array(input.size(1), input.size(3), input.size(2), input.size(4))
-    if (gradOutput.isContiguous()) {
-      gradInput = gradOutput.view(size)
-    } else {
-      gradInput = gradOutput.contiguous().view(size)
-    }
-    gradInput = gradInput.transpose(permutations._1, permutations._2).contiguous()
+  override def updateGradInput(input: Activity, gradOutput: Activity): Activity = {
+    gradInput = model.updateGradInput(input, gradOutput)
     gradInput
   }
-}
 
-/**
- * Split x into different heads, and transpose the resulting value.
- * The tensor is transposed to insure the inner dimensions hold the correct
- * values during the matrix multiplication.
- * input with shape (batch_size, length, hidden_size)
- * output with shape (batch_size, num_heads, length, hidden_size/num_heads)
- * @param hiddenSize
- * @param numHeads
- * @param mul
- * @tparam T The numeric type in this module parameters
- */
-private[nn] class SplitHeads[T: ClassTag](val hiddenSize: Int, val numHeads: Int,
-  val mul: Boolean = false)(implicit ev: TensorNumeric[T])
-  extends TensorModule[T] {
-
-  private val depth = hiddenSize / numHeads
-  private val value = ev.fromType(math.pow(depth, -0.5))
-  private val permutations: (Int, Int) = (2, 3)
-
-  override def updateOutput(input: Tensor[T]): Tensor[T] = {
-    val batchSize = input.size(1)
-    val length = input.size(2)
-
-    output.resizeAs(input).copy(input)
-    output = output.reshape(Array(batchSize, length, numHeads, depth))
-      .transpose(permutations._1, permutations._2)
-    if (mul) {
-      output.mul(value)
-    }
-    output
+  override def accGradParameters(input: Activity, gradOutput: Activity): Unit = {
+    model.accGradParameters(input, gradOutput)
   }
 
-  override def updateGradInput(input: Tensor[T], gradOutput: Tensor[T]): Tensor[T] = {
-    if (mul) {
-      gradInput.resizeAs(gradOutput).zero().add(value, gradOutput)
-    } else {
-      gradInput.resizeAs(gradOutput).copy(gradOutput)
-    }
-    gradInput = gradInput.transpose(permutations._1, permutations._2).contiguous()
-    gradInput.resize(input.size())
-    gradInput
+  override def training(): this.type = {
+    train = true
+    model.training()
+    this
+  }
+
+  override def evaluate(): this.type = {
+    train = false
+    model.evaluate()
+    this
+  }
+
+  override def getExtraParameter(): Array[Tensor[T]] = {
+    model.getExtraParameter()
+  }
+
+  override def getTimes(): Array[(AbstractModule[_ <: Activity, _ <: Activity, T], Long, Long)] = {
+    model.getTimes()
+  }
+
+  override def resetTimes(): Unit = {
+    model.resetTimes()
+  }
+
+  override def parameters(): (Array[Tensor[T]], Array[Tensor[T]]) = {
+    model.parameters()
+  }
+
+  override def getParametersTable(): Table = {
+    model.getParametersTable()
+  }
+
+  override def clearState(): this.type = {
+    model.clearState()
+    this
   }
 }
 
-object Attention {
+
+object AttentionCache {
   def apply[@specialized(Float, Double) T: ClassTag]
   (hiddenSize: Int, numHeads: Int, attentionDropout: Float)
-  (implicit ev: TensorNumeric[T]): Attention[T] =
-    new Attention(hiddenSize: Int, numHeads: Int, attentionDropout: Float)
+  (implicit ev: TensorNumeric[T]): AttentionCache[T] =
+    new AttentionCache(hiddenSize: Int, numHeads: Int, attentionDropout: Float)
 }
