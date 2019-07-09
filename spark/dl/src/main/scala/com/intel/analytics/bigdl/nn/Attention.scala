@@ -16,9 +16,11 @@
 package com.intel.analytics.bigdl.nn
 
 import com.intel.analytics.bigdl.Module
-import com.intel.analytics.bigdl.nn.abstractnn.TensorModule
+import com.intel.analytics.bigdl.nn.abstractnn.{Activity, TensorModule}
 import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
+import com.intel.analytics.bigdl.utils.{T, Table}
+import com.intel.analytics.bigdl.nn
 
 import scala.reflect.ClassTag
 
@@ -32,22 +34,37 @@ class Attention[T: ClassTag](
   val hiddenSize: Int, val numHeads: Int, val attentionDropout: Float)
  (implicit ev: TensorNumeric[T]) extends BaseModule[T] {
 
+  private val queryLayer = TransformerOperation.dense(
+    hiddenSize, hiddenSize, false, name = s"${this.getName()}_q")
+  private val keyLayer = TransformerOperation.dense(
+    hiddenSize, hiddenSize, false, name = s"${this.getName()}_k")
+  private val valueLayer = TransformerOperation.dense(
+    hiddenSize, hiddenSize, false, name = s"${this.getName()}_v")
+
+  private val join1 = nn.JoinTable[T](dimension = 1, nInputDims = -1)
+  private val join2 = nn.JoinTable[T](dimension = 1, nInputDims = -1)
+
   override def buildModel(): Module[T] = {
     // InputX with shape (batch_size, length_x, hidden_size).
     // InputY with shape (batch_size, length_x, hidden_size)
     // for self attention, InputX and InputY should be the same.
     // Bias is attention bias that will be added to the result of the dot product.
-    val inputX = Input()
-    val inputY = Input()
-    val inputBias = Input()
+//    val inputX = Input()
+//    val inputY = Input()
+//    val inputBias = Input()
+//
+//    // Layers for linearly projecting the queries, keys, and values.
+//    val queryLayer = TransformerOperation.dense(
+//      hiddenSize, hiddenSize, false, name = s"${this.getName()}_q").inputs(inputX)
+//    val keyLayer = TransformerOperation.dense(
+//      hiddenSize, hiddenSize, false, name = s"${this.getName()}_k").inputs(inputY)
+//    val valueLayer = TransformerOperation.dense(
+//      hiddenSize, hiddenSize, false, name = s"${this.getName()}_v").inputs(inputY)
 
-    // Layers for linearly projecting the queries, keys, and values.
-    val queryLayer = TransformerOperation.dense(
-      hiddenSize, hiddenSize, false, name = s"${this.getName()}_q").inputs(inputX)
-    val keyLayer = TransformerOperation.dense(
-      hiddenSize, hiddenSize, false, name = s"${this.getName()}_k").inputs(inputY)
-    val valueLayer = TransformerOperation.dense(
-      hiddenSize, hiddenSize, false, name = s"${this.getName()}_v").inputs(inputY)
+    val queryLayer = Input()
+    val keyLayer = Input()
+    val valueLayer = Input()
+    val inputBias = Input()
 
     val querySplit = new SplitHeads(hiddenSize, numHeads, true).inputs(queryLayer)
     val keySplit = new SplitHeads(hiddenSize, numHeads).inputs(keyLayer)
@@ -69,8 +86,52 @@ class Attention[T: ClassTag](
     val outputLayer = TransformerOperation.dense(
       hiddenSize, hiddenSize, false, name = s"${this.getName()}_output_transform")
       .inputs(combineHeads)
-    val graph = Graph(Array(inputX, inputY, inputBias), Array(outputLayer))
+    val graph = Graph(Array(queryLayer, keyLayer, valueLayer, inputBias), Array(outputLayer))
     graph
+  }
+
+  override def updateOutput(input: Activity): Activity = {
+    val inputTable = input.toTable
+
+    val (inputX, inputY, inputBias, inputK, inputV) = if (inputTable.length() == 2) {
+      // self attention
+      (inputTable[Tensor[T]](1), inputTable[Tensor[T]](1), inputTable[Tensor[T]](2), null, null)
+    } else if (inputTable.length() == 3) {
+      (inputTable[Tensor[T]](1), inputTable[Tensor[T]](2), inputTable[Tensor[T]](3), null, null)
+    } else if (inputTable.length() == 5) {
+      (inputTable[Tensor[T]](1), inputTable[Tensor[T]](2),
+        inputTable[Tensor[T]](3), inputTable[Tensor[T]](4), inputTable[Tensor[T]](5))
+    } else {
+      throw new UnsupportedOperationException(
+        s"Attention layer inputs should be 2, 3 or 5, but get ${inputTable.length()}")
+    }
+
+    val query = queryLayer.forward(inputBias).toTensor[T]
+    val key = {
+      val out = keyLayer.forward(inputBias).toTensor[T]
+      join1.forward(T(out, inputK))
+    }
+    val value = {
+      val out = valueLayer.forward(inputBias).toTensor[T]
+      join2.forward(T(out, inputV))
+    }
+
+
+//    val key = if (inputK.dim() > 0) {
+//      val out = keyLayer.forward(inputBias).toTensor[T]
+//      join1.forward(T(out, inputK))
+//    } else {
+//      keyLayer.forward(inputBias).toTensor[T]
+//    }
+//    val value = if (inputV.dim() > 0) {
+//      val out = valueLayer.forward(inputBias).toTensor[T]
+//      join2.forward(T(out, inputV))
+//    } else {
+//      valueLayer.forward(inputBias).toTensor[T]
+//    }
+
+    output = model.updateOutput(T(query, key, value, inputBias))
+    output
   }
 }
 // Combine tensor that has been splitted.

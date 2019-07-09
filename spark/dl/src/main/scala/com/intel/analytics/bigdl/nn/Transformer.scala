@@ -83,6 +83,8 @@ class Transformer[T: ClassTag](
     val decoderSelfAttentionBiasNode = Input()
     val encoderOutputNode = Input()
     val encoderAttentionBiasNode = Input()
+    val cacheAttention = Input()
+
     Graph(Array(decoderInputNode, decoderSelfAttentionBiasNode,
       encoderOutputNode, encoderAttentionBiasNode),
       Array(block(numHiddenlayers, decoderInputNode, decoderSelfAttentionBiasNode,
@@ -296,6 +298,7 @@ class Transformer[T: ClassTag](
                         decoderSelfAttentionBias: ModuleNode[T],
                         encoderOutput: ModuleNode[T] = null,
                         encoderAttentionBias: ModuleNode[T] = null,
+                        cacheAttention: ModuleNode[T] = null,
                         blockType: String): ModuleNode[T] = {
 
     var input = decoderInput
@@ -325,12 +328,22 @@ class Transformer[T: ClassTag](
   }
 
   private def processSelfAttention(layer: Module[T], decoderInput: ModuleNode[T],
-    decoderSelfAttentionBias: ModuleNode[T], preName: String): ModuleNode[T] = {
+    decoderSelfAttentionBias: ModuleNode[T],
+    preName: String, cacheAttention: ModuleNode[T] = null): ModuleNode[T] = {
+
     val norm = new LayerNormalization[T](hiddenSize).setName(preName + "/norm")
         .inputs(decoderInput)
+    val attention = if (cacheAttention == null) {
+      layer.setName(preName + "/self_attention")
+        .inputs(norm, norm, decoderSelfAttentionBias)
+    } else {
+      layer.setName(preName + "/self_attention")
+        .inputs(norm, norm, decoderSelfAttentionBias, cacheAttention)
+    }
+
     val drop = Dropout[T](1 - embeddingDropout).setName(preName + "/dropout")
-        .inputs(layer.setName(preName + "/self_attention")
-        .inputs(norm, norm, decoderSelfAttentionBias))
+        .inputs(attention)
+
     CAddTable().inputs(decoderInput, drop)
   }
 
