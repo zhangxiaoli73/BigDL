@@ -15,6 +15,8 @@
  */
 package com.intel.analytics.bigdl.nn
 
+import javafx.scene.control.Tab
+
 import com.intel.analytics.bigdl._
 import com.intel.analytics.bigdl.nn.Graph.ModuleNode
 import com.intel.analytics.bigdl.nn.abstractnn.{AbstractModule, Activity, TensorModule}
@@ -82,7 +84,7 @@ class Attention[T: ClassTag](val hiddenSize: Int, val numHeads: Int, val attenti
     if (this.train) model.training() else model.evaluate()
   }
 
-  private var graph: Module[T] = {
+  private val graph: Module[T] = {
     val queryNode = Input()
     val keyNode = Input()
     val valueNode = Input()
@@ -115,20 +117,19 @@ class Attention[T: ClassTag](val hiddenSize: Int, val numHeads: Int, val attenti
 
 
   private def updateOutputCache(input: Activity): Activity = {
-    require(input.toTable.length() == 4 && !this.isTraining(),
-          "Only support 4 inputs for model inference")
+    require(!this.isTraining(), "Only support input cache for model inference")
     val inputTable = input.toTable
     val inputX = inputTable[Tensor[T]](1)
     val inputY = inputTable[Tensor[T]](2)
-    val inputBias = inputTable[Tensor[T]](3)
+    val inputBias = inputTable[Table](3).apply[Tensor[T]](1)
     /**
-      * cache: (Used during prediction) dictionary with tensors containing results of
-      * previous attentions. The dictionary must have the items:
-      * {"k": tensor with shape [batch_size, i, key_channels],
-      * "v": tensor with shape [batch_size, i, value_channels]}
-      * where i is the current decoded length.
-      */
-    val cache = inputTable[Table](4)
+     * cache: (Used during prediction) dictionary with tensors containing results of
+     * previous attentions. The dictionary must have the items:
+     * {"k": tensor with shape [batch_size, i, key_channels],
+     * "v": tensor with shape [batch_size, i, value_channels]}
+     * where i is the current decoded length.
+     */
+    val cache = inputTable[Table](3).apply[Table](2)
 
     val query = queryLayer.forward(inputX).toTensor[T]
 
@@ -153,13 +154,14 @@ class Attention[T: ClassTag](val hiddenSize: Int, val numHeads: Int, val attenti
     output
   }
   override def updateOutput(input: Activity): Activity = {
-    if (input.toTable.length() == 3) {
+    require(input.toTable.length() == 3,
+      s"only support 3 inputs, but get ${input.toTable.length()}")
+
+    val cache = input.toTable.apply[Activity](3)
+    if (cache.isInstanceOf[Tensor[T]]) {
       output = model.updateOutput(input)
-    } else if (input.toTable.length() == 4) {
+    } else if (cache.isInstanceOf[Table]) {
       output = updateOutputCache(input)
-    } else {
-      throw new UnsupportedOperationException(
-        s"only support 3 or 4 inputs, but get ${input.toTable.length()}")
     }
     output
   }

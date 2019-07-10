@@ -88,12 +88,11 @@ class Transformer[T: ClassTag](
     val decoderSelfAttentionBiasNode = Input()
     val encoderOutputNode = Input()
     val encoderAttentionBiasNode = Input()
-    val cacheAttention = Input()
 
     Graph(Array(decoderInputNode, decoderSelfAttentionBiasNode,
-      encoderOutputNode, encoderAttentionBiasNode, cacheAttention),
+      encoderOutputNode, encoderAttentionBiasNode),
       Array(block(numHiddenlayers, decoderInputNode, decoderSelfAttentionBiasNode,
-        encoderOutputNode, encoderAttentionBiasNode, cacheAttention, blockType = "decoder")))
+        encoderOutputNode, encoderAttentionBiasNode, blockType = "decoder")))
   }
 
   private def createEncoder(): Module[T] = {
@@ -233,7 +232,7 @@ class Transformer[T: ClassTag](
       .select(3, i + 1).resize(Array(1, 1, 1, i + 1))
 
     val decoder_outputs = decoderStack.forward(T(decoder_input_add,
-      self_attention_bias, encoder_outputs, encoder_decoder_attention_bias, cache)).toTensor[T]
+      T(self_attention_bias, cache), encoder_outputs, encoder_decoder_attention_bias)).toTensor[T]
 
     shareWeights(withShareWeightsLinear)
     val logits = this.linearSharedWeigths.forward(decoder_outputs).toTensor[T]
@@ -320,7 +319,6 @@ class Transformer[T: ClassTag](
                         decoderSelfAttentionBias: ModuleNode[T],
                         encoderOutput: ModuleNode[T] = null,
                         encoderAttentionBias: ModuleNode[T] = null,
-                        cacheAttention: ModuleNode[T] = null,
                         blockType: String): ModuleNode[T] = {
 
     var input = decoderInput
@@ -329,7 +327,7 @@ class Transformer[T: ClassTag](
       val selfAttention = new Attention[T](hiddenSize, numHeads, attentionDropout)
       val selfAttentionModel = processSelfAttention(
         selfAttention, input, decoderSelfAttentionBias,
-        s"${blockType}_self_attention_${i}", cacheAttention)
+        s"${blockType}_self_attention_${i}")
       input = selfAttentionModel
 
       if (encoderOutput != null && encoderAttentionBias != null) {
@@ -350,22 +348,14 @@ class Transformer[T: ClassTag](
   }
 
   private def processSelfAttention(layer: Module[T], decoderInput: ModuleNode[T],
-    decoderSelfAttentionBias: ModuleNode[T],
-    preName: String, cacheAttention: ModuleNode[T] = null): ModuleNode[T] = {
-
+    decoderSelfAttentionBias: ModuleNode[T], preName: String): ModuleNode[T] = {
     val norm = new LayerNormalization[T](hiddenSize).setName(preName + "/norm")
         .inputs(decoderInput)
-    val attention = if (cacheAttention == null) {
-      layer.setName(preName + "/self_attention")
-        .inputs(norm, norm, decoderSelfAttentionBias)
-    } else {
-      layer.setName(preName + "/self_attention")
-        .inputs(norm, norm, decoderSelfAttentionBias, cacheAttention)
-    }
+    val attention = layer.setName(preName + "/self_attention")
+      .inputs(norm, norm, decoderSelfAttentionBias)
 
     val drop = Dropout[T](1 - embeddingDropout).setName(preName + "/dropout")
         .inputs(attention)
-
     CAddTable().inputs(decoderInput, drop)
   }
 
