@@ -25,6 +25,7 @@ import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
 import com.intel.analytics.bigdl.utils.serializer.converters.DataConverter
 import com.intel.analytics.bigdl.utils.serializer.{DeserializeContext, ModuleSerializable, ModuleSerializer, SerializeContext}
 import com.intel.analytics.bigdl.utils.{T, Table}
+import org.apache.zookeeper.ZooDefs.Ids
 
 import scala.collection.mutable.ArrayBuffer
 import scala.reflect.ClassTag
@@ -67,10 +68,12 @@ class Transformer[T: ClassTag](
   // for translation layers
   private[bigdl] var decoderStack: Module[T] = null
   private[bigdl] var encoderStack: Module[T] = null
-  private[bigdl] var predictModel: Module[T] = null
+  private[bigdl] var predict: Module[T] = null
   private var linearSharedWeigths : Module[T] = null
-  private var rangeBuffer = Tensor[T]()
-  private var timeBuffer = Tensor[T]()
+  // for symbols
+  private val rangeBuffer = Tensor[T]()
+  private val timeBuffer = Tensor[T]()
+  private var decoderBiasBuffer = Tensor[T]()
 
   private val embeddingLayer = Sequential[T]().add(
     LookupTable[T](vocabSize, hiddenSize, paddingValue = paddingValue,
@@ -134,8 +137,11 @@ class Transformer[T: ClassTag](
     val predictNode = Input()
     val attentionMask = mask.inputs(predictNode)
     val embeddingForPredict = embeddingLayer.inputs(predictNode)
-    predictModel = Graph(predictNode,
+    predict = Graph(predictNode,
       Array(encoderGraph.inputs(embeddingForPredict, attentionMask), attentionMask))
+
+    // init beam search
+    if (beamSearch != null) beamSearch.setLogitFn(symbols)
 
     // create training model
     val outputNode = decode(embeddingOutput,
@@ -192,7 +198,8 @@ class Transformer[T: ClassTag](
               list1: List[Tensor[T]], list2: List[Tensor[T]]):
    (Tensor[T], Tensor[T], Tensor[T], List[Tensor[T]], List[Tensor[T]]) = {
 
-    require(list1.length == list2.length, "k, v length must be same")
+    require(list1.length == list2.length,
+      s"k, v length must be same, but get ${list1.length} ${list2.length}")
 
     val cache = T()
     for(m <- 0 to (list1.length - 1)) {
@@ -214,21 +221,20 @@ class Transformer[T: ClassTag](
       rangeBuffer = rangeBuffer, outBuffer = timeBuffer)
 
     // size (1, 1, maxDecodeLength, maxDecodeLength)
-    val decoderSelfAttentionBias = Tensor[T](1, 1, maxDecodeLength, maxDecodeLength)
-    TransformerOperation.attentionBiasLowerTriangle(maxDecodeLength, decoderSelfAttentionBias)
+    if (decoderBiasBuffer == null
+      || decoderBiasBuffer.nElement() != maxDecodeLength * maxDecodeLength) {
+      decoderBiasBuffer = Tensor[T](1, 1, maxDecodeLength, maxDecodeLength)
+    }
+    TransformerOperation.attentionBiasLowerTriangle(maxDecodeLength, decoderBiasBuffer)
 
-    val idsSize = Ids.size()
-    val decoder_input = Ids.select(2, idsSize(1))
-    decoder_input.resize(Array(decoder_input.size(1), 1))
-    // todo: should add one in beam search
-    decoder_input.add(ev.one)
+    val decoder_input = Ids.narrow(2, i + 1, 1)
     val decoder_input_embedding = embeddingLayer.forward(decoder_input).toTensor[T]
 
     val timeSize = timeSignal.size()
     val timingTemp = timeSignal.select(1, i + 1)
     val decoder_input_add = decoder_input_embedding.add(timingTemp)
 
-    val self_attention_bias = decoderSelfAttentionBias.select(3, i + 1)
+    val self_attention_bias = decoderBiasBuffer.select(3, i + 1)
       .select(3, i + 1).resize(Array(1, 1, 1, i + 1))
 
     val decoder_outputs = decoderStack.forward(T(decoder_input_add,
@@ -248,19 +254,17 @@ class Transformer[T: ClassTag](
     (logits.squeeze(2), encoder_outputs, encoder_decoder_attention_bias, listK.toList, listV.toList)
   }
 
-  private def predictTranslation(encoder_outputs: Tensor[T],
-                                 encoder_decoder_attention_bias: Tensor[T]): Activity = {
-    beamSearch.setLogitFn(symbols)
-    beamSearch.forward(T(encoder_outputs, encoder_decoder_attention_bias))
-  }
-
   private def updateOutputTranslation(input: Activity): Activity = {
     if (input.isTensor) {
       require(!this.isTraining(),
         "Input for Transformer should be tensor when doing translation prediction")
       // inference case, first tensor is encoder_outputs,  another is attention_bias
-      val predictTable = predictModel.forward(input).toTable
-      output = predictTranslation(predictTable[Tensor[T]](1), predictTable[Tensor[T]](2))
+      val res = predict.forward(input).toTable
+      beamSearch.forward(T(res[Tensor[T]](1), res[Tensor[T]](2)))
+      // output for beamsearch is table, and first tensor is decoder_ids, another is scores
+      val decodedIds = beamSearch.output.toTable.apply[Tensor[T]](1).select(2, 1)
+      val scores = beamSearch.output.toTable.apply[Tensor[T]](2).select(2, 1)
+      output = T(decodedIds.narrow(2, 2, decodedIds.size(2) - 1), scores)
     } else {
       require(input.toTable.length() == 2, s"Input should be two tensors when doing " +
         s"translation training, but get ${input.toTable.length()}")

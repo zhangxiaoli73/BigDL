@@ -40,7 +40,8 @@ class SequenceBeamSearch[T: ClassTag](
   val maxDecodeLength: Int,
   val eosID: Float,
   val numHiddenLayers: Int,
-  val hiddenSize: Int)(implicit ev: TensorNumeric[T])
+  val hiddenSize: Int,
+  val paddingValue: Float = 0.0f)(implicit ev: TensorNumeric[T])
   extends AbstractModule[Table, Activity, T] {
 
   private val inf = 1e7f * (-1)
@@ -357,7 +358,7 @@ class SequenceBeamSearch[T: ClassTag](
       gatherTmp = gatherBeams(newFlatLayerV(i), topkBeamIndices, batchSize, beamsToKeep)
       topkLayerV(i).resizeAs(gatherTmp).copy(gatherTmp)
     }
-    var topkIds = topkIndices.apply1(e => ev.fromType[Int](ev.toType[Int](e) % vocabSize))
+    var topkIds = topkIndices.apply1(e => ev.fromType[Int](ev.toType[Int](e) % vocabSize + 1))
     topkIds = expandDim(topkIds, 2)
     val newSeq = concat(topkSeq, topkIds, 3)
     (newSeq, topkLogProbs)
@@ -406,7 +407,8 @@ class SequenceBeamSearch[T: ClassTag](
     finishedScores = state("FINISHED_SCORES").asInstanceOf[Tensor[T]]
     finishedFlags = state("FINISHED_FLAGS").asInstanceOf[Tensor[Boolean]]
     // append a column of 0-ids to finished_seq to increment the length.
-    finishedSeq = concat(finishedSeq, Tensor[T](batchSize, beamSize, 1), 3)
+    finishedSeq = concat(finishedSeq,
+      Tensor[T](batchSize, beamSize, 1).fill(ev.fromType(paddingValue)), 3)
     val lengthNorm = lengthNormalization(alpha, i)
     var newScores = newLogProbs / lengthNorm
     // Set the scores of the still-alive seq in new_seq to large negative values.
@@ -460,7 +462,7 @@ class SequenceBeamSearch[T: ClassTag](
     finishedFlagsSeq.resize(batchSize, beamSize * 2)
     finishedScores.resize(batchSize, beamSize)
     val curIndex = 0
-    val initialID = Tensor[T](Array(batchSize))
+    val initialID = Tensor[T](Array(batchSize)).fill(ev.fromType(paddingValue))
     var initialAliveSeq = extendBeamSize(initialID, beamSize)
     initialAliveSeq = expandDim(initialAliveSeq, 2)
     var initialLogProbs = Tensor[T](beamSize).apply1(e => ev.fromType[Float](inf))

@@ -659,7 +659,7 @@ class TransformerLayerSpec extends FlatSpec with Matchers {
       T(T(T( 6.18539155e-01, -4.43171918e-01, 1.81053495e+00, -1.30572689e+00,
         -3.44987214e-01, -2.30839744e-01))))
     )
-    val ids = Tensor[Float](T(T(2), T(1), T(3), T(2), T(3), T(1)))
+    val ids = Tensor[Float](T(T(2), T(1), T(3), T(2), T(3), T(1))).add(1.0f)
     val maxDecodeLength = 10
 
     transformer.evaluate()
@@ -679,8 +679,8 @@ class TransformerLayerSpec extends FlatSpec with Matchers {
   }
 
   "tranformer for translation prediction" should "work correctly" in {
-    val vocabSize = 4
-    val hiddenSize = 6
+    val vocabSize = 6
+    val hiddenSize = 4
     val filterSize = 8
     val numHeads = 1
     val num_hidden_layers = 1
@@ -689,20 +689,193 @@ class TransformerLayerSpec extends FlatSpec with Matchers {
     val reluDropout = 1.0f
     val beamSize = 3
     val alpha = 0.0f
+    val padding = 1.0
 
-    val beamSearch = SequenceBeamSearch[Float](vocabSize, beamSize, alpha,
-      maxDecodeLength = 10, eosID = 0.0f, numHiddenLayers = num_hidden_layers, hiddenSize)
+    val beamSearch = new SequenceBeamSearch[Float](vocabSize, beamSize, alpha,
+      maxDecodeLength = 6, eosID = 2.0f, numHiddenLayers = num_hidden_layers,
+      hiddenSize, paddingValue = padding.toFloat)
 
     val transformer = new Transformer[Float](vocabSize,
       hiddenSize, numHeads, filterSize, num_hidden_layers,
       postprocessDropout, attentionDropout, reluDropout, withShareWeightsLinear = true,
-      transformerType = Translation, beamSearch = beamSearch)
+      transformerType = Translation, beamSearch = beamSearch, paddingValue = padding)
 
-    val input1 = Tensor[Float](T(T(3, 1, 2, 3, 1, 1), T(3, 2, 1, 3, 2, 1))).add(1.0f)
+    val attention0 = transformer.encoderStack("encoder_self_attention_0/self_attention").get
+    val ffn0 = transformer.encoderStack("encoder_ffn_0/ffn").get
+
+    val attention1 = transformer.decoderStack("decoder_self_attention_0/self_attention").get
+    val ffn1 = transformer.decoderStack("decoder_ffn_0/ffn").get
+    val attention2 = transformer.decoderStack("decoder_encdec_attention_0/encdec_attention").get
+
+
+    var paramsTable = transformer.getParametersTable()
+    for (i <- paramsTable.keySet) {
+      if (i.toString contains "embedding") {
+        paramsTable.get[Table](i).get[Tensor[Float]]("weight").copy(
+          Tensor[Float](
+            T(T(-0.10626597, 0.23630716, -0.21521048, 0.2920521),
+              T(0.29631686, 0.25602844, -0.7230936, 0.44407833),
+              T(0.21172947, -0.69782203, 0.22524196, -1.0138164),
+              T(0.06197122, 0.24819946, 0.98074985, -0.45509085),
+              T(0.5263322, -0.40988722, 0.42144877, -0.604839),
+              T(-0.87161285, -0.9569873, 0.50618875, 0.42917752))
+          )
+        )
+      }
+    }
+
+    paramsTable = attention0.getParametersTable()
+    for (i <- paramsTable.keySet) {
+      if (i.toString contains "_q") {
+        paramsTable.get[Table](i).get[Tensor[Float]]("weight").copy(Tensor[Float](
+          T(T( 0.60471255, 0.54166526, 0.39841092, -0.44462326),
+            T( 0.02691836, -0.43647325, 0.16844122, 0.9925212),
+            T(-0.544705, -0.8566129, -0.6552941, 0.01295163),
+            T(-0.14695838, 0.23456065, -0.37129694, 0.31026325))).t())
+      } else if (i.toString contains "_k") {
+        paramsTable.get[Table](i).get[Tensor[Float]]("weight").copy(Tensor[Float](
+          T(T(-0.20041183, -0.4891488, -0.5085714, 0.02489659),
+            T(-0.8556601, 0.5424248, -0.6202357, -0.05780638),
+            T( 0.20420216, -0.6134986, -0.4326076, 0.30206147),
+            T( 0.19872786, 0.2613737, -0.92315775, 0.22687511))).t())
+      } else if (i.toString contains "_v") {
+        paramsTable.get[Table](i).get[Tensor[Float]]("weight").copy(Tensor[Float](
+          T(T(-0.4871333, 0.06103574, -0.6497405, 0.2223501),
+            T(-0.9120996, 0.16089165, 0.33262423, -0.19571291),
+            T(-0.23360679, -0.50078744, 0.41204292, -0.02241471),
+            T(-0.89100724, -0.67421687, -0.34987354, -0.60579276))).t())
+      } else if (i.toString contains "_output_transform") {
+        paramsTable.get[Table](i).get[Tensor[Float]]("weight").copy(
+          Tensor[Float](
+            T(T(-0.47020948, 0.5356578, 0.3193113, -0.09291445),
+              T(-0.19973904, -0.49609232, -0.33667022, -0.17671368),
+              T(-0.8060424, 0.5186156, 0.7493292, 0.11365094),
+              T( 1.0632801, -0.00599942, 0.8937121, -0.38923746))).t())
+      }
+    }
+
+    paramsTable = ffn0.getParametersTable()
+    for (i <- paramsTable.keySet) {
+      if (i.toString contains "_filter_layer") {
+        paramsTable.get[Table](i).get[Tensor[Float]]("weight").copy(
+          Tensor[Float](
+            T(T(-0.35298067, -0.674392, 0.2591158, -0.39853054, -0.37949187, 0.02309175,
+              -0.65644926, 0.8986522),
+              T( 0.19363914, -0.28986388, -0.257797, -0.15664439, 0.6596536, 0.12020741,
+                -0.17007843, -0.5501685),
+              T(-0.41227788, -0.35933533, -0.45497704, -0.25715417, 0.60992306, -0.19668543,
+                -0.77470696, 0.24892384),
+              T( 0.12124976, 0.8671879, -0.44282717, -0.27072555, 0.2076582, -0.53506184,
+        0.39133728,  0.35779685))).transpose(1, 2))
+      } else if (i.toString contains "_output_layer") {
+        paramsTable.get[Table](i).get[Tensor[Float]]("weight").copy(
+          Tensor[Float](
+            T(T( 0.27241132, 0.3341913, -0.41847667, 0.02148553),
+              T(-0.01241873, -0.26167524, -0.03825141, 0.23399451),
+              T(-0.17590803, 0.3214216, 0.03090363, 0.13343768),
+              T( 0.5105916, 0.47454977, -0.33296397, -0.30425498),
+              T( 0.08448114, 0.4124062, -0.44084966, 0.49881822),
+              T( 0.65130925, -0.3216592, 0.65844834, 0.48436818),
+              T(-0.25914645, -0.20871995, 0.32968223, -0.17965943),
+              T(-0.06768182, 0.057122, 0.36694843, 0.31433672))).transpose(1, 2))
+      }
+    }
+
+    paramsTable = attention1.getParametersTable()
+    for (i <- paramsTable.keySet) {
+      if (i.toString contains "_q") {
+        paramsTable.get[Table](i).get[Tensor[Float]]("weight").copy(Tensor[Float](
+          T(T( 0.77750987, 0.4158453, -0.6369134, 0.3423233),
+            T(-0.23027276, 0.14109705, 0.06633862, -0.10180788),
+            T(-0.2759771, 0.03831478, -0.28692466, -0.34104064),
+            T( 0.17564411, -0.46582016, -0.07349259, 0.6100675))).t())
+      } else if (i.toString contains "_k") {
+        paramsTable.get[Table](i).get[Tensor[Float]]("weight").copy(Tensor[Float](
+          T(T(-0.09555588, 0.16374706, -0.81079763, 0.18353464),
+            T( 0.72976017, -0.6785369, -0.1633139, -0.1220759),
+            T(-0.47357813, 0.19808318, 0.63312566, -0.14370666),
+            T( 0.11398887, 0.7884044, -0.36504376, -0.17514746))).t())
+      } else if (i.toString contains "_v") {
+        paramsTable.get[Table](i).get[Tensor[Float]]("weight").copy(Tensor[Float](
+          T(T(-0.19676681, -0.24631989, -1.1253904, -0.2751462),
+            T(-0.17718858, 0.06754616, 0.5731753, -0.8507766),
+            T( 0.06555229, -0.04867446, -0.05025194, -0.5535116),
+            T(-0.5346166, 0.23926297, -0.4628236, -0.3947385))).t())
+      } else if (i.toString contains "_output_transform") {
+        paramsTable.get[Table](i).get[Tensor[Float]]("weight").copy(
+          Tensor[Float](
+            T(T(-0.9045557, -0.24963744, 0.15128663, 0.3981787),
+              T( 0.27012536, 0.68673694, -0.5106513, -0.403161),
+              T( 0.4013973, 0.56175864, 0.07839457, 0.12541114),
+              T( 1.0649085, -0.36113226, 0.62341034, 0.40576163))).t())
+      }
+    }
+
+    paramsTable = attention2.getParametersTable()
+    for (i <- paramsTable.keySet) {
+      if (i.toString contains "_q") {
+        paramsTable.get[Table](i).get[Tensor[Float]]("weight").copy(Tensor[Float](
+          T(T(-0.30996466, 0.18248673, 0.8567455, 0.28524998),
+            T(-0.14087993, 0.89362335, 0.508464, 0.11154915),
+            T(-0.57769585, -0.05840808, -0.03983077, -0.18773204),
+            T( 0.01721322, -0.98023546, 0.45239854, 0.36473998))).t())
+      } else if (i.toString contains "_k") {
+        paramsTable.get[Table](i).get[Tensor[Float]]("weight").copy(Tensor[Float](
+          T(T(-0.899124, 0.2551926, -0.44861552, -0.03521642),
+            T( 0.11243621, 0.3853058, 0.2681699, 0.92443305),
+            T(-0.95154715, 0.05751022, -0.78881997, -0.1350401),
+            T(-0.37174794, 0.40753722, 0.29484457, 0.19494648))).t())
+      } else if (i.toString contains "_v") {
+        paramsTable.get[Table](i).get[Tensor[Float]]("weight").copy(Tensor[Float](
+          T(T(-0.4060595, 0.16372263, 0.023297, 0.36362377),
+            T(-0.2023103, 0.21245559, 0.8890398, -0.3310149),
+            T(-0.43833923, 0.3280986, 0.12780678, -0.03614727),
+            T(-0.13311541, 0.606744, 0.8235367, -0.7286466))).t())
+      } else if (i.toString contains "_output_transform") {
+        paramsTable.get[Table](i).get[Tensor[Float]]("weight").copy(
+          Tensor[Float](
+            T(T( 0.04250056, 0.22854215, 0.53206336, 0.4422663),
+              T( 0.33508906, -0.60044575, 0.6112323, -0.455282),
+              T(-0.2171716, 0.1193755, -0.20559259, -0.4482319),
+              T(-0.9909119, -0.42189652, 0.4596743, 0.54179823))).t())
+      }
+    }
+    paramsTable = ffn1.getParametersTable()
+    for (i <- paramsTable.keySet) {
+      if (i.toString contains "_filter_layer") {
+        paramsTable.get[Table](i).get[Tensor[Float]]("weight").copy(
+          Tensor[Float](
+            T(T( 0.02586995, 0.18380801, -0.4366081, 0.04554708, 0.502605, -0.0638033,
+              -0.02207431, 0.886901),
+              T( 0.71397907, -0.9562222, 0.5745853, -0.4594066, -0.03152881, -0.5183125,
+                -0.08600679, 0.29023197),
+              T( 0.45509827, -0.1206222, -0.00919442, -0.41815665, -0.10291624, 0.5107678,
+                -0.41308904, 0.5330143),
+              T( 0.15338193, 1.0132387, -0.7641731, 0.586552, -0.21082902, 0.06093456,
+                -0.13935581, -0.22199476))).transpose(1, 2))
+      } else if (i.toString contains "_output_layer") {
+        paramsTable.get[Table](i).get[Tensor[Float]]("weight").copy(
+          Tensor[Float](
+            T(T( 0.02742703, 0.4962597, -0.2972874, 0.19024311),
+              T(-0.2363084, -0.20939663, -0.19179073, 0.2456342),
+              T( 0.28929684, -0.08173832, 0.509045, 0.09438979),
+              T(-0.01957564, 0.46127063, 0.30457073, -0.05371396),
+              T( 0.44164342, -0.43652987, 0.25199357, 0.50121784),
+              T( 0.06327879, -0.41891155, 0.07631836, -0.1247088),
+              T(-0.31286344, -0.30700997, -0.4626535, 0.1554678),
+              T(-0.0544433, -0.5776823, -0.01178843, 0.02590635))).transpose(1, 2))
+      }
+    }
+
+    val input1 = Tensor[Float](T(T(3, 1, 2, 3, 4, 5), T(3, 2, 1, 4, 2, 1))).add(1.0f)
 
     transformer.evaluate()
 
-    val output = transformer.forward(input1)
+    val output = transformer.forward(input1).toTable
+    val expectedOutput = Tensor[Float](
+      T(T(2, 1, 1, 1, 1, 1), T(2, 1, 1, 1, 1, 1)))
+
+    expectedOutput should be(output.apply[Tensor[Float]](1))
 
     println("done")
   }
