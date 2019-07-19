@@ -405,7 +405,7 @@ object ResNet {
 
       // RandomGenerator.RNG.setSeed(1)
 
-      val fc = Linear(nFeatures, classNum, true, L2Regularizer(1e-4), L2Regularizer(1e-4))
+      val fc = Linear(nFeatures, classNum)
         .setInitMethod(RandomNormal(0.0, 0.01), Zeros).setName("fc1000").inputs(pool2) 
       val output = ReorderMemory(HeapData(Array(batchSize, classNum), Memory.Format.nc)).inputs(fc)
 
