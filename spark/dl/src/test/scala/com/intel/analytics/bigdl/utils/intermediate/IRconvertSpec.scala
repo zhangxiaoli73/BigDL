@@ -333,6 +333,7 @@ class IRconvertSpec extends BigDLSpecHelper {
 
   "dnn resnet50 blas pool" should "be same with blas" in {
     System.setProperty("modelType", "blasPool")
+    System.setProperty("bigdl.engineType", "mkldnn")
     Engine.init(1, 4, true)
 
     import com.intel.analytics.bigdl.models.resnet
@@ -344,22 +345,42 @@ class IRconvertSpec extends BigDLSpecHelper {
     val modelSeq = resnet.ResNet(1000, T("shortcutType" -> resnet.ResNet.ShortcutType.B,
       "depth" -> 50, "optnet" -> false, "dataSet" -> DatasetType.ImageNet))
     resnet.ResNet.modelInit(modelSeq)
-    val model = modelSeq.toGraph()
+    val model = modelSeq.cloneModule().toGraph().asInstanceOf[StaticGraph[Float]].toIRgraph()
 
     RandomGenerator.RNG.setSeed(1)
-    val modelCaffe = resnet.RestNetCaffe.graph(1000, blasPool = true).toGraph()
+    val modelCaffe = nn.mkldnn.ResNet.graph(batchSize, 1000,
+    T("depth" -> 50, "dataSet" -> nn.mkldnn.ResNet.DatasetType.ImageNet))
+    modelCaffe.compile(Phase.TrainingPhase)
+
+    RandomGenerator.RNG.setSeed(100)
+
+    for (i <- 1 to 4) {
+      val in = Tensor[Float](batchSize, 3, 224, 224).rand(-1, 1)
+      val out1 = modelSeq.forward(in).toTensor[Float]
+      val out2 = model.forward(in).toTensor[Float]
+      val out3 = modelCaffe.forward(in).toTensor[Float]
+      Equivalent.nearequals(out2, out3)
+
+      val gradOutput = out2.clone()
+      val grad2 = model.backward(in, gradOutput).toTensor[Float]
+      val grad3 = modelCaffe.backward(in, gradOutput).toTensor[Float]
+
+      Equivalent.getunequals(out2, out3)
+      Equivalent.getunequals(out2, out3, 1e-5)
+      Equivalent.getunequals(grad2, grad3, 1e-6)
+    }
+
+    model.evaluate()
+    modelCaffe.evaluate()
 
     RandomGenerator.RNG.setSeed(100)
     val in = Tensor[Float](batchSize, 3, 224, 224).rand(-1, 1)
-
+    val out1 = modelSeq.forward(in).toTensor[Float]
     val out2 = model.forward(in).toTensor[Float]
     val out3 = modelCaffe.forward(in).toTensor[Float]
+    Equivalent.getunequals(out2, out3)
 
-    val gradOutput = out2.clone()
-    val grad2 = model.backward(in, gradOutput).toTensor[Float]
-    val grad3 = modelCaffe.backward(in, gradOutput).toTensor[Float]
+    println("done")
 
-    Equivalent.getunequals(out2, out3, 1e-6)
-    Equivalent.getunequals(grad2, grad3, 1e-6)
   }
 }

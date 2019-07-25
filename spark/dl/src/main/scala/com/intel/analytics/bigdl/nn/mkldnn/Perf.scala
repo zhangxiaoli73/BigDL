@@ -391,6 +391,9 @@ object ResNet {
       iChannels = 64
 
       val input = Input(Array(batchSize, 3, 224, 224), Memory.Format.nchw).inputs()
+
+      // RandomGenerator.RNG.setSeed(1)
+
       val conv1 = SpatialConvolution(3, 64, 7, 7, 2, 2, 3, 3, propagateBack = false)
         .setName("conv1").inputs(input)
       val bn1 = SbnDnn(64).setName("bn_conv1").inputs(conv1)
@@ -405,8 +408,9 @@ object ResNet {
 
       // RandomGenerator.RNG.setSeed(1)
 
-      val fc = Linear(nFeatures, classNum)
-        .setInitMethod(RandomNormal(0.0, 0.01), Zeros).setName("fc1000").inputs(pool2) 
+      val fc = Linear(nFeatures, classNum, true, L2Regularizer(1e-4), L2Regularizer(1e-4))
+        .setInitMethod(RandomNormal(0.0, 0.01), Zeros).setName("fc1000").inputs(pool2)
+
       val output = ReorderMemory(HeapData(Array(batchSize, classNum), Memory.Format.nc)).inputs(fc)
 
       val model = DnnGraph(Array(input), Array(output))
@@ -479,7 +483,6 @@ object SbnDnn {
   def apply[@specialized(Float, Double) T: ClassTag](
     nOutput: Int,
     eps: Double = 1e-3,
-    // momentum: Double = 0.1)
     momentum: Double = 0.9)
     (implicit ev: TensorNumeric[T]): SpatialBatchNormalization = {
     SpatialBatchNormalization(nOutput, eps, momentum).setInitMethod(Ones, Zeros)

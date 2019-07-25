@@ -159,7 +159,7 @@ private[bigdl] class IRToDnn extends ConvertBase[IRElement[Float], Module[Float]
     require(t.dataFormat == DataFormat.NCHW, "Dnn SpatialBatchNormalization only supports NCHW")
     val nOutput = t.nOutput
     val eps = t.eps
-    val momentum = t.momentum
+    val momentum = 1 - t.momentum // change with mkldnn caffe
     val initWeight = t.initWeight
     val initBias = t.initBias
     val initGradWeight = t.initGradWeight

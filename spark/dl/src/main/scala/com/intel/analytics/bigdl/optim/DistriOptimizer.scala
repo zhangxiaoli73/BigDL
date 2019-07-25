@@ -254,9 +254,11 @@ object DistriOptimizer extends AbstractOptimizer {
 
               if (Engine.getEngineType() == MklBlas || localModel.isInstanceOf[IRGraph[T]]) {
                 val output = localModel.forward(input)
+                Engine.dnnComputing.invokeAndWait2(Array(0).map(_ => () => {
                 lossArray(i) = ev.toType[Double](localCriterion.forward(output, target))
-                val errors = localCriterion.backward(output, target)
-                localModel.backward(input, errors)
+                localCriterion.backward(output, target)
+                }))
+                localModel.backward(input, localCriterion.gradInput)
               } else {
                 Engine.dnnComputing.invokeAndWait2(Array(0).map(_ => () => {
                   val output = localModel.forward(input)
@@ -545,14 +547,15 @@ object DistriOptimizer extends AbstractOptimizer {
   .Cache[T]], ModelBroadcast[T]) = {
     val sc = dataset.originRDD().sparkContext
     val broadcast = sc.broadcast((criterion, state, validationMethods, optimMethod))
+    val convertedModel = model // ConversionUtils.convert(model)
     // ensure model's parameter is compacted for getting a better performance when broadcasting
-    model.getParameters()
+    convertedModel.getParameters()
     // As cloneModel is using Serialization to implement deep copy, and will throw OOMError
     // when model's size is bigger than SerializationUtils' buffer size. So we can use
     // ModelBroadcast to clone model here.
     // Notes: All models returned by modelBroadcast.value() share the same weight&bias, while
     // gradWeight&gradBias is unshared.
-    val modelBroadcast = ModelBroadcast[T]().broadcast(sc, ConversionUtils.convert(model))
+    val modelBroadcast = ModelBroadcast[T]().broadcast(sc, convertedModel)
     val _subModelNumber = Engine.getEngineType match {
       case MklBlas => coresPerNode
       case MklDnn => 1
@@ -850,7 +853,9 @@ class DistriOptimizer[T: ClassTag](
 
     prepareInput()
 
-    val modelsAndBroadcast = DistriOptimizer.initThreadModels(trainingModel, distDataset, criterion,
+    val convertedModel = ConversionUtils.convert(model)
+    val modelsAndBroadcast = DistriOptimizer.initThreadModels(
+      convertedModel, distDataset, criterion,
       state, nodeNumber, coresPerNode, checkSingleton, allReduceParameter, parameterSplits,
       validationMethods,
       optimMethods, parameterProcessors)
@@ -954,7 +959,11 @@ class DistriOptimizer[T: ClassTag](
       }
     }
 
-    DistriOptimizer.getModel(models, allReduceParameter, trainingModel)
+    System.setProperty("noScale", "true")
+    val dnnModel = DistriOptimizer.getModel(models, allReduceParameter, convertedModel)
+    if (checkpointPath.isDefined) {
+      dnnModel.save(s"${checkpointPath.get}/model_${Engine.getEngineType()}", true)
+    }
 
     // Reset some internal states, so this or other optimizers can run optimize again
     clearState()

@@ -362,7 +362,7 @@ class SpatialBatchNormalization(
   }
 
   override def getExtraParameter(): Array[Tensor[Float]] = {
-    if (needScale) {
+    if (needScale && (System.getProperty("noScale", "false") == "false")) {
       runningMeanScaled.copy(runningMean.dense).div(scaleFactor)
       runningVarianceScaled.copy(runningVariance.dense).div(scaleFactor)
       Array(runningMeanScaled, runningVarianceScaled)
