@@ -256,8 +256,9 @@ object ResNet {
         .add(layer(block, 512, loopConfig._4, 2))
         .add(SpatialAveragePooling(7, 7, 1, 1))
         .add(View(nFeatures).setNumInputDims(3))
-        .add(Linear(nFeatures, classNum, true, L2Regularizer(1e-4), L2Regularizer(1e-4))
-          .setInitMethod(RandomNormal(0.0, 0.01), Zeros))
+        // linear no weight regularizer
+        val linear = Linear(nFeatures, classNum, true).setInitMethod(RandomNormal(0.0, 0.01), Zeros)
+        model.add(linear)
     } else if (dataSet == DatasetType.CIFAR10) {
       require((depth - 2)%6 == 0,
         "depth should be one of 20, 32, 44, 56, 110, 1202")
