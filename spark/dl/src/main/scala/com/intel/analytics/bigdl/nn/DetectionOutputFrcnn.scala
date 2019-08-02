@@ -102,7 +102,7 @@ class DetectionOutputFrcnn(var nmsThresh: Float = 0.3f, val nClasses: Int = 21,
 
   @transient private var areas: Tensor[Float] = _
 
-  private def postProcessOneClass(scores: Tensor[Float], boxes: Tensor[Float],
+  def postProcessOneClass(scores: Tensor[Float], boxes: Tensor[Float],
     clsInd: Int): RoiLabel = {
     val inds = (1 to scores.size(1)).filter(ind =>
       scores.valueAt(ind, clsInd + 1) > thresh).toArray
