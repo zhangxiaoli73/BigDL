@@ -19,6 +19,7 @@ package com.intel.analytics.bigdl.optim
 import com.intel.analytics.bigdl._
 import com.intel.analytics.bigdl.dataset.{MiniBatch, Sample, SampleToMiniBatch}
 import com.intel.analytics.bigdl.models.utils.ModelBroadcast
+import com.intel.analytics.bigdl.nn.mkldnn.{DnnGraph, Phase}
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
 import com.intel.analytics.bigdl.utils.{Engine, MklDnn}
 import com.intel.analytics.bigdl.utils.intermediate.ConversionUtils
@@ -94,6 +95,9 @@ class Evaluator[T: ClassTag] private[optim](model: Module[T])(implicit ev: Tenso
 
     rdd.mapPartitions(miniBatch => {
       val localModel = modelBroad.value()
+      if (localModel.isInstanceOf[DnnGraph]) {
+        localModel.asInstanceOf[DnnGraph].compile(Phase.InferencePhase)
+      }
       val localMethod = otherBroad.value
       miniBatch.map(batch => {
         val output = localModel.forward(batch.getInput())
