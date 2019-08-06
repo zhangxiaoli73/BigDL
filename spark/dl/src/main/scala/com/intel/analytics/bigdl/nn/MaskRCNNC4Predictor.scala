@@ -25,17 +25,17 @@ class MaskRCNNC4Predictor(in_channels: Int, num_classes: Int, dim_reduced: Int)
   (implicit ev: TensorNumeric[Float]) extends BaseModule[Float] {
 
   override def buildModel(): Module[Float] = {
-    // todo:  ConvTranspose2d is SpatialFullConvolution in BigDL
-    val conv5_mask = SpatialFullConvolution(in_channels, dim_reduced, 2, 2, 0) // todo: check
-    val mask_fcn_logits = SpatialConvolution(dim_reduced, num_classes, 1, 1, 0)
+    val conv5_mask = SpatialFullConvolution(in_channels, dim_reduced,
+      kW = 2, kH = 2, dW = 2, dH = 2)
+    val mask_fcn_logits = SpatialConvolution(nInputPlane = dim_reduced,
+      nOutputPlane = num_classes, kernelW = 1, kernelH = 1, strideH = 1, strideW = 1)
 
     // init parameters
-    // init weight, Caffe2 implementation uses MSRAFill, which in fact corresponds to kaiming_normal_ in PyTorch
+    // init weight & bias, Caffe2 implementation uses MSRAFill,
+    // which in fact corresponds to kaiming_normal_ in PyTorch
     // todo: nn.init.kaiming_normal_(param, mode="fan_out", nonlinearity="relu")
-
-    // init bias
-    conv5_mask.bias.fill(0.0f)
-    mask_fcn_logits.bias.fill(0.0f)
+    conv5_mask.setInitMethod(MsraFiller(false), Zeros)
+    mask_fcn_logits.setInitMethod(MsraFiller(false), Zeros)
 
     val model = Sequential[Float]()
     model.add(conv5_mask).add(ReLU[Float]()).add(mask_fcn_logits)
