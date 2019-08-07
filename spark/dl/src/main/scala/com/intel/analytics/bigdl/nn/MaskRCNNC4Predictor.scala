@@ -19,6 +19,7 @@ import com.intel.analytics.bigdl.Module
 import com.intel.analytics.bigdl.nn.abstractnn.AbstractModule
 import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
+import com.intel.analytics.bigdl.utils.RandomGenerator._
 import com.intel.analytics.bigdl.utils.Table
 
 class MaskRCNNC4Predictor(in_channels: Int, num_classes: Int, dim_reduced: Int)
@@ -34,6 +35,7 @@ class MaskRCNNC4Predictor(in_channels: Int, num_classes: Int, dim_reduced: Int)
     // init weight & bias, Caffe2 implementation uses MSRAFill,
     // which in fact corresponds to kaiming_normal_ in PyTorch
     // todo: nn.init.kaiming_normal_(param, mode="fan_out", nonlinearity="relu")
+    RNG.setSeed(100)
     conv5_mask.setInitMethod(MsraFiller(false), Zeros)
     mask_fcn_logits.setInitMethod(MsraFiller(false), Zeros)
 

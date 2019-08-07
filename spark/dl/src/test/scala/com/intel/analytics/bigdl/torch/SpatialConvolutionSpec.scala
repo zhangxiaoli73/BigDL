@@ -195,12 +195,19 @@ class SpatialConvolutionSpec extends TorchSpec {
 
     val input = Tensor[Double](16, 3, 224, 224).apply1(e => Random.nextDouble())
 
+//    val code = "layer = nn.SpatialConvolutionMM(3, 64, 11, 11, 4, 4, 2, 2)\n" +
+//      "torch.manualSeed(" + seed + ")\n" +
+//      "n = layer.kW*layer.kH*layer.nOutputPlane\n" +
+//      "weight = layer.weight\n" +
+//      "std = math.sqrt(2/n)" +
+//      "weight:normal(0, std)"
+
     val code = "layer = nn.SpatialConvolutionMM(3, 64, 11, 11, 4, 4, 2, 2)\n" +
       "torch.manualSeed(" + seed + ")\n" +
-      "n = layer.kW*layer.kH*layer.nOutputPlane\n" +
       "weight = layer.weight\n" +
-      "std = math.sqrt(2/n)" +
-      "weight:normal(0, std)"
+      "nn.init.kaiming_normal_(weight, mode=\"fan_out\", nonlinearity=\"relu\")"
+//      "std = math.sqrt(2/n)" +
+//      "weight:normal(0, std)"
 
     val (luaTime, torchResult) = TH.run(code, Map("input" -> input),
       Array("weight", "std"))

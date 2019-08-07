@@ -75,9 +75,9 @@ class MaskRCNNC4PredictorSpec extends FlatSpec with Matchers {
           T(0.6561, 0.3722, 0.3653, 0.7055, 0.0839, 0.1767, 0.7989, 0.9738),
           T(0.2665, 0.1409, 0.7630, 0.9691, 0.3708, 0.0624, 0.5867, 0.7174)))))
 
-    val in_channels: Int = 3
-    val num_classes: Int = 2
-    val dim_reduced: Int = 10
+    val in_channels: Int = 256 // 3
+    val num_classes: Int = 81 // 2
+    val dim_reduced: Int = 256 // 10
     val layer = new MaskRCNNC4Predictor(in_channels, num_classes, dim_reduced)
     val params = layer.getParameters()
     params._1.fill(0.01f)
@@ -218,5 +218,9 @@ class MaskRCNNC4PredictorSpec extends FlatSpec with Matchers {
             0.0116, 0.0116, 0.0119, 0.0119, 0.0125, 0.0125, 0.0127, 0.0127)))))
 
     output.almostEqual(expectedOutput, 1e-4) should be(true)
+  }
+
+  "kaiming_normal" should "be same" in {
+
   }
 }
