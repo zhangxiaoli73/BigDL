@@ -29,6 +29,7 @@ import com.intel.analytics.bigdl.utils.RandomGenerator._
 import com.intel.analytics.bigdl.utils._
 import org.scalatest.{BeforeAndAfter, FlatSpec, Matchers}
 import com.intel.analytics.bigdl.models.resnet
+import com.intel.analytics.bigdl.models.resnet.ImageNetDataSet
 import com.intel.analytics.bigdl.models.utils.ModelBroadcast
 import com.intel.analytics.bigdl.utils.intermediate._
 import com.intel.analytics.bigdl.numeric.NumericFloat
@@ -345,5 +346,45 @@ class DnnGraphSpec extends FlatSpec with Matchers with BeforeAndAfter {
 
     dnn.forward(inputTensor)
     dnn.backward(inputTensor, gradOutput)
+  }
+
+  "Renset50 MKLDNN" should "work ok" in {
+    Engine.setEngineType(MklDnn)
+
+    val batchSize = 2
+
+    val dnn = nn.mkldnn.ResNet.graph(batchSize, 1000, T("depth" -> 50,
+      "dataSet" -> nn.mkldnn.ResNet.DatasetType.ImageNet))
+
+    dnn.compile(Phase.TrainingPhase)
+    val dnnClone = dnn.cloneModule()
+    dnnClone.compile(Phase.TrainingPhase)
+
+    RNG.setSeed(100)
+    for (i <- 1 to 10) {
+      val input = Tensor[Float](batchSize, 3, 224, 224).apply1(_ => RNG.uniform(0, 1).toFloat)
+      dnn.forward(input)
+      val gradOutput = Tensor[Float](dnn.output.toTensor[Float])
+      dnn.backward(input, gradOutput)
+    }
+
+    dnn.evaluate()
+    val input = Tensor[Float](batchSize, 3, 224, 224).apply1(_ => RNG.uniform(0, 1).toFloat)
+    val out1 = dnn.forward(input)
+
+    // System.setProperty("blas", "true")
+    RNG.setSeed(100)
+    for (i <- 1 to 10) {
+      val input = Tensor[Float](batchSize, 3, 224, 224).apply1(_ => RNG.uniform(0, 1).toFloat)
+      dnnClone.forward(input)
+      val gradOutput = Tensor[Float](dnnClone.output.toTensor[Float])
+      dnnClone.backward(input, gradOutput)
+    }
+
+    dnnClone.evaluate()
+    val input1 = Tensor[Float](batchSize, 3, 224, 224).apply1(_ => RNG.uniform(0, 1).toFloat)
+    val out2 = dnnClone.forward(input1)
+
+    println("done")
   }
 }

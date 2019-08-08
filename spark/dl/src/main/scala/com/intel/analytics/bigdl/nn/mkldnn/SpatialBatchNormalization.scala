@@ -258,8 +258,10 @@ class SpatialBatchNormalization(
     } else {
       // we should re-computing the running mean and running variance.
       // FIXME should do it at `initFwdPrimitives`
-      mean.scale(runningMean.native, 1 / scaleFactor)
-      variance.scale(runningVariance.native, 1 / scaleFactor)
+      if (System.getProperty("blas", "false") == "false") {
+        mean.scale(runningMean.native, 1 / scaleFactor)
+        variance.scale(runningVariance.native, 1 / scaleFactor)
+      }
     }
 
     updateWithNewTensor(updateOutputTensors, 0, input)
@@ -271,8 +273,13 @@ class SpatialBatchNormalization(
       // update running(Mean, Var) and scaleFactor
       scaleFactor = scaleFactor * momentum.toFloat + 1
 
-      mean.axpby(1, momentum.toFloat, runningMean.native)
-      variance.axpby(biasFactor, momentum.toFloat, runningVariance.native)
+      if (System.getProperty("blas", "false") == "false") {
+        mean.axpby(1, momentum.toFloat, runningMean.native)
+        variance.axpby(biasFactor, momentum.toFloat, runningVariance.native)
+      } else {
+        mean.axpby(1 / scaleFactor, momentum.toFloat, runningMean.native)
+        variance.axpby(biasFactor / scaleFactor, momentum.toFloat, runningVariance.native)
+      }
 
       runningMean.sync()
       runningVariance.sync()
@@ -362,13 +369,7 @@ class SpatialBatchNormalization(
   }
 
   override def getExtraParameter(): Array[Tensor[Float]] = {
-    if (needScale) {
-      runningMeanScaled.copy(runningMean.dense).div(scaleFactor)
-      runningVarianceScaled.copy(runningVariance.dense).div(scaleFactor)
-      Array(runningMeanScaled, runningVarianceScaled)
-    } else {
-      Array(runningMean.dense, runningVariance.dense)
-    }
+    Array(runningMean.dense, runningVariance.dense)
   }
 
   override def toString(): String = {
