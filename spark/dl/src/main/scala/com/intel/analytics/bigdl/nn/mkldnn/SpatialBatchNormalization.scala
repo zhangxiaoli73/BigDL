@@ -278,6 +278,9 @@ class SpatialBatchNormalization(
       runningVariance.sync()
     }
 
+    println(s"scaleFactor_${scaleFactor}_${runningMean.dense.valueAt(10)}_" +
+      s"${runningVariance.dense.valueAt(10)}_${System.getProperty("noScale", "false")}")
+
     output
   }
 
@@ -365,8 +368,15 @@ class SpatialBatchNormalization(
     if (needScale && (System.getProperty("noScale", "false") == "false")) {
       runningMeanScaled.copy(runningMean.dense).div(scaleFactor)
       runningVarianceScaled.copy(runningVariance.dense).div(scaleFactor)
+
+      println(s"${this.getName()}_getExtraParameter_scaleFactor_${scaleFactor}_" +
+        s"${runningMean.dense.valueAt(10)}_${runningVariance.dense.valueAt(10)}" +
+        s"_${runningMeanScaled.valueAt(10)}_${runningVarianceScaled.valueAt(10)}")
       Array(runningMeanScaled, runningVarianceScaled)
     } else {
+
+      println(s"getExtraParameter_scaleFactor_${scaleFactor}_${runningMean.dense.valueAt(10)}_" +
+        s"${runningVariance.dense.valueAt(10)}")
       Array(runningMean.dense, runningVariance.dense)
     }
   }

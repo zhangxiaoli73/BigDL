@@ -658,7 +658,9 @@ object DistriOptimizer extends AbstractOptimizer {
   : Module[T] = {
     val partitionNum = models.partitions.length
     val extraState = models.map(_.localModels.head.getExtraParameter()).first()
+    System.setProperty("noScale", "true")
     trainingModel.setExtraParameter(extraState)
+    System.setProperty("noScale", "false")
 
     // make sure gradient is as the same length as weight
     val parameterArray = trainingModel.parameters()
@@ -959,7 +961,7 @@ class DistriOptimizer[T: ClassTag](
       }
     }
 
-    System.setProperty("noScale", "true")
+    // System.setProperty("noScale", "true")
     val dnnModel = DistriOptimizer.getModel(models, allReduceParameter, convertedModel)
     if (checkpointPath.isDefined) {
       dnnModel.save(s"${checkpointPath.get}/model_${Engine.getEngineType()}", true)

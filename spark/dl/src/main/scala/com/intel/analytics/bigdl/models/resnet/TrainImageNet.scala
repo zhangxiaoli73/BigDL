@@ -65,7 +65,7 @@ object TrainImageNet {
 
       val shortcut: ShortcutType = ShortcutType.B
 
-      val model = if (param.modelSnapshot.isDefined) {
+      val modelDef = if (param.modelSnapshot.isDefined) {
         Module.load[Float](param.modelSnapshot.get)
       } else {
         val curModel =
@@ -103,6 +103,7 @@ object TrainImageNet {
 //        }
       }
 
+      val model = modelDef.toGraph().asInstanceOf[nn.StaticGraph[Float]].toIRgraph()
       println(model)
 
       val optimMethod = if (param.stateSnapshot.isDefined) {

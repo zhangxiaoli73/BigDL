@@ -20,6 +20,7 @@ import com.intel.analytics.bigdl._
 import com.intel.analytics.bigdl.dataset.DataSet
 import com.intel.analytics.bigdl.dataset.image.CropCenter
 import com.intel.analytics.bigdl.models.resnet.ResNet.DatasetType
+import com.intel.analytics.bigdl.nn.mkldnn.DnnGraph
 import com.intel.analytics.bigdl.nn.{Module, StaticGraph}
 import com.intel.analytics.bigdl.optim._
 import com.intel.analytics.bigdl.tensor.Tensor
@@ -27,6 +28,7 @@ import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric._
 import com.intel.analytics.bigdl.transform.vision.image.{ImageFeature, MTImageFeatureToBatch, MatToTensor, PixelBytesToMat}
 import com.intel.analytics.bigdl.transform.vision.image.augmentation.{ChannelScaledNormalizer, RandomCropper, RandomResize}
 import com.intel.analytics.bigdl.utils._
+import com.intel.analytics.bigdl.utils.intermediate.IRGraph
 import org.apache.log4j.{Level, Logger}
 import org.apache.spark.SparkContext
 
@@ -46,6 +48,10 @@ object TestImageNet {
         .set("spark.rpc.message.maxSize", "200")
       val sc = new SparkContext(conf)
       Engine.init
+
+      val m1 = Module.load[Float]("/home/zhangli/workspace/zoo-model/cherry/model.15199")
+      val g = m1.asInstanceOf[IRGraph[Float]].graph.asInstanceOf[DnnGraph]
+      val m2 = Module.load[Float]("/home/zhangli/workspace/zoo-model/cherry/model.15025")
 
       val model = if (System.getProperty("load", "true") == "true") {
         Module.load[Float](param.model)
