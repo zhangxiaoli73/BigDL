@@ -221,6 +221,11 @@ class MaskRCNNC4PredictorSpec extends FlatSpec with Matchers {
   }
 
   "kaiming_normal" should "be same" in {
+    val tmp = Tensor[Float](2, 3)
+    RandomGenerator.RNG.setSeed(100)
+    val t = MsraFiller(false)
+    t.init(tmp, VariableFormat.IN_OUT)
 
+    println("done")
   }
 }
