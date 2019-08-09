@@ -261,6 +261,9 @@ class SpatialBatchNormalization(
       if (System.getProperty("blas", "false") == "false") {
         mean.scale(runningMean.native, 1 / scaleFactor)
         variance.scale(runningVariance.native, 1 / scaleFactor)
+      } else {
+        mean.scale(runningMean.native, 1)
+        variance.scale(runningVariance.native, 1)
       }
     }
 
@@ -283,6 +286,8 @@ class SpatialBatchNormalization(
 
       runningMean.sync()
       runningVariance.sync()
+
+      println(s"${this.getName()}_${scaleFactor}_${runningMean.dense.valueAt(1)}_${runningVariance.dense.valueAt(1)}")
     }
 
     output

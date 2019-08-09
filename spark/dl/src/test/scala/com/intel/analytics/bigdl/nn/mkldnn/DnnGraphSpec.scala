@@ -353,6 +353,7 @@ class DnnGraphSpec extends FlatSpec with Matchers with BeforeAndAfter {
 
     val batchSize = 2
 
+    RNG.setSeed(100)
     val dnn = nn.mkldnn.ResNet.graph(batchSize, 1000, T("depth" -> 50,
       "dataSet" -> nn.mkldnn.ResNet.DatasetType.ImageNet))
 
@@ -372,7 +373,7 @@ class DnnGraphSpec extends FlatSpec with Matchers with BeforeAndAfter {
     val input = Tensor[Float](batchSize, 3, 224, 224).apply1(_ => RNG.uniform(0, 1).toFloat)
     val out1 = dnn.forward(input)
 
-    // System.setProperty("blas", "true")
+    System.setProperty("blas", "true")
     RNG.setSeed(100)
     for (i <- 1 to 10) {
       val input = Tensor[Float](batchSize, 3, 224, 224).apply1(_ => RNG.uniform(0, 1).toFloat)
