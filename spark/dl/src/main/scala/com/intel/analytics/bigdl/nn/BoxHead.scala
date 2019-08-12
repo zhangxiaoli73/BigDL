@@ -13,21 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.intel.analytics.bigdl.nn
-
-import com.intel.analytics.bigdl.nn.abstractnn.AbstractModule
-import com.intel.analytics.bigdl.tensor.Tensor
-import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
-import com.intel.analytics.bigdl.utils.Table
-
-class ROIMaskHead()
- (implicit ev: TensorNumeric[Float]) extends AbstractModule[Table, Tensor[Float], Float] {
-
-  override def updateOutput(input: Table): Tensor[Float] = {
-    output
-  }
-
-  override def updateGradInput(input: Table, gradOutput: Tensor[Float]): Table = {
-    gradInput
-  }
-}
+//package com.intel.analytics.bigdl.nn
+//
+//class BoxHead {
+//
+//}

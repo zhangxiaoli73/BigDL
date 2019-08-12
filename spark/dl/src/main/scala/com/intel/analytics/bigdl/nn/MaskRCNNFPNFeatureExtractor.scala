@@ -16,7 +16,7 @@
 package com.intel.analytics.bigdl.nn
 
 import com.intel.analytics.bigdl.Module
-import com.intel.analytics.bigdl.nn.abstractnn.{AbstractModule, DataFormat}
+import com.intel.analytics.bigdl.nn.abstractnn.{AbstractModule, Activity, DataFormat}
 import com.intel.analytics.bigdl.optim.Regularizer
 import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
@@ -28,9 +28,12 @@ class MaskRCNNFPNFeatureExtractor(in_channels: Int, resolution: Int,
   dilation: Int, use_gn: Boolean = false)
   (implicit ev: TensorNumeric[Float]) extends BaseModule[Float] {
 
+  val pooler = Pooler(resolution, scales, sampling_ratio.toInt)
+
   override def buildModel(): Module[Float] = {
     val model = Sequential[Float]()
-    //  val pooler = Pooler((resolution, resolution), scales, sampling_ratio)
+    val pooler = Pooler(resolution, scales, sampling_ratio.toInt)
+    model.add(pooler)
 
     var next_features = in_channels
     var i = 0
