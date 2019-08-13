@@ -844,7 +844,8 @@ class MaskRCNNFPNFeatureExtractorSpec extends FlatSpec with Matchers {
         T(0.4267, 0.4533),
         T(0.8624, 0.3172)))))
 
-    val bbox = Tensor[Float](T(T(0.0f, 1.0f,  3.0f,  2.0f,  6.0f), T(0.0f, 3.0f,  5.0f,  6.0f, 10.0f)))
+    val bbox = Tensor[Float](T(T(1.0f, 3.0f, 2.0f, 6.0f),
+      T(3.0f, 5.0f, 6.0f, 10.0f)))
 
     val expectedOutput = Tensor[Float](T(T(T(
       T(0.0275, 0.0447, 0.0516, 0.0533, 0.0551, 0.0568, 0.0585, 0.0603,
@@ -1082,6 +1083,6 @@ class MaskRCNNFPNFeatureExtractorSpec extends FlatSpec with Matchers {
 
     val output = layer.forward(T(T(features1, features2), bbox)).toTensor[Float]
 
-    output.almostEqual(expectedOutput, 1e-4) should be(true)
+    output.almostEqual(expectedOutput, 1e-3) should be(true)
   }
 }

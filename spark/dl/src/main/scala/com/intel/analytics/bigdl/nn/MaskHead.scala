@@ -20,53 +20,51 @@ import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
 import com.intel.analytics.bigdl.utils.{T, Table}
 
-class ROIMaskHead()
- (implicit ev: TensorNumeric[Float]) extends AbstractModule[Table, Table, Float] {
+class MaskHead(
+  val inChannels: Int = 0,
+  val resolution: Int = 0,
+  val scales: Array[Float],
+  val samplingRratio: Float = 0.1f,
+  val layers: Array[Int],
+  val dilation: Int = 1,
+  val numClasses: Int = 81, // coco dataset class number
+  val useGn: Boolean = false)(implicit ev: TensorNumeric[Float])
+  extends AbstractModule[Table, Table, Float] {
 
-  val in_channels: Int = 0
-  val resolution: Int = 0
-  val scales: Array[Float] = new Array[Float](1)
-  val sampling_ratio: Float = 0.1f
-  val layers: Array[Int] = new Array[Int](1)
-  val dilation: Int = 1
-  val use_gn: Boolean = false
-
-  val feature_extractor = new MaskRCNNFPNFeatureExtractor(
-    in_channels, resolution, scales, sampling_ratio, layers, dilation, use_gn)
-
-  val num_classes: Int = 0
-  val dim_reduced: Int = 0
-  val predictor = new MaskRCNNC4Predictor(in_channels, num_classes, dim_reduced)
-
-  val post_processor = new MaskPostProcessor()
+  private val featureExtractor = new MaskRCNNFPNFeatureExtractor(
+    inChannels, resolution, scales, samplingRratio, layers, dilation, useGn)
+  val dimReduced = layers(layers.length - 1)
+  private val predictor = new MaskRCNNC4Predictor(dimReduced, numClasses, dimReduced)
+  private val postProcessor = new MaskPostProcessor()
 
   /**
-    *         """
-        Arguments:
-            features (list[Tensor]): feature-maps from possibly several levels
-            proposals (list[BoxList]): proposal boxes
-        Returns:
-            x (Tensor): the result of the feature extractor
-            proposals (list[BoxList]): during training, the original proposals
-                are returned. During testing, the predicted boxlists are returned
-                with the `mask` field set
-        """
-    * @param input
-    * @return
-    */
+   * @param input feature-maps from possibly several levels and proposal boxes
+   * @return
+   * first tensor: the result of the feature extractor
+   * second tensor: proposals (list[BoxList]): during training, the original proposals
+   *      are returned. During testing, the predicted boxlists are returned
+   *      with the `mask` field set
+   */
   override def updateOutput(input: Table): Table = {
-    val features = input[Tensor[Float]](1)
+    val features = input[Table](1)
     val proposals = input[Tensor[Float]](2)
+    val imageInfo = input[Tensor[Float]](3)
+    val labels = input[Tensor[Float]](4)
 
-    val x = feature_extractor.forward(T(features, proposals))
-    val mask_logits = predictor.forward(x)
-
-    val result = post_processor.forward(T(mask_logits, proposals))
+    val x = featureExtractor.forward(T(features, proposals))
+    val maskLogits = predictor.forward(x)
+    val result = postProcessor.forward(T(maskLogits, proposals, imageInfo, labels))
     output = T(x, result)
     output
   }
 
   override def updateGradInput(input: Table, gradOutput: Table): Table = {
-    gradInput
+    throw new UnsupportedOperationException("MaskHead only support inference")
+  }
+
+  override def parameters(): (Array[Tensor[Float]], Array[Tensor[Float]]) = {
+    val p1 = featureExtractor.parameters()
+    val p2 = predictor.parameters()
+    (p1._1 ++ p2._1, p1._2 ++ p2._2)
   }
 }

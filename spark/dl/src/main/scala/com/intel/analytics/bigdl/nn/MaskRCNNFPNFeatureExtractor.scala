@@ -23,41 +23,38 @@ import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
 import com.intel.analytics.bigdl.utils.Table
 import org.dmg.pmml.{False, True}
 
-class MaskRCNNFPNFeatureExtractor(in_channels: Int, resolution: Int,
-  scales: Array[Float], sampling_ratio: Float, layers: Array[Int],
-  dilation: Int, use_gn: Boolean = false)
+class MaskRCNNFPNFeatureExtractor(inChannels: Int, resolution: Int,
+  scales: Array[Float], samplingRatio: Float, layers: Array[Int],
+  dilation: Int, useGn: Boolean = false)
   (implicit ev: TensorNumeric[Float]) extends BaseModule[Float] {
 
-  val pooler = Pooler(resolution, scales, sampling_ratio.toInt)
+  require(dilation == 1, s"Only support dilation = 1, but get ${dilation}")
 
   override def buildModel(): Module[Float] = {
     val model = Sequential[Float]()
-    val pooler = Pooler(resolution, scales, sampling_ratio.toInt)
-    model.add(pooler)
+    model.add(Pooler(resolution, scales, samplingRatio.toInt))
 
-    var next_features = in_channels
+    var nextFeatures = inChannels
     var i = 0
     while (i < layers.length) {
-      val layer_features = layers(i)
+      val features = layers(i)
       // todo: not support dilation convolution
       val module = SpatialConvolution[Float](
-        next_features,
-        layer_features,
+        nextFeatures,
+        features,
         kernelW = 3,
         kernelH = 3,
         strideW = 1,
         strideH = 1,
         padW = dilation,
         padH = dilation,
-        withBias = if (use_gn) false else true
+        withBias = if (useGn) false else true
       ).setName(s"mask_fcn{${i}}")
 
       // weight init
-      // todo: nn.init.kaiming_normal_(conv.weight, mode="fan_out", nonlinearity="relu")
-      module.bias.fill(0.0f)
-
+      module.setInitMethod(MsraFiller(false), Zeros)
       model.add(module)
-      next_features = layer_features
+      nextFeatures = features
       i += 1
     }
     model.add(ReLU[Float]())
