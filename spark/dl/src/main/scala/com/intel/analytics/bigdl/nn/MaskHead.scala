@@ -48,12 +48,11 @@ class MaskHead(
   override def updateOutput(input: Table): Table = {
     val features = input[Table](1)
     val proposals = input[Tensor[Float]](2)
-    val imageInfo = input[Tensor[Float]](3)
-    val labels = input[Tensor[Float]](4)
+    val labels = input[Tensor[Float]](3)
 
     val x = featureExtractor.forward(T(features, proposals))
     val maskLogits = predictor.forward(x)
-    val result = postProcessor.forward(T(maskLogits, proposals, imageInfo, labels))
+    val result = postProcessor.forward(T(maskLogits, proposals, labels))
     output = T(x, result)
     output
   }

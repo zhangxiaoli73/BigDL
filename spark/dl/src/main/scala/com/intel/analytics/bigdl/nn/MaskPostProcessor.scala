@@ -28,23 +28,14 @@ class MaskPostProcessor()
   @transient var rangeBuffer: Tensor[Float] = null
   val sigmoid = Sigmoid[Float]()
 
-
   /**
-    * Arguments:
-      x (Tensor): the mask logits
-      boxes (list[BoxList]): bounding boxes that are used as
-          reference, one for ech image
-    Returns:
-        results (list[BoxList]): one BoxList for each image, containing
-            the extra field mask
-    * @param input
-    * @return
-    */
+   * @param input feature-maps from possibly several levels, proposal boxes and labels
+   * @return the predicted boxlists are returned with the `mask` field set
+   */
   override def updateOutput(input: Table): Tensor[Float] = {
     val maskLogits = input[Tensor[Float]](1)
     val bbox = input[Tensor[Float]](2) // N * 4
-    val imageInfo = input[Tensor[Float]](3)
-    val labels = input[Tensor[Float]](4)
+    val labels = input[Tensor[Float]](3)
 
     val num_masks = maskLogits.size(1)
     if (rangeBuffer == null || rangeBuffer.nElement() != num_masks) {
@@ -53,7 +44,6 @@ class MaskPostProcessor()
     }
 
     val mask_prob = sigmoid.forward(maskLogits)
-    // mask_prob = mask_prob[index, labels][:, None]
     require(labels.nDimension() == 1, s"Labels should be tensor with one dimention," +
       s"but get ${labels.nDimension()}")
     require(rangeBuffer.nElement() == labels.nElement(), s"number of masks should be same" +
