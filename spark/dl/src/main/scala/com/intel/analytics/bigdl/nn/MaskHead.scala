@@ -15,6 +15,7 @@
  */
 package com.intel.analytics.bigdl.nn
 
+import com.intel.analytics.bigdl._
 import com.intel.analytics.bigdl.nn.abstractnn.AbstractModule
 import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
@@ -29,41 +30,102 @@ class MaskHead(
   val dilation: Int = 1,
   val numClasses: Int = 81, // coco dataset class number
   val useGn: Boolean = false)(implicit ev: TensorNumeric[Float])
-  extends AbstractModule[Table, Table, Float] {
+  extends BaseModule[Float] {
 
-  private val featureExtractor = new MaskRCNNFPNFeatureExtractor(
-    inChannels, resolution, scales, samplingRratio, layers, dilation, useGn)
-  val dimReduced = layers(layers.length - 1)
-  private val predictor = new MaskRCNNC4Predictor(dimReduced, numClasses, dimReduced)
-  private val postProcessor = new MaskPostProcessor()
+  override def buildModel(): Module[Float] = {
+    val featureExtractor = this.maskFeatureExtractor(
+      inChannels, resolution, scales, samplingRratio, layers, dilation, useGn)
+    val dimReduced = layers(layers.length - 1)
+    val predictor = this.maskPredictor(dimReduced, numClasses, dimReduced)
+    val postProcessor = new MaskPostProcessor()
 
-  /**
-   * @param input feature-maps from possibly several levels and proposal boxes
-   * @return
-   * first tensor: the result of the feature extractor
-   * second tensor: proposals (list[BoxList]): during training, the original proposals
-   *      are returned. During testing, the predicted boxlists are returned
-   *      with the `mask` field set
-   */
-  override def updateOutput(input: Table): Table = {
-    val features = input[Table](1)
-    val proposals = input[Tensor[Float]](2)
-    val labels = input[Tensor[Float]](3)
+    /**
+     * input: feature-maps from possibly several levels and proposal boxes
+     * return:
+     * first tensor: the result of the feature extractor
+     * second tensor: proposals (list[BoxList]): during training, the original proposals
+     *      are returned. During testing, the predicted boxlists are returned
+     *      with the `mask` field set
+     */
+    val features = Input()
+    val proposals = Input()
+    val labels = Input()
 
-    val x = featureExtractor.forward(T(features, proposals))
-    val maskLogits = predictor.forward(x)
-    val result = postProcessor.forward(T(maskLogits, proposals, labels))
-    output = T(x, result)
-    output
+    val maskFeatures = featureExtractor.inputs(features, proposals)
+    val maskLogits = predictor.inputs(maskFeatures)
+    val result = postProcessor.inputs(maskLogits, proposals, labels)
+
+    Graph(Array(features, proposals, labels), Array(maskFeatures, result))
   }
 
-  override def updateGradInput(input: Table, gradOutput: Table): Table = {
-    throw new UnsupportedOperationException("MaskHead only support inference")
+  private[nn] def maskPredictor(inChannels: Int,
+                                numClasses: Int,
+                                dimReduced: Int): Module[Float] = {
+    val convMask = SpatialFullConvolution(inChannels, dimReduced,
+      kW = 2, kH = 2, dW = 2, dH = 2)
+    val maskLogits = SpatialConvolution(nInputPlane = dimReduced,
+      nOutputPlane = numClasses, kernelW = 1, kernelH = 1, strideH = 1, strideW = 1)
+
+    // init weight & bias, Caffe2 implementation uses MSRAFill,
+    convMask.setInitMethod(MsraFiller(false), Zeros)
+    maskLogits.setInitMethod(MsraFiller(false), Zeros)
+
+    val model = Sequential[Float]()
+    model.add(convMask).add(ReLU[Float]()).add(maskLogits)
+    model
   }
 
-  override def parameters(): (Array[Tensor[Float]], Array[Tensor[Float]]) = {
-    val p1 = featureExtractor.parameters()
-    val p2 = predictor.parameters()
-    (p1._1 ++ p2._1, p1._2 ++ p2._2)
+  private[nn] def maskFeatureExtractor(inChannels: Int,
+                                       resolution: Int,
+                                       scales: Array[Float],
+                                       samplingRatio: Float,
+                                       layers: Array[Int],
+                                       dilation: Int,
+                                       useGn: Boolean = false): Module[Float] = {
+
+    require(dilation == 1, s"Only support dilation = 1, but get ${dilation}")
+
+    val model = Sequential[Float]()
+    model.add(Pooler(resolution, scales, samplingRatio.toInt))
+
+    var nextFeatures = inChannels
+    var i = 0
+    while (i < layers.length) {
+      val features = layers(i)
+      // todo: not support dilation convolution
+      val module = SpatialConvolution[Float](
+        nextFeatures,
+        features,
+        kernelW = 3,
+        kernelH = 3,
+        strideW = 1,
+        strideH = 1,
+        padW = dilation,
+        padH = dilation,
+        withBias = if (useGn) false else true
+      ).setName(s"mask_fcn{${i}}")
+
+      // weight init
+      module.setInitMethod(MsraFiller(false), Zeros)
+      model.add(module)
+      nextFeatures = features
+      i += 1
+    }
+    model.add(ReLU[Float]())
+  }
+}
+
+
+object MaskHead {
+  def apply(inChannels: Int = 0,
+  resolution: Int = 0,
+  scales: Array[Float],
+  samplingRratio: Float = 0.1f,
+  layers: Array[Int],
+  dilation: Int = 1,
+  numClasses: Int = 81, // coco dataset class number
+  useGn: Boolean = false)(implicit ev: TensorNumeric[Float]): Module[Float] = {
+    new MaskHead(inChannels, resolution, scales, samplingRratio,
+      layers, dilation, numClasses, useGn)
   }
 }

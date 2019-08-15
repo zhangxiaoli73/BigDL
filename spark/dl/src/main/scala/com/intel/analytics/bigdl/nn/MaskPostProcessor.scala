@@ -26,7 +26,7 @@ class MaskPostProcessor()
 (implicit ev: TensorNumeric[Float]) extends AbstractModule[Table, Tensor[Float], Float] {
 
   @transient var rangeBuffer: Tensor[Float] = null
-  val sigmoid = Sigmoid[Float]()
+  private val sigmoid = Sigmoid[Float]()
 
   /**
    * @param input feature-maps from possibly several levels, proposal boxes and labels
@@ -62,6 +62,6 @@ class MaskPostProcessor()
   }
 
   override def updateGradInput(input: Table, gradOutput: Tensor[Float]): Table = {
-    gradInput
+    throw new UnsupportedOperationException("MaskPostProcessor only support inference")
   }
 }
