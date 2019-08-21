@@ -28,30 +28,28 @@ import org.apache.spark.sql.catalyst.expressions.If
 import org.dmg.pmml.{Apply, False}
 
 class FPNPostProcessor(
-    score_thresh: Float,
-    nms_thresh: Float,
+    scoreThresh: Float,
+    nmsThresh: Float,
     detections_per_img: Int,
     cls_agnostic_bbox_reg: Boolean,
     bbox_aug_enabled: Boolean
   ) (implicit ev: TensorNumeric[Float]) extends AbstractModule[Table, Tensor[Float], Float] {
 
-  val softMax = SoftMax[Float]()
-
-  val weight = Tensor[Float](T(1.0f, 1.0f, 1.0f, 1.0f))
+  private val softMax = SoftMax[Float]()
+  private val weight = Tensor[Float](T(1.0f, 1.0f, 1.0f, 1.0f))
+  private val nmsTool: Nms = new Nms
+  private var areas: Tensor[Float] = _
 
   /**
-    *   """Returns bounding-box detection results by thresholding on scores and
-        applying non-maximum suppression (NMS).
-  """
-    * @param num_classes
-    */
-  def filterResults(boxes: Tensor[Float], scores: Tensor[Float], num_classes: Int,
-                    imgInfo: Tensor[Float]): Array[RoiLabel] = {
+   * Returns bounding-box detection results by thresholding on scores and
+   * applying non-maximum suppression (NMS).
+   */
+  private[nn] def filterResults(boxes: Tensor[Float], scores: Tensor[Float],
+                                num_classes: Int): Array[RoiLabel] = {
     val dim = num_classes * 4
     boxes.resize(Array(boxes.nElement() / dim, dim))
     scores.resize(Array(scores.nElement() / num_classes, num_classes))
 
-    // check scores >
     val results = new Array[RoiLabel](num_classes)
     var clsInd = 1
     while (clsInd < num_classes) {
@@ -62,74 +60,76 @@ class FPNPostProcessor(
     results
   }
 
-    var nmsTool: Nms = new Nms
-    private var areas: Tensor[Float] = _
+  private def postProcessOneClass(scores: Tensor[Float], boxes: Tensor[Float],
+                          clsInd: Int): RoiLabel = {
+    val inds = (1 to scores.size(1)).filter(ind =>
+      scores.valueAt(ind, clsInd + 1) > scoreThresh).toArray
+    if (inds.length == 0) return null
+    val clsScores = selectTensor(scores.select(2, clsInd + 1), inds, 1)
+    val clsBoxes = selectTensor(boxes.narrow(2, clsInd * 4 + 1, 4), inds, 1)
 
-    def postProcessOneClass(scores: Tensor[Float], boxes: Tensor[Float],
-                            clsInd: Int): RoiLabel = {
-      val inds = (1 to scores.size(1)).filter(ind =>
-        scores.valueAt(ind, clsInd + 1) > score_thresh).toArray
-      if (inds.length == 0) return null
-      val clsScores = selectTensor(scores.select(2, clsInd + 1), inds, 1)
-      val clsBoxes = selectTensor(boxes.narrow(2, clsInd * 4 + 1, 4), inds, 1)
+    val keepN = nmsTool.nms(clsScores, clsBoxes, nmsThresh, inds)
 
-      val keepN = nmsTool.nms(clsScores, clsBoxes, nms_thresh, inds)
+    val bboxNms = selectTensor(clsBoxes, inds, 1, keepN)
+    val scoresNms = selectTensor(clsScores, inds, 1, keepN)
 
-      val bboxNms = selectTensor(clsBoxes, inds, 1, keepN)
-      val scoresNms = selectTensor(clsScores, inds, 1, keepN)
+    RoiLabel(scoresNms, bboxNms)
+  }
 
-      RoiLabel(scoresNms, bboxNms)
-    }
-
-    private def selectTensor(matrix: Tensor[Float], indices: Array[Int],
-      dim: Int, indiceLen: Int = -1, out: Tensor[Float] = null): Tensor[Float] = {
-      assert(dim == 1 || dim == 2)
-      var i = 1
-      val n = if (indiceLen == -1) indices.length else indiceLen
-      if (matrix.nDimension() == 1) {
-        val res = if (out == null) {
-          Tensor[Float](n)
-        } else {
-          out.resize(n)
-        }
-        while (i <= n) {
-          res.update(i, matrix.valueAt(indices(i - 1)))
-          i += 1
-        }
-        return res
-      }
-      // select rows
-      if (dim == 1) {
-        val res = if (out == null) {
-          Tensor[Float](n, matrix.size(2))
-        } else {
-          out.resize(n, matrix.size(2))
-        }
-        while (i <= n) {
-          res.update(i, matrix(indices(i - 1)))
-          i += 1
-        }
-        res
+  private def selectTensor(matrix: Tensor[Float], indices: Array[Int],
+    dim: Int, indiceLen: Int = -1, out: Tensor[Float] = null): Tensor[Float] = {
+    assert(dim == 1 || dim == 2)
+    var i = 1
+    val n = if (indiceLen == -1) indices.length else indiceLen
+    if (matrix.nDimension() == 1) {
+      val res = if (out == null) {
+        Tensor[Float](n)
       } else {
-        val res = if (out == null) {
-          Tensor[Float](matrix.size(1), n)
-        } else {
-          out.resize(matrix.size(1), n)
-        }
-        while (i <= n) {
-          var rid = 1
-          val value = matrix.select(2, indices(i - 1))
-          while (rid <= res.size(1)) {
-            res.setValue(rid, i, value.valueAt(rid))
-            rid += 1
-          }
-          i += 1
-        }
-        res
+        out.resize(n)
       }
+      while (i <= n) {
+        res.update(i, matrix.valueAt(indices(i - 1)))
+        i += 1
+      }
+      return res
     }
+    // select rows
+    if (dim == 1) {
+      val res = if (out == null) {
+        Tensor[Float](n, matrix.size(2))
+      } else {
+        out.resize(n, matrix.size(2))
+      }
+      while (i <= n) {
+        res.update(i, matrix(indices(i - 1)))
+        i += 1
+      }
+      res
+    } else {
+      val res = if (out == null) {
+        Tensor[Float](matrix.size(1), n)
+      } else {
+        out.resize(matrix.size(1), n)
+      }
+      while (i <= n) {
+        var rid = 1
+        val value = matrix.select(2, indices(i - 1))
+        while (rid <= res.size(1)) {
+          res.setValue(rid, i, value.valueAt(rid))
+          rid += 1
+        }
+        i += 1
+      }
+      res
+    }
+  }
 
-  // todo: now just support one image per batch
+  /**
+    * input contains:the class logits, the box_regression and
+    * bounding boxes that are used as reference, one for ech image
+    * @param input
+    * @return boxlist contains labels and scores
+    */
   override def updateOutput(input: Table): Tensor[Float] = {
     val class_logits = input[Tensor[Float]](1)
     val box_regression = input[Tensor[Float]](2)
@@ -146,10 +146,12 @@ class FPNPostProcessor(
     val proposals_split = proposals.split(boxes_per_image, dim = 1)
     val class_prob_split = class_prob.split(boxes_per_image, dim = 1)
 
+    // todo: only support one image for one batch
+    val roilabels = filterResults(proposals_split(0), class_prob_split(0), num_classes)
     output
   }
 
   override def updateGradInput(input: Table, gradOutput: Tensor[Float]): Table = {
-    gradInput
+    throw new UnsupportedOperationException("FPNPostProcessor only support inference")
   }
 }
