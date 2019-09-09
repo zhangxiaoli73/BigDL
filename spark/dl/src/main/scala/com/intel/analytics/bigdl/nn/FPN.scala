@@ -52,8 +52,10 @@ class FPN[T : ClassTag](
       if (inChannels(i) != 0) {
         val innerBlockModule =
           SpatialConvolution[T](inChannels(i), outChannels, 1, 1, 1, 1)
+            .setName(s"fpn_inner${i + 1}")
         val layerBlockModule =
           SpatialConvolution[T](outChannels, outChannels, 3, 3, 1, 1, 1, 1)
+            .setName(s"fpn_layer${i + 1}")
         innerBlockModules(i) = innerBlockModule
         layerBlockModules(i) = layerBlockModule
       }

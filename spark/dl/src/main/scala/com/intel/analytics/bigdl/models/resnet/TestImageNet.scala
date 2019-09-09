@@ -48,6 +48,7 @@ object TestImageNet {
       Engine.init
 
       val model = Module.loadModule[Float](param.model)
+      model.saveModule("/tmp")
       val evaluationSet = ImageNetDataSet.valDataSet(param.folder,
         sc, 224, param.batchSize).toDistributed().data(train = false)
 

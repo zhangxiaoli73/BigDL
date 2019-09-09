@@ -40,24 +40,6 @@ class BoxHead(
   )(implicit ev: TensorNumeric[Float])
   extends BaseModule[Float] {
 
-  val weight = Array(10.0f, 10.0f, 5.0f, 5.0f)
-
-  val features = this.featureExtractor(
-    inChannels, resolution, scales, samplingRatio.toInt, outputSize)
-
-  val clsPre = this.clsPredictor(numClasses, outputSize)
-  val bboxPre = this.bboxPredictor(numClasses, outputSize)
-
-  val postProcessor = new BoxPostProcessor(scoreThresh, nmsThresh,
-    maxPerImage, numClasses, weight = weight)
-
-  // debug
-  features.getParameters()._1.fill(0.001f)
-  clsPre.getParameters()._1.fill(0.001f)
-  bboxPre.getParameters()._1.fill(0.001f)
-
-  val pooler = new Pooler(resolution, scales, samplingRatio.toInt)
-
   override def buildModel(): Module[Float] = {
     val featureExtractor = this.featureExtractor(
       inChannels, resolution, scales, samplingRatio.toInt, outputSize)
@@ -82,7 +64,7 @@ class BoxHead(
 
   private[nn] def clsPredictor(numClass: Int,
                                inChannels: Int): Module[Float] = {
-    val cls_score = Linear[Float](inChannels, numClass).setName("forCls")
+    val cls_score = Linear[Float](inChannels, numClass).setName("cls_score")
     cls_score.weight.apply1(_ => RNG.normal(0, 0.01).toFloat)
     cls_score.bias.fill(0.0f)
     cls_score.asInstanceOf[Module[Float]]
@@ -90,7 +72,7 @@ class BoxHead(
 
   private[nn] def bboxPredictor(numClass: Int,
                                inChannels: Int): Module[Float] = {
-    val bbox_pred = Linear[Float](inChannels, numClass * 4)
+    val bbox_pred = Linear[Float](inChannels, numClass * 4).setName("bbox_pred")
     bbox_pred.weight.apply1(_ => RNG.normal(0, 0.001).toFloat)
     bbox_pred.bias.fill(0.0f)
     bbox_pred.asInstanceOf[Module[Float]]
@@ -105,8 +87,10 @@ class BoxHead(
 
     val fc1 = Linear[Float](inputSize, representationSize, withBias = true)
       .setInitMethod(Xavier, Zeros)
+      .setName("fc6")
     val fc2 = Linear[Float](representationSize, representationSize, withBias = true)
       .setInitMethod(Xavier, Zeros)
+      .setName("fc7")
 
     val model = Sequential[Float]()
       .add(pooler)
@@ -121,21 +105,21 @@ class BoxHead(
 }
 
 private[nn] class BoxPostProcessor(
-    scoreThresh: Float,
-    nmsThresh: Float,
-    maxPerImage: Int,
-    nClasses: Int,
-    weight: Array[Float] = Array(10.0f, 10.0f, 5.0f, 5.0f)
+    val scoreThresh: Float,
+    val nmsThresh: Float,
+    val maxPerImage: Int,
+    val nClasses: Int,
+    val weight: Array[Float] = Array(10.0f, 10.0f, 5.0f, 5.0f)
   ) (implicit ev: TensorNumeric[Float]) extends AbstractModule[Table, Table, Float] {
 
   private val softMax = SoftMax[Float]()
   private val nmsTool: Nms = new Nms
-  @transient var boxesBuf: Tensor[Float] = _
+  @transient var boxesBuf: Tensor[Float] = null
 
   /**
-    * Returns bounding-box detection results by thresholding on scores and
-    * applying non-maximum suppression (NMS).
-    */
+   * Returns bounding-box detection results by thresholding on scores and
+   * applying non-maximum suppression (NMS).
+   */
   private[nn] def filterResults(boxes: Tensor[Float], scores: Tensor[Float],
                                 num_classes: Int): Array[RoiLabel] = {
     val dim = num_classes * 4
@@ -163,18 +147,6 @@ private[nn] class BoxPostProcessor(
     val clsScores = selectTensor(scores.select(2, clsInd + 1), inds, 1)
     val clsBoxes = selectTensor(boxes.narrow(2, clsInd * 4 + 1, 4), inds, 1)
 
-    // set to 0 if samller than 0
-    require(clsBoxes.isContiguous())
-    var arr = clsBoxes.storage().array()
-    val offset = clsBoxes.storageOffset() - 1
-    var i = 0
-    while (i < arr.length) {
-      if (arr(i) <  0) {
-        arr(i) = 0
-      }
-      i += 1
-    }
-
     val keepN = nmsTool.nms(clsScores, clsBoxes, nmsThresh, inds)
 
     val bboxNms = selectTensor(clsBoxes, inds, 1, keepN)
@@ -183,7 +155,7 @@ private[nn] class BoxPostProcessor(
     RoiLabel(scoresNms, bboxNms)
   }
 
-  private[nn] def selectTensor(matrix: Tensor[Float], indices: Array[Int],
+  private def selectTensor(matrix: Tensor[Float], indices: Array[Int],
     dim: Int, indiceLen: Int = -1, out: Tensor[Float] = null): Tensor[Float] = {
     assert(dim == 1 || dim == 2)
     var i = 1
@@ -300,11 +272,11 @@ private[nn] class BoxPostProcessor(
   }
 
   /**
-    * input contains:the class logits, the box_regression and
-    * bounding boxes that are used as reference, one for ech image
-    * @param input
-    * @return boxlist contains labels and scores
-    */
+   * input contains:the class logits, the box_regression and
+   * bounding boxes that are used as reference, one for ech image
+   * @param input
+   * @return labels and bbox
+   */
   override def updateOutput(input: Table): Table = {
 //    if (isTraining()) {
 //      output = input
@@ -327,8 +299,8 @@ private[nn] class BoxPostProcessor(
     val roilabels = filterResults(proposals_split(0), class_prob_split(0), nClasses)
 
     if (output.toTable.length() == 0) {
-      output.toTable(1) = Tensor[Float]() // for scores
-      output.toTable(2) = Tensor[Float]() // for labels
+      output.toTable(1) = Tensor[Float]() // for labels
+      output.toTable(2) = Tensor[Float]() // for bbox
     }
 
     resultToTensor(roilabels, output.toTable(1), output.toTable(2))

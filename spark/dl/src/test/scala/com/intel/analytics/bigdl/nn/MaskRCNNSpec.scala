@@ -16,11 +16,12 @@
 
 package com.intel.analytics.bigdl.nn
 
-import com.intel.analytics.bigdl.models.maskrcnn.MaskRCNN
+import com.intel.analytics.bigdl.models.maskrcnn.MaskUtils
 import com.intel.analytics.bigdl.models.resnet.ResNetMask
+import com.intel.analytics.bigdl.nn.mkldnn.Equivalent
 import com.intel.analytics.bigdl.tensor.Tensor
-import com.intel.analytics.bigdl.utils.{RandomGenerator, T}
-import org.scalatest.{FlatSpec, Matchers}
+import com.intel.analytics.bigdl.utils.{RandomGenerator, T, Table}
+import org.scalatest.{FlatSpec, Matchers, path}
 
 class MaskRCNNSpec extends FlatSpec with Matchers {
   "build maskrcnn" should "be ok" in {
@@ -32,6 +33,136 @@ class MaskRCNNSpec extends FlatSpec with Matchers {
     val input = Tensor[Float](1, 3, 224, 256).rand()
     val output = mask.forward(input)
 
+    println("done")
+  }
+
+  "build maskrcnn with loaded weight" should "be ok" in {
+    val resNetOutChannels = 256
+    val backboneOutChannels = 256
+    val mask = new MaskRCNN(resNetOutChannels, backboneOutChannels)
+
+    val params = mask.getParametersTable()
+    val keys = params.keySet
+    val path = "/home/zhangli/workspace/tmp/mask/maskrcnn-benchmark/demo/weight/"
+    for(i <- keys) {
+      // for weight
+      var p = params.get[Table](i).get.get[Tensor[Float]]("weight").get
+      var size = p.size()
+      var name = path + i.toString + ".weight"
+      if (size(0) != 1) {
+        size.foreach(n => name = name + s"_${n}")
+      } else {
+        size.slice(1, size.length).foreach(n => name = name + s"_${n}")
+      }
+
+      name = name + ".txt"
+      val weight = MaskUtils.loadWeight(name, size)
+      p.set(weight)
+
+      // for bias
+      p = params.get[Table](i).get.get[Tensor[Float]]("bias").getOrElse(null)
+      if (p != null) {
+        size = p.size()
+        name = path + i.toString + ".bias"
+        size.foreach(n => name = name + s"_${n}")
+        name = name + ".txt"
+        val bias = MaskUtils.loadWeight(name, size)
+        p.set(bias)
+      }
+
+      println(s"${i} done")
+    }
+
+    val input = MaskUtils.loadWeight(path + "input.txt", Array(1, 3, 800, 1088))
+
+    mask.evaluate()
+    val out = mask.forward(input).toTable
+
+    val expectedBbox = Tensor[Float](T(
+      T( 453.1522,  334.3315,  501.1705,  421.0176),
+      T(359.4648,  344.7227,  419.7825,  415.5826),
+      T( 896.1373,  313.2400,  931.5672,  374.0488),
+      T( 993.7571,  297.5816, 1018.6810,  345.1978),
+      T( 942.7654,  292.9069,  999.7523,  358.1204),
+      T( 985.8417,  252.9171,  995.6226,  281.1850),
+      T( 980.4796,  253.2323,  992.5759,  278.4875),
+      T( 871.1727,  318.4342,  923.3215,  383.5176),
+      T( 975.4414,  254.2575,  987.0934,  275.7443),
+      T( 949.4941,  295.6840,  981.8075,  335.6603),
+      T( 952.8575,  314.9540,  996.2098,  360.9853),
+      T( 916.7671,  314.6682,  996.5461,  384.1572),
+      T( 970.6074,  296.2614, 1015.4398,  349.3472),
+      T( 883.4898,  331.6453,  910.9511,  379.8238),
+      T( 921.4911,  284.3484,  988.0775,  343.6074),
+      T( 959.0654,  297.3557,  997.5435,  337.0765),
+      T( 977.9693,  308.9249, 1004.4815,  351.7527),
+      T( 866.8826,  337.7082,  907.4388,  386.9977),
+      T( 922.5219,  285.9380,  957.7973,  338.0446),
+      T( 973.4485,  307.2058,  998.9310,  339.6187),
+      T(1052.2827,  306.5223, 1063.3223,  337.4540),
+      T( 989.5474,  255.2382,  999.1593,  282.3305),
+      T( 931.9264,  344.0161, 1001.4952,  384.5714), // 1 end
+      T( 944.2170,  249.2393, 1062.9771,  337.2081), // 8 end
+      T( 587.4909,  207.1821,  744.0966,  258.9776),
+      T( 921.8297,  249.6249, 1065.0000,  333.6861),
+      T( 146.7835,  237.2273,  204.3738,  257.4573),
+      T( 518.7712,  212.1742,  592.9564,  250.9497),
+      T( 242.7008,  240.0408,  256.0341,  253.2762),
+      T( 543.5923,  221.0722,  587.7577,  249.7338),
+      T( 468.7414,  230.5153,  513.8766,  248.7726),
+      T( 925.5219,  274.2933, 1030.0034,  327.5317),
+      T( 493.9839,  227.9635,  517.6334,  251.1486),
+      T( 509.0908,  224.4982,  529.2344,  255.8907),
+      T( 821.9435,  233.9751,  866.3505,  241.7147),
+      T( 201.3457,  240.2068,  213.4665,  253.8796),
+      T( 293.7153,  239.6023,  341.6818,  251.3944),
+      T( 254.5318,  244.3242,  293.3817,  252.6587),
+      T( 348.3199,  225.7574,  462.2884,  248.5971),
+      T( 381.9234,  229.3435,  451.7597,  246.1363),
+      T( 287.4272,  242.2798,  305.3281,  251.1286),
+      T( 212.9085,  239.7381,  253.9352,  254.2726),
+      T( 511.4533,  242.5052,  530.3216,  255.7836),
+      T( 126.7071,  249.5205,  149.3576,  257.5415),
+      T( 964.6575,  248.6210, 1063.6282,  308.8153),
+      T( 471.4401,  238.8418,  501.8425,  247.6842),
+      T( 933.4740,  275.6440, 1045.8156,  304.1557),
+      T( 471.3326,  238.6808,  514.0198,  252.7766),
+      T( 117.7000,  229.4729,  206.8829,  257.2673),
+      T( 509.2099,  234.7784,  574.7255,  258.6571),
+      T( 125.2171,  243.9744,  198.4265,  258.3085),
+      T( 536.7642,  215.5787,  590.4665,  239.3698),
+      T( 486.3723,  221.3730,  581.9128,  256.2294),
+      T( 146.5625,  247.9995,  210.5252,  258.7644),
+      T( 471.9031,  228.1445,  543.9926,  254.7226),
+      T( 501.0192,  191.5446,  592.9208,  257.1713), // 99 end
+      T( 430.5654,  382.5406,  543.2626,  412.4271), // 14 end
+      T( 276.3342,  432.4406,  327.4404,  494.2536),
+      T( 264.3383,  464.8788,  283.9221,  474.4892), // 15 end
+      T( 126.8237,  607.1029,  332.8095,  714.4706),
+      T( 408.4129,  400.1710,  439.2040,  454.2181), // 16 end
+      T( 127.4222,  608.2464,  332.5010,  714.0272),
+      T( 409.4522,  400.8844,  438.9731,  456.2548),
+      T( 919.0250,  346.2679, 1002.2537,  386.6497),
+      T( 415.0092,  392.9026,  464.0328,  449.2130),
+      T( 867.3154,  337.0943,  909.0655,  386.7977), // 17 end
+      T( 923.9782,  346.9974, 1002.3323,  386.0760),
+      T( 868.3989,  340.8422,  913.6042,  387.3757),
+      T( 869.8809,  344.9059,  972.6536,  387.6791), // 18 end
+      T( 922.6125,  351.4860, 1001.9156,  385.4829), // 19 end
+      T( 924.9070,  347.3515, 1001.5031,  386.1269),
+      T( 257.7678,  407.8460,  278.5858,  426.5238),  // 10 end
+      T( 867.5575,  344.1192,  905.8793,  387.5363))) // 25 end
+
+    val expectedLabel = Tensor[Float](
+      T( 1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,
+      1,  1,  1,  1,  1,  8,  9,  9,  9,  9,  9,  9,  9,  9,  9,  9,  9,  9,
+      9,  9,  9,  9,  9,  9,  9,  9,  9,  9,  9,  9,  9,  9,  9,  9,  9,  9,
+      9,  9, 14, 15, 15, 16, 16, 17, 17, 17, 17, 17, 18, 18, 18, 19, 20, 20,
+      25))
+
+
+    out[Tensor[Float]](2) should be(expectedLabel)
+//    Equivalent.nearequals(out[Tensor[Float]](1), expectedBbox, 1e-3) should be (true)
     println("done")
   }
 

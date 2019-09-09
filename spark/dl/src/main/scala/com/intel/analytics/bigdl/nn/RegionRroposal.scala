@@ -15,23 +15,18 @@
  */
 package com.intel.analytics.bigdl.nn
 
-import breeze.linalg
+import java.util
+
 import breeze.linalg.{dim, min}
 import com.intel.analytics.bigdl.Module
 import com.intel.analytics.bigdl.nn.abstractnn.AbstractModule
-import com.intel.analytics.bigdl.nn.keras.Convolution2D
 import com.intel.analytics.bigdl.tensor.{Storage, Tensor}
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
 import com.intel.analytics.bigdl.transform.vision.image.util.BboxUtil
-import com.intel.analytics.bigdl.utils.RandomGenerator._
 import com.intel.analytics.bigdl.utils.{LayerException, T, Table}
-import com.sun.tracing.dtrace.ModuleName
-import org.apache.spark.api.java.function
-import org.dmg.pmml.True
 import sun.misc.GC
 
 import scala.collection.mutable.ArrayBuffer
-import scala.reflect.ClassTag
 
 /**
  * Layer for RPN computation. Takes feature maps from the backbone and
@@ -95,12 +90,15 @@ class RegionRroposal(
   private[nn] def rpnHead(inChannels: Int, numAnchors: Int): Module[Float] = {
     val conv = SpatialConvolution[Float](inChannels, inChannels,
       kernelH = 3, kernelW = 3, strideH = 1, strideW = 1, padH = 1, padW = 1)
+      .setName("rpn.head.conv")
     conv.setInitMethod(RandomNormal(0.0, 0.01), Zeros)
     val conv2 = SpatialConvolution[Float](inChannels, numAnchors,
-      kernelH = 1, kernelW = 1, strideH = 1, strideW = 1).setName(this.getName() + "_cls_logits")
+       kernelH = 1, kernelW = 1, strideH = 1, strideW = 1) // .setName(this.getName() + "_cls_logits")
+      .setName("rpn.head.cls_logits")
     conv2.setInitMethod(RandomNormal(0.0, 0.01), Zeros)
     val conv3 = SpatialConvolution[Float](inChannels, numAnchors * 4,
-      kernelH = 1, kernelW = 1, strideH = 1, strideW = 1).setName(this.getName() + "_bbox_pred")
+      kernelH = 1, kernelW = 1, strideH = 1, strideW = 1) // .setName(this.getName() + "_bbox_pred")
+      .setName("rpn.head.bbox_pred")
     conv3.setInitMethod(RandomNormal(0.0, 0.01), Zeros)
 
     val input = Input()
@@ -144,17 +142,18 @@ class RegionRroposal(
       i += 1
     }
 
-    output.resize(bboxNumber, 4)
-
     val post_nms_top_n = min(fpnPostNmsTopN, bboxNumber)
+    output.resize(post_nms_top_n, 4)
+
     // sort
-    selectOverAllLevels(selectorRes, post_nms_top_n, output)
+    selectOverAllLevels(selectorRes, post_nms_top_n, bboxNumber, output)
     output
   }
 
-  private def selectOverAllLevels(res: Table, post_nms_top_n: Int, output: Tensor[Float]): Unit = {
-    val scoreResult = Tensor[Float]().resize(post_nms_top_n)
-    val bboxResult = Tensor[Float]().resize(post_nms_top_n, 4)
+  private def selectOverAllLevels(res: Table, post_nms_top_n: Int, totalNumber: Int,
+                                  output: Tensor[Float]): Unit = {
+    val scoreResult = Tensor[Float]().resize(totalNumber)
+    val bboxResult = Tensor[Float]().resize(totalNumber, 4)
     var i = 1
     var startOffset = 1
     while (i <= res.length()) {
@@ -246,10 +245,11 @@ private[nn] class ProposalPostProcessor(
   val minSize: Int = 0)
   (implicit ev: TensorNumeric[Float]) extends AbstractModule[Table, Table, Float]{
 
-  @transient private val sortedScores: Tensor[Float] = Tensor[Float]()
-  @transient private val sortedInds: Tensor[Float] = Tensor[Float]()
-  @transient private val sigmoid = Sigmoid[Float]()
-  @transient private val nms = new Nms()
+  @transient private var sortedScores: Tensor[Float] = null
+  @transient private var sortedInds: Tensor[Float] = null
+  private val nms = new Nms()
+  private val arr = new Array[Int](10000)
+  private val sigmoid = Sigmoid[Float]()
 
   /**
    * Arguments:
@@ -285,10 +285,14 @@ private[nn] class ProposalPostProcessor(
 
     val num_anchors = A * H * W
     val topNum = if (this.isTraining()) {
-      Math.min(preNmsTopNTest, num_anchors)
-    } else Math.min(preNmsTopNTrain, num_anchors)
+      Math.min(preNmsTopNTrain, num_anchors)
+    } else Math.min(preNmsTopNTest, num_anchors)
     // scores ==> objectness
     // sortedScores ===> objectness, sortedInds = topk_idx + 1
+    // initial
+    if (sortedScores == null) sortedScores = Tensor[Float]()
+    if (sortedInds == null) sortedInds = Tensor[Float]()
+
     objectness.topk(topNum, dim = 2, increase = false,
       result = sortedScores, indices = sortedInds)
 
@@ -312,7 +316,7 @@ private[nn] class ProposalPostProcessor(
     var keepN = BboxUtil.clipBoxes(proposals, imageSize.valueAt(1), imageSize.valueAt(2), minBoxH
       , minBoxW, sortedScores)
 
-    val arr = new Array[Int](100000)
+    util.Arrays.fill(arr, 0, arr.length, 0)
     nms.nms(sortedScores, proposals, thresh = nmsThread, arr, sorted = true)
     val arrFilter = arr.filter(_ > 0).map(_.toFloat)
 
