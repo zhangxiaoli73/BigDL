@@ -31,7 +31,7 @@ class BoxHead(
   val inChannels: Int,
   val resolution: Int,
   val scales: Array[Float],
-  val samplingRatio: Float,
+  val samplingRatio: Int,
   val scoreThresh: Float,
   val nmsThresh: Float,
   val maxPerImage: Int,
@@ -42,10 +42,10 @@ class BoxHead(
 
   override def buildModel(): Module[Float] = {
     val featureExtractor = this.featureExtractor(
-      inChannels, resolution, scales, samplingRatio.toInt, outputSize)
+      inChannels, resolution, scales, samplingRatio, outputSize)
 
-    val clsPre = this.clsPredictor(numClasses, outputSize)
-    val bboxPre = this.bboxPredictor(numClasses, outputSize)
+    val clsPredictor = this.clsPredictor(numClasses, outputSize)
+    val bboxPredictor = this.bboxPredictor(numClasses, outputSize)
 
     val weight = Array(10.0f, 10.0f, 5.0f, 5.0f)
     val postProcessor = new BoxPostProcessor(scoreThresh, nmsThresh,
@@ -55,8 +55,8 @@ class BoxHead(
     val proposals = Input()
 
     val boxFeatures = featureExtractor.inputs(features, proposals)
-    val classLogits = clsPre.inputs(boxFeatures)
-    val boxRegression = bboxPre.inputs(boxFeatures)
+    val classLogits = clsPredictor.inputs(boxFeatures)
+    val boxRegression = bboxPredictor.inputs(boxFeatures)
     val result = postProcessor.inputs(classLogits, boxRegression, proposals)
 
     Graph(Array(features, proposals), Array(boxFeatures, result))
@@ -114,21 +114,22 @@ private[nn] class BoxPostProcessor(
 
   private val softMax = SoftMax[Float]()
   private val nmsTool: Nms = new Nms
-  @transient var boxesBuf: Tensor[Float] = null
+  @transient  private var boxesBuf: Tensor[Float] = null
 
   /**
    * Returns bounding-box detection results by thresholding on scores and
    * applying non-maximum suppression (NMS).
    */
   private[nn] def filterResults(boxes: Tensor[Float], scores: Tensor[Float],
-                                num_classes: Int): Array[RoiLabel] = {
-    val dim = num_classes * 4
+                                numOfClasses: Int): Array[RoiLabel] = {
+    val dim = numOfClasses * 4
     boxes.resize(Array(boxes.nElement() / dim, dim))
-    scores.resize(Array(scores.nElement() / num_classes, num_classes))
+    scores.resize(Array(scores.nElement() / numOfClasses, numOfClasses))
 
-    val results = new Array[RoiLabel](num_classes)
+    val results = new Array[RoiLabel](numOfClasses)
+    // skip clsInd = 0, because it's the background class
     var clsInd = 1
-    while (clsInd < num_classes) {
+    while (clsInd < numOfClasses) {
       results(clsInd) = postProcessOneClass(scores, boxes, clsInd)
       clsInd += 1
     }
@@ -157,7 +158,7 @@ private[nn] class BoxPostProcessor(
 
   private def selectTensor(matrix: Tensor[Float], indices: Array[Int],
     dim: Int, indiceLen: Int = -1, out: Tensor[Float] = null): Tensor[Float] = {
-    assert(dim == 1 || dim == 2)
+    require(dim == 1 || dim == 2, s"dim should be 1 or 2, but get ${dim}")
     var i = 1
     val n = if (indiceLen == -1) indices.length else indiceLen
     if (matrix.nDimension() == 1) {
@@ -289,14 +290,14 @@ private[nn] class BoxPostProcessor(
     if (boxesBuf == null) boxesBuf = Tensor[Float]
     boxesBuf.resizeAs(boxRegression)
 
-    val class_prob = softMax.forward(classLogits)
+    val classProb = softMax.forward(classLogits)
     BboxUtil.decodeWithWeight(boxRegression, bbox, weight, boxesBuf)
 
     val boxesInImage = bbox.size(1)
-    val proposals_split = boxesBuf.split(boxesInImage, dim = 1)
-    val class_prob_split = class_prob.split(boxesInImage, dim = 1)
+    val proposalSplit = boxesBuf.split(boxesInImage, dim = 1)
+    val classProbSplit = classProb.split(boxesInImage, dim = 1)
 
-    val roilabels = filterResults(proposals_split(0), class_prob_split(0), nClasses)
+    val roilabels = filterResults(proposalSplit(0), classProbSplit(0), nClasses)
 
     if (output.toTable.length() == 0) {
       output.toTable(1) = Tensor[Float]() // for labels
@@ -317,7 +318,7 @@ object BoxHead {
   def apply(inChannels: Int,
   resolution: Int = 7,
   scales: Array[Float] = Array[Float](0.25f, 0.125f, 0.0625f, 0.03125f),
-  samplingRatio: Float = 2.0f,
+  samplingRatio: Int = 2,
   scoreThresh: Float = 0.05f,
   nmsThresh: Float = 0.5f,
   maxPerImage: Int = 100,

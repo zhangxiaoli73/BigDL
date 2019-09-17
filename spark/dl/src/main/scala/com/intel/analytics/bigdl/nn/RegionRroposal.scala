@@ -16,7 +16,6 @@
 package com.intel.analytics.bigdl.nn
 
 import java.util
-
 import breeze.linalg.{dim, min}
 import com.intel.analytics.bigdl.Module
 import com.intel.analytics.bigdl.nn.abstractnn.AbstractModule
@@ -24,8 +23,6 @@ import com.intel.analytics.bigdl.tensor.{Storage, Tensor}
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
 import com.intel.analytics.bigdl.transform.vision.image.util.BboxUtil
 import com.intel.analytics.bigdl.utils.{LayerException, T, Table}
-import sun.misc.GC
-
 import scala.collection.mutable.ArrayBuffer
 
 /**
@@ -50,12 +47,13 @@ class RegionRroposal(
    val preNmsTopNTrain: Int = 2000,
    val postNmsTopNTrain: Int = 2000,
    val nmsThread: Float = 0.7f,
-   val minSize: Int = 0,
-   val fpnPostNmsTopN: Int = 2000)(implicit ev: TensorNumeric[Float])
+   val minSize: Int = 0)(implicit ev: TensorNumeric[Float])
    extends AbstractModule[Table, Tensor[Float], Float] {
 
   // for anchor generation
-  require(anchorSizes.length == anchorStride.length, s"anchor size and stride should be same")
+  require(anchorSizes.length == anchorStride.length,
+      s"length of anchor size and stride should be same, " +
+      s"but get size length ${anchorSizes.length}, stride length ${anchorStride.length}")
 
   private val scalesForStride = new Array[Float](1)
   private val anchors = new ArrayBuffer[Anchor]
@@ -85,7 +83,7 @@ class RegionRroposal(
   }
 
   /**
-   * Adds a simple RPN Head with classification and regression heads
+   * Add a simple RPN Head with classification and regression heads
    */
   private[nn] def rpnHead(inChannels: Int, numAnchors: Int): Module[Float] = {
     val conv = SpatialConvolution[Float](inChannels, inChannels,
@@ -117,7 +115,6 @@ class RegionRroposal(
    *  computing the predictions.
    */
   override def updateOutput(input: Table): Tensor[Float] = {
-    require(!this.isTraining(), "Only support RegionProposal inference")
     val features = input[Table](1)
     val images = input[Tensor[Float]](2)
     val anchors = this.anchorGenerator(features)
@@ -127,10 +124,10 @@ class RegionRroposal(
     while (i <= anchors.length()) {
       val headOutput = head.forward(features(i)).toTable
       val objectness = headOutput.apply[Tensor[Float]](1)
-      val rpn_box_regression = headOutput.apply[Tensor[Float]](2)
+      val boxRegression = headOutput.apply[Tensor[Float]](2)
 
       val out = boxSelector.forward(T(anchors[Tensor[Float]](i), objectness,
-        rpn_box_regression, images)).clone()
+        boxRegression, images))
 
       if (!selectorRes.contains(i)) selectorRes(i) = T(Tensor[Float](), Tensor[Float]())
       selectorRes(i).asInstanceOf[Table].apply[Tensor[Float]](1).resizeAs(out[Tensor[Float]](1))
@@ -142,15 +139,16 @@ class RegionRroposal(
       i += 1
     }
 
-    val post_nms_top_n = min(fpnPostNmsTopN, bboxNumber)
-    output.resize(post_nms_top_n, 4)
+    val postNmsTopN = if (this.isTraining()) min(postNmsTopNTrain, bboxNumber)
+    else min(postNmsTopNTest, bboxNumber)
+    output.resize(postNmsTopN, 4)
 
     // sort
-    selectOverAllLevels(selectorRes, post_nms_top_n, bboxNumber, output)
+    selectOverAllLevels(selectorRes, postNmsTopN, bboxNumber, output)
     output
   }
 
-  private def selectOverAllLevels(res: Table, post_nms_top_n: Int, totalNumber: Int,
+  private def selectOverAllLevels(res: Table, postNmsTopN: Int, totalNumber: Int,
                                   output: Tensor[Float]): Unit = {
     val scoreResult = Tensor[Float]().resize(totalNumber)
     val bboxResult = Tensor[Float]().resize(totalNumber, 4)
@@ -165,7 +163,7 @@ class RegionRroposal(
       i += 1
     }
 
-    val inds = scoreResult.topk(post_nms_top_n, dim = 1, sortedResult = true, increase = false)
+    val inds = scoreResult.topk(postNmsTopN, dim = 1, sortedResult = true, increase = false)
 
     i = 1
     while (i <= inds._2.nElement()) {
@@ -229,11 +227,10 @@ object RegionRroposal {
             preNmsTopNTrain: Int = 2000,
             postNmsTopNTrain: Int = 2000,
             nmsThread: Float = 0.7f,
-            minSize: Int = 0,
-            fpnPostNmsTopN: Int = 2000)(implicit ev: TensorNumeric[Float]): RegionRroposal =
+            minSize: Int = 0)(implicit ev: TensorNumeric[Float]): RegionRroposal =
     new RegionRroposal(inChannels, anchorSizes, aspectRatios, anchorStride,
       preNmsTopNTest, postNmsTopNTest, preNmsTopNTrain, postNmsTopNTrain, nmsThread,
-      minSize, fpnPostNmsTopN)
+      minSize)
 }
 
 private[nn] class ProposalPostProcessor(
@@ -247,15 +244,18 @@ private[nn] class ProposalPostProcessor(
 
   @transient private var sortedScores: Tensor[Float] = null
   @transient private var sortedInds: Tensor[Float] = null
+  @transient private var boxRegressionIndex: Tensor[Float] = null
+  @transient private var anchorsIndex: Tensor[Float] = null
+
   private val nms = new Nms()
   private val arr = new Array[Int](10000)
   private val sigmoid = Sigmoid[Float]()
 
   /**
    * Arguments:
-   *    anchors: Tensor with shape (N, nums, 4)
-   *    objectness: Tensor of size N, A, H, W
-   *    box_regression: Tensor of size N, A * 4, H, W
+   *    anchors: Tensor with shape (batchsize, nums, 4)
+   *    objectness: Tensor of size (batchsize, anchornumber, height, width)
+   *    box_regression: Tensor of size (batchsize, anchornumber * 4, height, width)
    *    img_info: image size
    * @param input
    * @return
@@ -264,13 +264,13 @@ private[nn] class ProposalPostProcessor(
     //  for memory case, input may be changed
     val anchors = input[Tensor[Float]](1)
     var objectness = input[Tensor[Float]](2)
-    var box_regression = input[Tensor[Float]](3)
-    val imageSize = input[Tensor[Float]](4) // height, width
+    var boxRegression = input[Tensor[Float]](3)
+    val imageSize = input[Tensor[Float]](4) // original image height & width
 
-    val N = objectness.size(1)
-    val A = objectness.size(2)
-    val H = objectness.size(3)
-    val W = objectness.size(4)
+    val N = objectness.size(1) // batch size
+    val A = objectness.size(2) // anchor number
+    val H = objectness.size(3) // height
+    val W = objectness.size(4) // width
 
     // permute_and_flatten
     objectness = objectness.transpose(3, 1).transpose(2, 4).contiguous()
@@ -280,13 +280,13 @@ private[nn] class ProposalPostProcessor(
     objectness = sigmoid.forward(objectness)
 
     // permute_and_flatten
-    box_regression = box_regression.transpose(3, 1).transpose(2, 4)
+    boxRegression = boxRegression.transpose(3, 1).transpose(2, 4)
       .contiguous().resize(Array(N, A * H * W, 4))
 
-    val num_anchors = A * H * W
+    val numAnchors = A * H * W
     val topNum = if (this.isTraining()) {
-      Math.min(preNmsTopNTrain, num_anchors)
-    } else Math.min(preNmsTopNTest, num_anchors)
+      Math.min(preNmsTopNTrain, numAnchors)
+    } else Math.min(preNmsTopNTest, numAnchors)
     // scores ==> objectness
     // sortedScores ===> objectness, sortedInds = topk_idx + 1
     // initial
@@ -298,18 +298,20 @@ private[nn] class ProposalPostProcessor(
 
     objectness.resizeAs(sortedScores).copy(sortedScores)
 
-    val tmp = Tensor[Float]().resizeAs(box_regression)
-    tmp.index(2, sortedInds.squeeze(1), box_regression)
+    if (boxRegressionIndex == null) boxRegressionIndex = Tensor[Float]()
+    boxRegressionIndex.resizeAs(boxRegression)
+    boxRegressionIndex.index(2, sortedInds.squeeze(1), boxRegression)
+    // view (-1, 4)
+    boxRegressionIndex.resize(boxRegressionIndex.nElement() / 4, 4)
 
     // view (-1, 4)
-    val tmp_anchors = Tensor[Float]().resizeAs(anchors)
-    tmp_anchors.index(1, sortedInds.squeeze(1), anchors)
-    val concat_anchors = tmp_anchors.resize(tmp_anchors.nElement() / 4, 4)
-    // view (-1, 4)
-    val box_regression_view = tmp.resize(tmp.nElement() / 4, 4)
+    if (anchorsIndex == null) anchorsIndex = Tensor[Float]()
+    anchorsIndex.resizeAs(anchors)
+    anchorsIndex.index(1, sortedInds.squeeze(1), anchors)
+    anchorsIndex.resize(anchorsIndex.nElement() / 4, 4)
 
-    val proposals = BboxUtil.bboxTransformInv(concat_anchors,
-      box_regression_view, normalized = true)
+    val proposals = BboxUtil.bboxTransformInv(anchorsIndex,
+      boxRegressionIndex, normalized = true)
     // remove _small box
     val minBoxH = minSize
     val minBoxW = minSize

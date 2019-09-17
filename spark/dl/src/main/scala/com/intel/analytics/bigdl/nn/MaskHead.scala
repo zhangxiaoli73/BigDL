@@ -16,10 +16,11 @@
 package com.intel.analytics.bigdl.nn
 
 import com.intel.analytics.bigdl._
-import com.intel.analytics.bigdl.nn.abstractnn.{AbstractModule, Activity}
+import com.intel.analytics.bigdl.nn.abstractnn.AbstractModule
+import com.intel.analytics.bigdl.nn.{Module => _}
 import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
-import com.intel.analytics.bigdl.utils.{T, Table}
+import com.intel.analytics.bigdl.utils.Table
 
 class MaskHead(
   val inChannels: Int,
@@ -113,12 +114,11 @@ class MaskHead(
       nextFeatures = features
       i += 1
     }
-    // model.add(ReLU[Float]())
-    model
+    model.add(ReLU[Float]())
   }
 }
 
-private[nn] class MaskPostProcessor()(implicit ev: TensorNumeric[Float])
+class MaskPostProcessor()(implicit ev: TensorNumeric[Float])
   extends AbstractModule[Table, Tensor[Float], Float] {
 
   @transient var rangeBuffer: Tensor[Float] = null

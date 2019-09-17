@@ -16,7 +16,7 @@
 
 package com.intel.analytics.bigdl.nn
 
-import com.intel.analytics.bigdl.models.maskrcnn.MaskUtils
+import com.intel.analytics.bigdl.models.maskrcnn.{MaskRCNN, MaskUtils}
 import com.intel.analytics.bigdl.models.resnet.ResNetMask
 import com.intel.analytics.bigdl.nn.mkldnn.Equivalent
 import com.intel.analytics.bigdl.tensor.Tensor

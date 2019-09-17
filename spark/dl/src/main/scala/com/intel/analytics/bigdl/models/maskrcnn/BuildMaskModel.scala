@@ -16,14 +16,14 @@
 
 package com.intel.analytics.bigdl.models.maskrcnn
 
-import com.intel.analytics.bigdl.nn.{MaskRCNN, Module}
+import com.intel.analytics.bigdl.nn.Module
 import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.utils.{RandomGenerator, Table}
 
 import scala.collection.mutable.ArrayBuffer
 import scala.io.Source
 
-object BuildMask {
+object BuildMaskModel {
   def main(args: Array[String]): Unit = {
     RandomGenerator.RNG.setSeed(100)
     val resNetOutChannels = 256

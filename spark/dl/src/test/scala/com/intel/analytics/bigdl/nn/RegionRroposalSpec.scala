@@ -28,7 +28,7 @@ class RegionRroposalSpec extends FlatSpec with Matchers {
     val layer = new RegionRroposal(6,
       Array[Float](32, 64, 128, 256, 512),
       Array[Float](0.5f, 1.0f, 2.0f),
-      Array[Float](4, 8, 16, 32, 64), 2000, 2000, 2000, 2000, 0.7f, 0, 2000)
+      Array[Float](4, 8, 16, 32, 64), 2000, 2000, 2000, 2000, 0.7f, 0)
 
     val images = Tensor[Float](T(20, 38))
 
@@ -278,7 +278,7 @@ class RegionRroposalSpec extends FlatSpec with Matchers {
     val layer = new RegionRroposal(6,
       Array[Float](32, 64, 128, 256, 512),
       Array[Float](0.5f, 1.0f, 2.0f),
-      Array[Float](4, 8, 16, 32, 64), 2000, 2000, 2000, 2000, 0.7f, 0, 2000)
+      Array[Float](4, 8, 16, 32, 64), 2000, 2000, 2000, 2000, 0.7f, 0)
 
     val images = Tensor[Float](T(20, 38))
 
@@ -741,7 +741,7 @@ class RegionRroposalSpec extends FlatSpec with Matchers {
     val layer = new RegionRroposal(6,
       Array[Float](32, 64, 128, 256, 512),
       Array[Float](0.5f, 1.0f, 2.0f),
-      Array[Float](4, 8, 16, 32, 64), 2000, 2000, 2000, 2000, 0.7f, 0, 2000)
+      Array[Float](4, 8, 16, 32, 64), 2000, 2000, 2000, 2000, 0.7f, 0)
 
     val input = Tensor[Float](T(T(T(T(0.7668, 0.1659, 0.4393, 0.2243),
       T(0.8935, 0.0497, 0.1780, 0.3011),
@@ -807,7 +807,7 @@ class RegionRroposalSpec extends FlatSpec with Matchers {
     val layer = new RegionRroposal(6,
       Array[Float](32, 64, 128, 256, 512),
       Array[Float](0.5f, 1.0f, 2.0f),
-      Array[Float](4, 8, 16, 32, 64), 2000, 2000, 2000, 2000, 0.7f, 0, 2000)
+      Array[Float](4, 8, 16, 32, 64), 2000, 2000, 2000, 2000, 0.7f, 0)
 
     val proposal = layer.rpnHead(6, 3)
     val input = Tensor[Float](T(T(T(T(0.7668, 0.1659, 0.4393, 0.2243),
@@ -1105,7 +1105,7 @@ class RegionRroposalSerialTest extends ModuleSerializationTest {
       Array[Float](32, 64, 128, 256, 512),
       Array[Float](0.5f, 1.0f, 2.0f),
       Array[Float](4, 8, 16, 32, 64),
-      2000, 2000, 2000, 2000, 0.7f, 0, 2000).setName("RegionRroposal")
+      2000, 2000, 2000, 2000, 0.7f, 0).setName("RegionRroposal")
 
     val features = Tensor[Float](1, 6, 3, 4).rand()
     val imgInfo = Tensor[Float](T(20, 38))

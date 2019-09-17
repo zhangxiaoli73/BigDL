@@ -14,10 +14,11 @@
  * limitations under the License.
  */
 
-package com.intel.analytics.bigdl.nn
+package com.intel.analytics.bigdl.models.maskrcnn
 
 import com.intel.analytics.bigdl.Module
 import com.intel.analytics.bigdl.models.resnet.{Convolution, Sbn}
+import com.intel.analytics.bigdl.nn._
 import com.intel.analytics.bigdl.nn.abstractnn.Activity
 import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
@@ -42,7 +43,7 @@ class MaskRCNN(val inChannels: Int,
     val maskResolution: Int = 14
     val resolution: Int = 28
     val scales: Array[Float] = Array[Float](0.25f, 0.125f, 0.0625f, 0.03125f)
-    val samplingRatio: Float = 2.0f
+    val samplingRatio: Int = 2
     val boxScoreThresh: Float = 0.05f
     val boxNmsThread: Float = 0.5f
     val maxPerImage: Int = 100
@@ -56,7 +57,7 @@ class MaskRCNN(val inChannels: Int,
     private val backbone = buildBackbone(inChannels, outChannels)
     private val rpn = RegionRroposal(inChannels, anchorSizes, aspectRatios, anchorStride,
       preNmsTopNTest, postNmsTopNTest, preNmsTopNTrain, postNmsTopNTrain, rpnNmsThread,
-      minSize, fpnPostNmsTopNTest)
+      minSize)
     private val boxHead = BoxHead(inChannels, boxResolution, scales, samplingRatio,
       boxScoreThresh, boxNmsThread, maxPerImage, outputSize, numClasses)
     private val maskHead = MaskHead(inChannels, maskResolution, scales, samplingRatio,

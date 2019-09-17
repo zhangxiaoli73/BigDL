@@ -39,4 +39,6 @@ object MaskUtils {
     require(totalLength == size.product, s"total length ${totalLength} ${size.product}")
     weight
   }
+
+
 }
