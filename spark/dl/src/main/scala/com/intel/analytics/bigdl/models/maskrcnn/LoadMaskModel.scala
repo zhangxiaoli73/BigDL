@@ -23,7 +23,7 @@ import com.intel.analytics.bigdl.utils.{RandomGenerator, Table}
 import scala.collection.mutable.ArrayBuffer
 import scala.io.Source
 
-object BuildMaskModel {
+object LoadMaskModel {
   def main(args: Array[String]): Unit = {
     RandomGenerator.RNG.setSeed(100)
     val resNetOutChannels = 256

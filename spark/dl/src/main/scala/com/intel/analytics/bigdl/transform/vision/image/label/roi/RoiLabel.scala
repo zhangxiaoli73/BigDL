@@ -26,7 +26,8 @@ import com.intel.analytics.bigdl.utils.{T, Table}
  * the second line is difficults
  * @param bboxes N * 4
  */
-case class RoiLabel(classes: Tensor[Float], bboxes: Tensor[Float]) {
+case class RoiLabel(classes: Tensor[Float], bboxes: Tensor[Float],
+                    mask: Tensor[Float] = null, maskSize: Tensor[Float] = null) {
   def copy(target: RoiLabel): Unit = {
     classes.resizeAs(target.classes).copy(target.classes)
     bboxes.resizeAs(target.bboxes).copy(target.bboxes)
