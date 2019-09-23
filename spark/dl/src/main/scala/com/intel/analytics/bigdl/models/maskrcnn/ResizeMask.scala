@@ -82,11 +82,15 @@ class ResizeMask(minSize: Int = -1, maxSize: Int = -1)
     val scaledW = feature.getWidth().toFloat / feature.getOriginalWidth
     val scaledH = feature.getHeight().toFloat / feature.getOriginalHeight
 
+    // it is a array
     val mask = feature.getLabel[RoiLabel].mask
-    // mask shape (poly number, 2)
-    if (mask != null) { // not mask
-      mask.select(2, 1).mul(scaledW)
-      mask.select(2, 2).mul(scaledH)
+    for (i <- 0 to (mask.length - 1)) {
+      val oneMask = mask(i)
+      // one mask shape (poly number, 2)
+      if (oneMask != null) { // not mask
+        oneMask.select(2, 1).mul(scaledW)
+        oneMask.select(2, 2).mul(scaledH)
+      }
     }
   }
 }
