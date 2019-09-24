@@ -26,7 +26,7 @@ class MaskHead(
   val inChannels: Int,
   val resolution: Int,
   val scales: Array[Float],
-  val samplingRratio: Float,
+  val samplingRratio: Int,
   val layers: Array[Int],
   val dilation: Int,
   val numClasses: Int,
