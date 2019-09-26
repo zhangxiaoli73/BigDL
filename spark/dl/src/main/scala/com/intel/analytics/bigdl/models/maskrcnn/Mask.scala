@@ -50,20 +50,20 @@ object Mask {
     return boxes_exp
   }
 
-  // mask two dims
+  // mask with three dims (channel, height, wide)
   def expandMasks(mask: Tensor[Float], padding: Int): (Tensor[Float], Float) = {
     val N = mask.size(1)
     val M = mask.size(mask.dim() - 1)
     val pad2 = 2 * padding
     val scale = (M + pad2).toFloat / M
-    val padded_mask = Tensor[Float](N, 1, M + pad2, M + pad2)
+    val padded_mask = Tensor[Float](N, M + pad2, M + pad2)
 
     require(mask.isContiguous() && padded_mask.isContiguous())
 
     val maskHeight = mask.size(2)
     val maskWidth = mask.size(3)
-    val padHeight = padded_mask.size(3)
-    val padWidth = padded_mask.size(4)
+    val padHeight = padded_mask.size(2)
+    val padWidth = padded_mask.size(3)
 
     var i = 1
     while (i <= N) {
@@ -131,9 +131,8 @@ object Mask {
     val maskY0 = x_0 - boxExpand.valueAt(1).toInt
     val maskY1 = x_1 - boxExpand.valueAt(1).toInt
 
-    val tmp1 = lastMask.narrow(2, maskX0 + 1, maskX1 - maskX0).narrow(3, maskY0 + 1, maskY1 - maskY0)
-    val tmp2 = im_mask.narrow(1, y_0 + 1, y_1 - y_0).narrow(2, x_0 + 1, x_1 - x_0)
-    tmp2.copy(tmp1)
+    im_mask.narrow(1, y_0 + 1, y_1 - y_0).narrow(2, x_0 + 1, x_1 - x_0).copy(
+      lastMask.narrow(2, maskX0 + 1, maskX1 - maskX0).narrow(3, maskY0 + 1, maskY1 - maskY0))
     return im_mask
   }
 
@@ -374,7 +373,7 @@ object Mask {
     val batchImgs = Tensor[Float](batchShape)
 
     for (i <- 0 to (tensors.length - 1)) {
-      batchImgs.select(1, 1).narrow(2, 1, tensors(i).size(2))
+      batchImgs.select(1, i + 1).narrow(2, 1, tensors(i).size(2))
         .narrow(3, 1, tensors(i).size(3)).copy(tensors(i))
     }
     batchImgs

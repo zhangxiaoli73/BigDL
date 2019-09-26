@@ -21,7 +21,8 @@ import java.nio.file.{Path, Paths}
 
 import breeze.linalg.{*, max, min, shuffle, where}
 import com.intel.analytics.bigdl.dataset.image.BGRImage
-import com.intel.analytics.bigdl.models.maskrcnn.{MaskRCNN, MaskUtils}
+import com.intel.analytics.bigdl.dataset.segmentation.COCO.MaskAPI
+import com.intel.analytics.bigdl.models.maskrcnn.{Mask, MaskRCNN, MaskUtils}
 import com.intel.analytics.bigdl.nn.ResizeBilinear
 import com.intel.analytics.bigdl.nn.abstractnn.DataFormat
 import com.intel.analytics.bigdl.tensor.Tensor
@@ -70,20 +71,18 @@ object MaskInference {
 
   // box shape: box_number * 4
   // mask shape: box_number * 1* 28 * 28
-  def prepareForCocoSegmentation(mask: Tensor[Float], bbox: Tensor[Float],
-                                 imageHeight: Int, imageWidth: Int): Unit = {
-    // need, category_id, segmentation, score
-
+  def CocoPostProcessor(mask: Array[Tensor[Float]], bbox: Tensor[Float],
+                        imageHeight: Int, imageWidth: Int): ROILabel = {
     // resize mask
-    require(mask.size(1) == bbox.size(1), s"error get ${mask.size(1)} ${bbox.size(1)}")
+    require(mask.length == bbox.size(1), s"error get ${mask.size(1)} ${bbox.size(1)}")
     val boxNumber = mask.size(1)
     var i = 0
     while (i < boxNumber) {
+      val binaryMask = Mask.pasteMaskInImage(mask(i), bbox.select(1, i), imageHeight, imageWidth)
 
+      mask(i) = MaskAPI.binaryToRLE(binaryMask)
       i += 1
     }
-
-
     // encode to rle
   }
 }
