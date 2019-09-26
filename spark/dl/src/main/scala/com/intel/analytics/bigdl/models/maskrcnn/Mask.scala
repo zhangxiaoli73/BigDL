@@ -17,6 +17,7 @@
 
 package com.intel.analytics.bigdl.models.maskrcnn
 
+import breeze.linalg.*
 import com.intel.analytics.bigdl.nn.ResizeBilinear
 import com.intel.analytics.bigdl.nn.abstractnn.DataFormat
 import com.intel.analytics.bigdl.tensor.Tensor
@@ -25,25 +26,26 @@ import scala.collection.mutable.ArrayBuffer
 
 object Mask {
 
+  // boxes with one dim
   def expandBoxes(boxes: Tensor[Float], scale: Float): Tensor[Float] = {
-    val box0 = boxes.select(2, 1)
-    val box1 = boxes.select(2, 2)
-    val box2 = boxes.select(2, 3)
-    val box3 = boxes.select(2, 4)
+    val box0 = boxes.valueAt(1)
+    val box1 = boxes.valueAt(2)
+    val box2 = boxes.valueAt(3)
+    val box3 = boxes.valueAt(4)
 
-    var w_half = Tensor[Float]().resizeAs(box2).copy(box2).sub(box0).mul(0.5f)
-    var h_half = Tensor[Float]().resizeAs(box3).copy(box3).sub(box1).mul(0.5f)
-    val x_c = Tensor[Float]().resizeAs(box2).copy(box2).add(box0).mul(0.5f)
-    val y_c = Tensor[Float]().resizeAs(box3).copy(box3).add(box1).mul(0.5f)
+    var w_half = (box2 - box0) * 0.5f
+    var h_half = (box3  - box1) * 0.5f
+    val x_c = (box2 + box0) * 0.5f
+    val y_c = (box3 + box1) * 0.5f
 
     w_half *= scale
     h_half *= scale
 
     val boxes_exp = Tensor[Float]().resizeAs(boxes)
-    boxes_exp.select(2, 1).copy(x_c - w_half)
-    boxes_exp.select(2, 3).copy(x_c + w_half)
-    boxes_exp.select(2, 2).copy(y_c - h_half)
-    boxes_exp.select(2, 4).copy(y_c + h_half)
+    boxes_exp.setValue(1, x_c - w_half)
+    boxes_exp.setValue(3, x_c + w_half)
+    boxes_exp.setValue(2, y_c - h_half)
+    boxes_exp.setValue(4, y_c + h_half)
     return boxes_exp
   }
 
@@ -96,7 +98,7 @@ object Mask {
     (padded_mask, scale)
   }
 
-  // decode mask to binary mask todo: ???
+  // mask and box should be one by one
   def pasteMaskInImage(mask: Tensor[Float], box: Tensor[Float],
     im_h: Int, im_w: Int, thresh: Float = 0.5f, padding : Int = 1): Tensor[Float] = {
 
@@ -104,12 +106,12 @@ object Mask {
     val boxExpand = expandBoxes(box, scale)
 
     val TO_REMOVE = 1
-    val w = math.max(boxExpand.valueAt(1, 3).toInt - boxExpand.valueAt(1, 1).toInt + TO_REMOVE, 1)
-    val h = math.max(boxExpand.valueAt(1, 4).toInt - boxExpand.valueAt(1, 2).toInt + TO_REMOVE, 1)
+    val w = math.max(boxExpand.valueAt(3).toInt - boxExpand.valueAt(1).toInt + TO_REMOVE, 1)
+    val h = math.max(boxExpand.valueAt(4).toInt - boxExpand.valueAt(2).toInt + TO_REMOVE, 1)
 
-    padded_mask.resize(1, 1, padded_mask.size(2), padded_mask.size(3))
-    val lastMask = bilinearResize(padded_mask, Array(h, w))
-    // bilinearResize(mask, Array(40, 50))
+    padded_mask.resize(1, padded_mask.size(2), padded_mask.size(3))
+    val lastMask = Tensor[Float](1, h, w)
+    bilinear(padded_mask, lastMask)
 
     if (thresh >= 0) {
       lastMask.apply1(m => if (m > thresh) 1 else 0)
@@ -118,17 +120,17 @@ object Mask {
     }
 
     val im_mask = Tensor[Float](im_h, im_w)
-    val x_0 = math.max(boxExpand.valueAt(1, 1).toInt, 0)
-    val x_1 = math.min(boxExpand.valueAt(1, 3).toInt + 1, im_w)
-    val y_0 = math.max(boxExpand.valueAt(1, 2).toInt, 0)
-    val y_1 = math.min(boxExpand.valueAt(1, 4).toInt + 1, im_h)
+    val x_0 = math.max(boxExpand.valueAt(1).toInt, 0)
+    val x_1 = math.min(boxExpand.valueAt(3).toInt + 1, im_w)
+    val y_0 = math.max(boxExpand.valueAt(2).toInt, 0)
+    val y_1 = math.min(boxExpand.valueAt(4).toInt + 1, im_h)
 
-    val maskX0 = y_0 - boxExpand.valueAt(1, 2).toInt
-    val maskX1 = y_1 - boxExpand.valueAt(1, 2).toInt
-    val maskY0 = x_0 - boxExpand.valueAt(1, 1).toInt
-    val maskY1 = x_1 - boxExpand.valueAt(1, 1).toInt
+    val maskX0 = y_0 - boxExpand.valueAt(2).toInt
+    val maskX1 = y_1 - boxExpand.valueAt(2).toInt
+    val maskY0 = x_0 - boxExpand.valueAt(1).toInt
+    val maskY1 = x_1 - boxExpand.valueAt(1).toInt
 
-    val tmp1 = lastMask.narrow(3, maskX0 + 1, maskX1 - maskX0).narrow(4, maskY0 + 1, maskY1 - maskY0)
+    val tmp1 = lastMask.narrow(2, maskX0 + 1, maskX1 - maskX0).narrow(3, maskY0 + 1, maskY1 - maskY0)
     val tmp2 = im_mask.narrow(1, y_0 + 1, y_1 - y_0).narrow(2, x_0 + 1, x_1 - x_0)
     tmp2.copy(tmp1)
     return im_mask
@@ -205,7 +207,6 @@ object Mask {
         }
       }
     }
-
     iou
   }
 
@@ -271,6 +272,88 @@ object Mask {
       bbox.setValue(3, xe- xs)
       bbox.setValue(2, ys)
       bbox.setValue(4, ye - ys + 1)
+    }
+  }
+
+  // input & output should be 3 dims with (n, height, width)
+  def bilinear(input: Tensor[Float], output: Tensor[Float],
+               alignCorners: Boolean = false): Unit = {
+    val input_height = input.size(2)
+    val input_width = input.size(3)
+    val output_height = output.size(2)
+    val output_width = output.size(3)
+
+    if (input_height == output_height && input_width == output_width) {
+     output.copy(input)
+     return
+    }
+
+    require(input.isContiguous() && output.isContiguous())
+    val channels = input.size(1)
+    val idata = input.storage().array()
+    val odata = output.storage().array()
+    val ioffset = input.storageOffset() - 1
+    val ooffset = output.storageOffset() - 1
+
+    val rheight = area_pixel_compute_scale(
+      input_height, output_height, alignCorners)
+
+    val rwidth = area_pixel_compute_scale(
+      input_width, output_width, alignCorners)
+
+    for (h2 <- 0 to (output_height - 1)) {
+      val h1r = area_pixel_compute_source_index(
+        rheight, h2, alignCorners)
+
+      val h1 : Int = h1r.toInt
+      val h1p = if (h1 < input_height - 1) 1 else 0
+
+      val h1lambda = h1r - h1
+      val h0lambda = 1.0f - h1lambda
+
+      for (w2 <- 0 to (output_width - 1)) {
+        val w1r = area_pixel_compute_source_index(
+          rwidth, w2, alignCorners)
+
+        val w1 = w1r.toInt
+        val w1p = if (w1 < input_width - 1) 1 else 0
+
+        val w1lambda = w1r - w1
+        val w0lambda = 1.0f - w1lambda
+
+        val pos1 = h1 * input_width + w1 + ioffset
+        val pos2 = h2 * output_width + w2 + ooffset
+
+        //  todo: now only support 1 channel
+        for (c <- 0 to (channels - 1)) {
+          odata(pos2) = h0lambda * (w0lambda * idata(pos1) + w1lambda * idata(pos1 + w1p)) +
+            h1lambda * (w0lambda * idata(pos1 + h1p * input_width) +
+              w1lambda * idata(pos1 + h1p * input_width + w1p))
+        }
+      }
+    }
+  }
+
+  def area_pixel_compute_scale(
+    input_size: Int,
+    output_size: Int,
+    align_corners: Boolean): Float = {
+    if (align_corners) {
+      (input_size - 1).toFloat / (output_size - 1)
+    } else {
+      (input_size.toFloat) / output_size;
+    }
+  }
+
+  def area_pixel_compute_source_index(
+  scale: Float,
+  dst_index: Int,
+  align_corners : Boolean) : Float = {
+    if (align_corners) {
+      return scale * dst_index
+    } else {
+      val src_idx = scale * (dst_index + 0.5f) - 0.5f
+      if (src_idx < 0) 0.0f else src_idx
     }
   }
 }
