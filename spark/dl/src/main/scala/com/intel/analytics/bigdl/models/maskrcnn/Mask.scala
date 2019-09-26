@@ -131,62 +131,7 @@ object Mask {
     val tmp1 = lastMask.narrow(3, maskX0 + 1, maskX1 - maskX0).narrow(4, maskY0 + 1, maskY1 - maskY0)
     val tmp2 = im_mask.narrow(1, y_0 + 1, y_1 - y_0).narrow(2, x_0 + 1, x_1 - x_0)
     tmp2.copy(tmp1)
-    //    im_mask[y_0:y_1, x_0:x_1] = mask[
-    //      (y_0 - box[1]) : (y_1 - box[1]), (x_0 - box[0]) : (x_1 - box[0])
-    //    ]
     return im_mask
-  }
-
-
-  // todo: ???
-  def bilinearResize(input: Tensor[Float], size: Array[Int],
-                     align_corners: Boolean = false): Tensor[Float] = {
-    val module = ResizeBilinear[Float](
-      size(0),
-      size(1),
-      false,
-      dataFormat = DataFormat.NCHW
-    )
-
-    module.forward(input)
-  }
-
-  // convert binary mask to rle with counts
-  def rleEncode(binaryMask: Tensor[Float]): Tensor[Int] = {
-    val countsBuffer = new ArrayBuffer[Int]
-
-    val h = binaryMask.size(1)
-    val w = binaryMask.size(2)
-    val maskArr = binaryMask.storage().array()
-    val offset = binaryMask.storageOffset() - 1
-
-    val n = binaryMask.nElement()
-    var i = 0
-    var p = -1
-    var c = 0
-    while (i < n) {
-      // the first one should be 0
-      if (p == -1 && maskArr(i + offset) == 1) {
-        countsBuffer.append(0)
-        p = 1
-        c = 1
-      } else if (p == -1 && maskArr(i + offset) == 0) {
-        p = 0
-        c = 1
-      } else if (maskArr(i + offset) == p) {
-        c += 1
-      } else {
-        countsBuffer.append(c)
-        c = 1
-        p = maskArr(i + offset).toInt
-      }
-      i += 1
-    }
-    countsBuffer.append(c)
-
-    val out = Tensor[Int](countsBuffer.length)
-    System.arraycopy(countsBuffer.toArray, 0, out.storage().array(), 0, countsBuffer.length)
-    out
   }
 
   // compute rle iou

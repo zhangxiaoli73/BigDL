@@ -16,6 +16,7 @@
 
 package com.intel.analytics.bigdl.models.maskrcnn
 
+import com.intel.analytics.bigdl.dataset.segmentation.COCO.MaskAPI
 import com.intel.analytics.bigdl.models.mask.MaskInference
 import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.utils.T
@@ -1203,5 +1204,36 @@ class MaskSpec extends FlatSpec with Matchers {
 
     println("done")
 
+  }
+
+  "mask api" should "be ok" in {
+    val str = ";399K4O1O01Oa0"
+    val out = MaskAPI.string2RLE(str, 19, 7)
+
+    val binary = Tensor[Float](T(
+      T(0, 0, 0, 0, 0, 0, 0),
+      T(0, 0, 1, 1, 1, 0, 0),
+      T(0, 0, 1, 1, 1, 1, 0),
+      T(0, 0, 1, 1, 1, 1, 0),
+      T(0, 1, 1, 1, 1, 1, 0),
+      T(0, 1, 1, 1, 1, 1, 0),
+      T(0, 1, 1, 1, 1, 1, 0),
+      T(0, 1, 1, 1, 1, 1, 0),
+      T(0, 1, 1, 1, 1, 1, 0),
+      T(0, 1, 1, 1, 1, 1, 0),
+      T(0, 1, 1, 1, 1, 1, 0),
+      T(1, 1, 1, 1, 1, 1, 0),
+      T(1, 1, 1, 1, 1, 1, 0),
+      T(1, 1, 1, 1, 1, 1, 0),
+      T(0, 1, 1, 1, 1, 1, 0),
+      T(0, 1, 1, 1, 1, 1, 0),
+      T(0, 0, 1, 1, 1, 1, 0),
+      T(0, 0, 0, 1, 1, 1, 0),
+      T(0, 0, 0, 0, 0, 0, 0)))
+
+    val res = MaskAPI.binaryToRLE(binary)
+
+    res.counts should be(out.counts)
+    println("done")
   }
 }
