@@ -17,10 +17,11 @@
 
 package com.intel.analytics.bigdl.models.maskrcnn
 
-import breeze.linalg.*
+import breeze.linalg.{*, dim, max}
 import com.intel.analytics.bigdl.nn.ResizeBilinear
 import com.intel.analytics.bigdl.nn.abstractnn.DataFormat
 import com.intel.analytics.bigdl.tensor.Tensor
+import com.sun.xml.internal.bind.v2.TODO
 
 import scala.collection.mutable.ArrayBuffer
 
@@ -295,14 +296,14 @@ object Mask {
     val ioffset = input.storageOffset() - 1
     val ooffset = output.storageOffset() - 1
 
-    val rheight = area_pixel_compute_scale(
+    val rheight = areaPixelComputeScale(
       input_height, output_height, alignCorners)
 
-    val rwidth = area_pixel_compute_scale(
+    val rwidth = areaPixelComputeScale(
       input_width, output_width, alignCorners)
 
     for (h2 <- 0 to (output_height - 1)) {
-      val h1r = area_pixel_compute_source_index(
+      val h1r = areaPixelComputeSourceIndex(
         rheight, h2, alignCorners)
 
       val h1 : Int = h1r.toInt
@@ -312,7 +313,7 @@ object Mask {
       val h0lambda = 1.0f - h1lambda
 
       for (w2 <- 0 to (output_width - 1)) {
-        val w1r = area_pixel_compute_source_index(
+        val w1r = areaPixelComputeSourceIndex(
           rwidth, w2, alignCorners)
 
         val w1 = w1r.toInt
@@ -334,26 +335,48 @@ object Mask {
     }
   }
 
-  def area_pixel_compute_scale(
-    input_size: Int,
-    output_size: Int,
-    align_corners: Boolean): Float = {
-    if (align_corners) {
-      (input_size - 1).toFloat / (output_size - 1)
+  def areaPixelComputeScale(
+    inputSize: Int, outputSize: Int, alignCorners: Boolean): Float = {
+    if (alignCorners) {
+      (inputSize - 1).toFloat / (outputSize - 1)
     } else {
-      (input_size.toFloat) / output_size;
+      (inputSize.toFloat) / outputSize
     }
   }
 
-  def area_pixel_compute_source_index(
-  scale: Float,
-  dst_index: Int,
-  align_corners : Boolean) : Float = {
-    if (align_corners) {
-      return scale * dst_index
+  def areaPixelComputeSourceIndex(
+    scale: Float, dstIndex: Int, alignCorners : Boolean) : Float = {
+    if (alignCorners) {
+      scale * dstIndex
     } else {
-      val src_idx = scale * (dst_index + 0.5f) - 0.5f
+      val src_idx = scale * (dstIndex + 0.5f) - 0.5f
       if (src_idx < 0) 0.0f else src_idx
     }
+  }
+
+  def toImageList(tensors: Array[Tensor[Float]], size_divisible: Int = 0): Tensor[Float] = {
+    val channel = tensors(0).size(1)
+    var maxHeight = 0
+    var maxWide = 0
+    for (i <- 0 to (tensors.length - 1)) {
+      require(channel == tensors(i).size(1),
+        s"tensors in one batch should have same channel, but get ${channel} ${tensors(i).size(1)}")
+      if (maxHeight < tensors(i).size(2)) maxHeight = tensors(i).size(2)
+      if (maxWide < tensors(i).size(3)) maxWide = tensors(i).size(3)
+    }
+
+    if (size_divisible > 0) {
+      maxHeight = (math.ceil(maxHeight.toFloat / size_divisible) * size_divisible).toInt
+      maxWide = (math.ceil(maxWide.toFloat / size_divisible) * size_divisible).toInt
+    }
+    val batchSize = tensors.length
+    val batchShape = Array(batchSize, channel, maxHeight, maxWide)
+    val batchImgs = Tensor[Float](batchShape)
+
+    for (i <- 0 to (tensors.length - 1)) {
+      batchImgs.select(1, 1).narrow(2, 1, tensors(i).size(2))
+        .narrow(3, 1, tensors(i).size(3)).copy(tensors(i))
+    }
+    batchImgs
   }
 }
