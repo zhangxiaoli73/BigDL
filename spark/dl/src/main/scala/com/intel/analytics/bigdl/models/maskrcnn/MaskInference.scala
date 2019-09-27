@@ -21,14 +21,16 @@ import java.nio.file.{Path, Paths}
 
 import breeze.linalg.{*, max, min, shuffle, where}
 import com.intel.analytics.bigdl.dataset.image.BGRImage
-import com.intel.analytics.bigdl.dataset.segmentation.COCO.MaskAPI
+import com.intel.analytics.bigdl.dataset.segmentation.COCO.{MaskAPI, SegmentationMask}
 import com.intel.analytics.bigdl.models.maskrcnn.{Mask, MaskRCNN, MaskUtils}
 import com.intel.analytics.bigdl.nn.ResizeBilinear
 import com.intel.analytics.bigdl.nn.abstractnn.DataFormat
 import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.transform.vision.image.{BytesToMat, ImageFeature, MatToTensor}
 import com.intel.analytics.bigdl.transform.vision.image.augmentation.{ChannelNormalize, ColorJitter, Resize}
+import com.intel.analytics.bigdl.transform.vision.image.label.roi.RoiLabel
 import com.intel.analytics.bigdl.transform.vision.image.opencv.OpenCVMat
+import com.intel.analytics.bigdl.utils.{T, Table}
 import org.apache.commons.io.FileUtils
 import org.dmg.pmml.False
 import spire.std.float
@@ -65,25 +67,29 @@ object MaskInference {
 
   }
 
-  def prepareForCocoDetection() : Unit = {
-    // need, category_id, bbox, score
-  }
-
   // box shape: box_number * 4
   // mask shape: box_number * 1* 28 * 28
-  def CocoPostProcessor(mask: Array[Tensor[Float]], bbox: Tensor[Float],
-                        imageHeight: Int, imageWidth: Int): ROILabel = {
-    // resize mask
-    require(mask.length == bbox.size(1), s"error get ${mask.size(1)} ${bbox.size(1)}")
-    val boxNumber = mask.size(1)
+  def postProcessorForMask(classes: Tensor[Float], bboxes: Tensor[Float], scores: Tensor[Float],
+    masks: Array[Tensor[Float]], imageHeight: Int, imageWidth: Int): Table = {
+    // convert mask to rle mask
+    require(masks.length == bboxes.size(1), s"error get ${masks.length} ${bboxes.size(1)}")
+    val boxNumber = masks.length
+    val masksRLE = new Array[Tensor[Float]](masks.length)
     var i = 0
     while (i < boxNumber) {
-      val binaryMask = Mask.pasteMaskInImage(mask(i), bbox.select(1, i), imageHeight, imageWidth)
-
-      mask(i) = MaskAPI.binaryToRLE(binaryMask)
+      val binaryMask = Mask.pasteMaskInImage(masks(i), bboxes.select(1, i), imageHeight, imageWidth)
+      masksRLE(i) = MaskAPI.binaryToRLE(binaryMask).toRLETensor()
       i += 1
     }
-    // encode to rle
+
+    // prepare for evaluation
+    val postOutput = T()
+    postOutput.update(RoiLabel.MASKS, masksRLE)
+    postOutput.update(RoiLabel.BBOXES, bboxes)
+    postOutput.update(RoiLabel.CLASSES, classes)
+    postOutput.update(RoiLabel.IMGSIZE, (imageHeight, imageWidth))
+
+    postOutput
   }
 }
 
