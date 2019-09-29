@@ -60,24 +60,27 @@ object MaskInference {
 
     val resNetOutChannels = 256
     val backboneOutChannels = 256
-    val mask = new MaskRCNN(resNetOutChannels, backboneOutChannels)
+    val output = new MaskRCNN(resNetOutChannels, backboneOutChannels)
+    // output = T(proposalsBox, boxLabels, mask, scores)
 
 
     println("done")
 
   }
 
+  // just process for one image
   // box shape: box_number * 4
   // mask shape: box_number * 1* 28 * 28
-  def postProcessorForMask(classes: Tensor[Float], bboxes: Tensor[Float], scores: Tensor[Float],
-    masks: Array[Tensor[Float]], imageHeight: Int, imageWidth: Int): Table = {
+  def postProcessorForSingleImage(classes: Tensor[Float], bboxes: Tensor[Float],
+    scores: Tensor[Float], masks: Tensor[Float], imageHeight: Int, imageWidth: Int): Table = {
     // convert mask to rle mask
-    require(masks.length == bboxes.size(1), s"error get ${masks.length} ${bboxes.size(1)}")
-    val boxNumber = masks.length
-    val masksRLE = new Array[Tensor[Float]](masks.length)
+    require(masks.size(1) == bboxes.size(1), s"error get ${masks.size(1)} ${bboxes.size(1)}")
+    val boxNumber = masks.size(1)
+    val masksRLE = new Array[Tensor[Float]](boxNumber)
     var i = 0
     while (i < boxNumber) {
-      val binaryMask = Mask.pasteMaskInImage(masks(i), bboxes.select(1, i), imageHeight, imageWidth)
+      val binaryMask = Mask.pasteMaskInImage(
+        masks.select(1, i + 1), bboxes.select(1, i + 1), imageHeight, imageWidth)
       masksRLE(i) = MaskAPI.binaryToRLE(binaryMask).toRLETensor()
       i += 1
     }
@@ -88,6 +91,7 @@ object MaskInference {
     postOutput.update(RoiLabel.BBOXES, bboxes)
     postOutput.update(RoiLabel.CLASSES, classes)
     postOutput.update(RoiLabel.IMGSIZE, (imageHeight, imageWidth))
+    postOutput.update(RoiLabel.SCORES, scores)
 
     postOutput
   }

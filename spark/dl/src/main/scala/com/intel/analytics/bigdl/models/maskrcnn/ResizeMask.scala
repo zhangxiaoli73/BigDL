@@ -18,6 +18,7 @@ package com.intel.analytics.bigdl.models.mask
 
 import breeze.linalg.{max, min}
 import breeze.numerics.round
+import com.intel.analytics.bigdl.dataset.segmentation.COCO.{COCOPoly, COCORLE}
 import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.transform.vision.image.augmentation.Resize
 import com.intel.analytics.bigdl.transform.vision.image.{FeatureTransformer, ImageFeature, augmentation}
@@ -83,13 +84,29 @@ class ResizeMask(minSize: Int = -1, maxSize: Int = -1)
     val scaledH = feature.getHeight().toFloat / feature.getOriginalHeight
 
     // it is a array
-    val mask = feature.getLabel[RoiLabel].mask
+    val mask = feature.getLabel[RoiLabel].masks
     for (i <- 0 to (mask.length - 1)) {
       val oneMask = mask(i)
-      // one mask shape (poly number, 2)
-      if (oneMask != null) { // not mask
-        oneMask.select(2, 1).mul(scaledW)
-        oneMask.select(2, 2).mul(scaledH)
+      if (oneMask.isInstanceOf[COCOPoly]) {
+        val m = oneMask.asInstanceOf[COCOPoly]
+        val p = m.poly
+        for (i <- 0 to (p.length - 1)) {
+          val pp = p(i)
+          for (j <- 0 to (pp.length - 1)) {
+            if (j % 2 == 0) {
+              // for x
+              pp(j) = pp(j) * scaledW
+            } else {
+              // for y
+              pp(j) = pp(j) * scaledH
+            }
+          }
+        }
+        m.height = feature.getHeight()
+        m.width = feature.getWidth()
+      } else if (oneMask.isInstanceOf[COCORLE]) {
+        // TODO: resize for rle format
+        oneMask.asInstanceOf[COCORLE]
       }
     }
   }

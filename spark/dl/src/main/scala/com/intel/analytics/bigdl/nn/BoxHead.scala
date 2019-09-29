@@ -204,7 +204,8 @@ private[nn] class BoxPostProcessor(
     }
   }
 
-  private def resultToTensor(results: Array[RoiLabel], labels: Tensor[Float], bbox: Tensor[Float])
+  private def resultToTensor(results: Array[RoiLabel], labels: Tensor[Float],
+                             bbox: Tensor[Float], scores: Tensor[Float])
     : Unit = {
     var maxDetection = 0
     results.foreach(res => {
@@ -215,6 +216,7 @@ private[nn] class BoxPostProcessor(
 
     labels.resize(maxDetection)
     bbox.resize(maxDetection, 4)
+    scores.resize(maxDetection)
 
     var offset = 1
     (0 until nClasses).foreach(c => {
@@ -222,6 +224,7 @@ private[nn] class BoxPostProcessor(
       if (null != label) {
         (1 to label.size()).foreach(j => {
           labels.setValue(offset, c)
+          scores.setValue(offset, label.classes.valueAt(j))
           bbox.setValue(offset, 1, label.bboxes.valueAt(j, 1))
           bbox.setValue(offset, 2, label.bboxes.valueAt(j, 2))
           bbox.setValue(offset, 3, label.bboxes.valueAt(j, 3))
@@ -302,9 +305,10 @@ private[nn] class BoxPostProcessor(
     if (output.toTable.length() == 0) {
       output.toTable(1) = Tensor[Float]() // for labels
       output.toTable(2) = Tensor[Float]() // for bbox
+      output.toTable(3) = Tensor[Float]() // for scores
     }
 
-    resultToTensor(roilabels, output.toTable(1), output.toTable(2))
+    resultToTensor(roilabels, output.toTable(1), output.toTable(2), output.toTable(3))
     output
   }
 

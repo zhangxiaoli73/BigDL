@@ -24,9 +24,10 @@ abstract class SegmentationMask {
   def toRLETensor(): Tensor[Float]
 }
 
+// poly with (x, y) format
 case class COCOPoly(poly: Array[Array[Float]]) extends SegmentationMask {
-  val width: Int = 0
-  val height: Int = 0
+  var width: Int = 0
+  var height: Int = 0
   override def toRLETensor(): Tensor[Float] = {
     val out = MaskAPI.polyToSingleRLE(this, height, width)
     out.toRLETensor()

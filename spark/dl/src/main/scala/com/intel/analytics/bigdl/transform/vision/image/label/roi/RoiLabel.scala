@@ -80,6 +80,7 @@ object RoiLabel {
   val ISCROWD = "is_crowd"
   val ORIGSIZE = "size"
   val IMGSIZE = "imageSize"
+  val SCORES = "imageSize"
 
 
   def getClasses(tab: Table): Tensor[Float] = tab[Tensor[Float]](CLASSES)
