@@ -38,6 +38,18 @@ class MaskRCNNSpec extends FlatSpec with Matchers {
     println("done")
   }
 
+  "build maskrcnn with batch size" should "be ok" in {
+    RandomGenerator.RNG.setSeed(100)
+    val resNetOutChannels = 32
+    val backboneOutChannels = 32
+    val mask = new MaskRCNN(resNetOutChannels, backboneOutChannels)
+    mask.evaluate()
+    val input = Tensor[Float](2, 3, 224, 256).rand()
+    val output = mask.forward(input)
+
+    println("done")
+  }
+
   "build maskrcnn with loaded weight" should "be ok" in {
     val resNetOutChannels = 256
     val backboneOutChannels = 256
