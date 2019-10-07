@@ -1069,26 +1069,26 @@ class BoxHead(
 //    T(6.5621e+02, 0.0000e+00, 1.0650e+03, 5.6873e+01),
 //    T(3.9372e+02, 1.0242e+02, 9.0970e+02, 3.1604e+02)))
 //
-//  override def updateOutput(input: Activity): Activity = {
-//    val n1 = model.asInstanceOf[Graph[Float]].node("featureExtractor")
-//    val n2 = model.asInstanceOf[Graph[Float]].node("cls_score")
-//    val n3 = model.asInstanceOf[Graph[Float]].node("bbox_pred")
-//    val n4 = model.asInstanceOf[Graph[Float]].node("postProcessor")
-//
-//
-//    val features = input.toTable[Table](1)
-//    // val proposals = input.toTable[Tensor[Float]](2)
-//
-//    println(input.toTable[Tensor[Float]](2))
-//
-//    val boxFeatures = n1.element.forward(input)
-//    val classLogits = n2.element.forward(boxFeatures)
-//    val boxRegression = n3.element.forward(boxFeatures)
-//    val result = n4.element.forward(T(classLogits, boxRegression, proposals))
-//
-//    output = T(boxFeatures, result) // model.updateOutput(input)
-//    output
-//  }
+  override def updateOutput(input: Activity): Activity = {
+    val n1 = model.asInstanceOf[Graph[Float]].node("featureExtractor")
+    val n2 = model.asInstanceOf[Graph[Float]].node("cls_score")
+    val n3 = model.asInstanceOf[Graph[Float]].node("bbox_pred")
+    val n4 = model.asInstanceOf[Graph[Float]].node("postProcessor")
+
+
+    val features = input.toTable[Table](1)
+    val proposals = input.toTable[Table](2)
+
+    println(input.toTable[Tensor[Float]](2))
+
+    val boxFeatures = n1.element.forward(input)
+    val classLogits = n2.element.forward(boxFeatures)
+    val boxRegression = n3.element.forward(boxFeatures)
+    val result = n4.element.forward(T(classLogits, boxRegression, proposals))
+
+    output = T(boxFeatures, result) // model.updateOutput(input)
+    output
+  }
 
   private[nn] def clsPredictor(numClass: Int,
                                inChannels: Int): Module[Float] = {
@@ -1143,6 +1143,7 @@ private[nn] class BoxPostProcessor(
   private val softMax = SoftMax[Float]()
   private val nmsTool: Nms = new Nms
   @transient  private var boxesBuf: Tensor[Float] = null
+  @transient  private var concatBoxes: Tensor[Float] = null
 
   /**
    * Returns bounding-box detection results by thresholding on scores and
@@ -1232,32 +1233,29 @@ private[nn] class BoxPostProcessor(
     }
   }
 
-  private def resultToTensor(results: Array[RoiLabel], labels: Tensor[Float],
-                             bbox: Tensor[Float], scores: Tensor[Float])
+  private def resultToTensor(results: Array[RoiLabel],
+                             labels: Array[Float], labelsOffset: Int,
+                             bbox: Array[Float], bboxOffset : Int,
+                             scores: Array[Float], scoresOffset: Int)
     : Unit = {
-    var maxDetection = 0
-    results.foreach(res => {
-      if (null != res) {
-        maxDetection += res.size()
-      }
-    })
+    var bboxPos = bboxOffset
+    var labelsPos = labelsOffset
+    var scoresPos = scoresOffset
 
-    labels.resize(maxDetection)
-    bbox.resize(maxDetection, 4)
-    scores.resize(maxDetection)
-
-    var offset = 1
     (0 until nClasses).foreach(c => {
       val label = results(c)
       if (null != label) {
         (1 to label.size()).foreach(j => {
-          labels.setValue(offset, c)
-          scores.setValue(offset, label.classes.valueAt(j))
-          bbox.setValue(offset, 1, label.bboxes.valueAt(j, 1))
-          bbox.setValue(offset, 2, label.bboxes.valueAt(j, 2))
-          bbox.setValue(offset, 3, label.bboxes.valueAt(j, 3))
-          bbox.setValue(offset, 4, label.bboxes.valueAt(j, 4))
-          offset += 1
+          labels(labelsPos) = c
+          scores(scoresPos) = label.classes.valueAt(j)
+          bbox(bboxPos + 1) = label.bboxes.valueAt(j, 1)
+          bbox(bboxPos + 2) = label.bboxes.valueAt(j, 2)
+          bbox(bboxPos + 3) = label.bboxes.valueAt(j, 3)
+          bbox(bboxPos + 4) = label.bboxes.valueAt(j, 4)
+
+          bboxPos += 4
+          scoresPos += 1
+          labelsPos += 1
         })
       }
     })
@@ -1316,27 +1314,78 @@ private[nn] class BoxPostProcessor(
 //    }
     val classLogits = input[Tensor[Float]](1)
     val boxRegression = input[Tensor[Float]](2)
-    val bbox = input[Tensor[Float]](3)
+    val bbox = input[Table](3)
+
+    val boxesInImage = new Array[Int](bbox.length())
+    for (i <- 0 to boxesInImage.length - 1) {
+      boxesInImage(i) = bbox[Tensor[Float]](i + 1).size(1)
+    }
 
     if (boxesBuf == null) boxesBuf = Tensor[Float]
     boxesBuf.resizeAs(boxRegression)
+    if (concatBoxes == null) concatBoxes = Tensor[Float]
+    concatBoxes.resize(boxesInImage.product, 4)
+    var start = 1
+    for (i <- 0 to boxesInImage.length - 1) {
+      val length = boxesInImage(i)
+      concatBoxes.narrow(1, start, length).copy(bbox[Tensor[Float]](i + 1))
+      start += length
+    }
 
     val classProb = softMax.forward(classLogits)
-    BboxUtil.decodeWithWeight(boxRegression, bbox, weight, boxesBuf)
-
-    val boxesInImage = bbox.size(1)
-    val proposalSplit = boxesBuf.split(boxesInImage, dim = 1)
-    val classProbSplit = classProb.split(boxesInImage, dim = 1)
-
-    val roilabels = filterResults(proposalSplit(0), classProbSplit(0), nClasses)
+    BboxUtil.decodeWithWeight(boxRegression, concatBoxes, weight, boxesBuf)
 
     if (output.toTable.length() == 0) {
       output.toTable(1) = Tensor[Float]() // for labels
-      output.toTable(2) = Tensor[Float]() // for bbox
+      output.toTable(2) = T() // for bbox, use table in case of batch
       output.toTable(3) = Tensor[Float]() // for scores
     }
 
-    resultToTensor(roilabels, output.toTable(1), output.toTable(2), output.toTable(3))
+    val outLabels = output.toTable[Tensor[Float]](1)
+    val outBBoxs = output.toTable[Table](2)
+    val outScores = output.toTable[Tensor[Float]](3)
+
+    var totalROILables = T()
+    var totalDetections = 0
+    start = 1
+    for (i <- 0 to boxesInImage.length - 1) {
+      val boxNum = boxesInImage(i)
+
+      val proposalNarrow = boxesBuf.narrow(1, start, boxNum)
+      val classProbNarrow = classProb.narrow(1, start, boxNum)
+      val roilabels = filterResults(proposalNarrow, classProbNarrow, nClasses)
+      if (outBBoxs.getOrElse[Tensor[Float]](i + 1, null) == null) {
+        outBBoxs(i + 1) = Tensor[Float]()
+      }
+      var maxDetection = 0
+      roilabels.foreach(res => {
+        if (null != res) {
+          maxDetection += res.size()
+        }
+      })
+      totalDetections += maxDetection
+      outBBoxs[Tensor[Float]](i + 1).resize(maxDetection, 4)
+      totalROILables(i + 1) = roilabels
+    }
+
+    // resize labels and scores
+    outLabels.resize(totalDetections)
+    outScores.resize(totalDetections)
+
+    val labels = outLabels.storage().array()
+    val scores = outScores.storage().array()
+    var labelsOffset = outLabels.storageOffset() - 1
+    var scoresOffset = outScores.storageOffset() - 1
+    for (i <- 0 to boxesInImage.length - 1) {
+      val roilabels = totalROILables(i + 1)
+      var bbox = outBBoxs[Tensor[Float]](i + 1).storage().array()
+      var bboxOffset = outBBoxs[Tensor[Float]](i + 1).storageOffset() - 1
+
+      resultToTensor(roilabels, labels, labelsOffset, bbox, bboxOffset, scores, scoresOffset)
+      labelsOffset += outBBoxs[Tensor[Float]](i + 1).size(1)
+      scoresOffset += outBBoxs[Tensor[Float]](i + 1).size(1)
+    }
+
     output
   }
 

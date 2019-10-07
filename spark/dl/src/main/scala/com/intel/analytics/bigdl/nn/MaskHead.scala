@@ -52,11 +52,31 @@ class MaskHead(
     val proposals = Input()
     val labels = Input()
 
-    val maskFeatures = featureExtractor.inputs(features, proposals)
-    val maskLogits = predictor.inputs(maskFeatures)
-    val result = postProcessor.inputs(maskLogits, proposals, labels)
+    val maskFeatures = featureExtractor.setName("featureExtractor").inputs(features, proposals)
+    val maskLogits = predictor.setName("predictor").inputs(maskFeatures)
+    val result = postProcessor.setName("postProcessor").inputs(maskLogits, proposals, labels)
 
     Graph(Array(features, proposals, labels), Array(maskFeatures, result))
+  }
+
+  override def updateOutput(input: Activity): Activity = {
+    val n1 = model.asInstanceOf[Graph[Float]].node("featureExtractor")
+    val n2 = model.asInstanceOf[Graph[Float]].node("predictor")
+    val n3 = model.asInstanceOf[Graph[Float]].node("postProcessor")
+
+
+    val features = input.toTable[Table](1)
+    val proposals = input.toTable[Table](2)
+    val labels = input.toTable[Tensor[Float]](3)
+
+    println(input.toTable[Tensor[Float]](2))
+
+    val maskFeatures = n1.element.forward(input)
+    val maskLogits = n2.element.forward(maskFeatures)
+    val result = n3.element.forward(T(maskLogits, proposals, labels))
+
+    output = T(maskFeatures, result) // model.updateOutput(input)
+    output
   }
 
   private[nn] def maskPredictor(inChannels: Int,
@@ -130,7 +150,6 @@ private[nn] class MaskPostProcessor()(implicit ev: TensorNumeric[Float])
    */
   override def updateOutput(input: Table): Tensor[Float] = {
     val maskLogits = input[Tensor[Float]](1)
-    val bbox = input[Tensor[Float]](2) // N * 4
     val labels = input[Tensor[Float]](3)
 
     val num_masks = maskLogits.size(1)
@@ -151,7 +170,7 @@ private[nn] class MaskPostProcessor()(implicit ev: TensorNumeric[Float])
     while (i <= rangeBuffer.nElement()) {
       val dim = rangeBuffer.valueAt(i).toInt + 1
       val index = labels.valueAt(i).toInt // start from 1
-      // todo:
+      // todo: bug fix
       output.narrow(1, i, 1).copy(mask_prob.narrow(1, i, 1).narrow(2, index + 1, 1))
       i += 1
     }
