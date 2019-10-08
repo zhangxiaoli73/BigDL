@@ -16,6 +16,7 @@
 
 package com.intel.analytics.bigdl.nn
 
+import com.intel.analytics.bigdl.Module
 import com.intel.analytics.bigdl.models.mask.MaskInference
 import com.intel.analytics.bigdl.models.maskrcnn.{MaskRCNN, MaskUtils}
 import com.intel.analytics.bigdl.models.resnet.ResNetMask
@@ -39,15 +40,45 @@ class MaskRCNNSpec extends FlatSpec with Matchers {
   }
 
   "build maskrcnn with batch size" should "be ok" in {
-    RandomGenerator.RNG.setSeed(100)
+    RandomGenerator.RNG.setSeed(1)
     val resNetOutChannels = 32
     val backboneOutChannels = 32
     val mask = new MaskRCNN(resNetOutChannels, backboneOutChannels)
     mask.evaluate()
-    val input = Tensor[Float](2, 3, 224, 256).rand()
-    val output = mask.forward(input)
+    val maskBatch = mask.asInstanceOf[Module[Float]].cloneModule()
+    maskBatch.evaluate()
+    val mask3 = mask.asInstanceOf[Module[Float]].cloneModule()
+    mask3.evaluate()
 
-    println("done")
+    val input1 = Tensor[Float](1, 3, 224, 256).rand()
+    val input2 = Tensor[Float](1, 3, 224, 256).rand()
+
+    val input = Tensor[Float](2, 3, 224, 256)
+    input.narrow(1, 1, 1).copy(input1)
+    input.narrow(1, 2, 1).copy(input2)
+
+    val output1 = mask.forward(input1).toTable.clone()
+    val output2 = mask3.forward(input2).toTable.clone()
+    val output = maskBatch.forward(input).toTable
+
+    output[Table](1)[Tensor[Float]](1) should be(output1[Table](1)[Tensor[Float]](1))
+    output[Table](1)[Tensor[Float]](2) should be(output2[Table](1)[Tensor[Float]](1))
+
+    output[Tensor[Float]](2).narrow(1, 1, 100) should be(output1[Tensor[Float]](2))
+    output[Tensor[Float]](2).narrow(1, 101, 100) should be(output2[Tensor[Float]](2))
+
+    output[Table](3)[Tensor[Float]](1).narrow(1, 1, 100) should be(
+      output1[Table](3)[Tensor[Float]](1))
+    output[Table](3)[Tensor[Float]](1).narrow(1, 101, 100) should be(
+      output2[Table](3)[Tensor[Float]](1))
+
+    output[Table](3)[Tensor[Float]](2).narrow(1, 1, 100) should be(
+      output1[Table](3)[Tensor[Float]](2))
+    output[Table](3)[Tensor[Float]](2).narrow(1, 101, 100) should be(
+      output2[Table](3)[Tensor[Float]](2))
+
+    output[Tensor[Float]](4).narrow(1, 1, 100) should be(output1[Tensor[Float]](4))
+    output[Tensor[Float]](4).narrow(1, 101, 100) should be(output2[Tensor[Float]](4))
   }
 
   "build maskrcnn with loaded weight" should "be ok" in {

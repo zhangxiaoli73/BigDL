@@ -91,7 +91,7 @@ class MaskHeadSpec extends FlatSpec with Matchers {
       T(3.0f, 5.0f, 6.0f, 10.0f)))
     val labels = Tensor[Float](T(1, 3))
 
-    val output = layer.forward(T(T(features1, features2), bbox, labels)).toTable
+    val output = layer.forward(T(T(features1, features2), T(bbox), labels)).toTable
 
     val expectedOutput = Tensor[Float](T(T(T(
       T(0.0013, 0.0015, 0.0015, 0.0016, 0.0016, 0.0016, 0.0016, 0.0016,
@@ -967,7 +967,7 @@ class MaskHeadSpec extends FlatSpec with Matchers {
           T(0.0349, 0.0562, 0.0634, 0.0633, 0.0623, 0.0607, 0.0588, 0.0570,
             0.0551, 0.0532, 0.0513, 0.0494, 0.0426, 0.0262)))))
 
-    val output = layer.forward(T(T(features1, features2), bbox)).toTensor[Float]
+    val output = layer.forward(T(T(features1, features2), T(bbox))).toTensor[Float]
 
     output.almostEqual(expectedOutput, 1e-3) should be(true)
   }

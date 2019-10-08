@@ -103,16 +103,15 @@ class BoxHeadSpec extends FlatSpec with Matchers {
           T(0.3573, 0.5961),
           T(0.8601, 0.7605)))))
 
-    val bbox = Tensor[Float](T(T(1.0f, 3.0f, 2.0f, 6.0f),
-      T(3.0f, 5.0f, 6.0f, 7.0f)))
+    val bbox = T(Tensor[Float](T(T(1.0f, 3.0f, 2.0f, 6.0f),
+      T(3.0f, 5.0f, 6.0f, 7.0f))))
     val labels = Tensor[Float](T(1, 3))
 
     layer.evaluate()
 
-    val output = layer.forward(T(T(features1, features2), bbox, labels)).toTable
+    val output = layer.forward(T(T(features1, features2), bbox, labels)).toTable[Table](2)
 
     val expectedBbox = Tensor[Float](T(
-      T(2.9990, 4.9992, 6.1299, 7.0975),
       T(0.9995, 2.9991, 2.0602, 6.1203),
       T(2.9990, 4.9992, 6.1299, 7.0975),
       T(0.9995, 2.9991, 2.0602, 6.1203),
@@ -271,8 +270,9 @@ class BoxHeadSpec extends FlatSpec with Matchers {
       T(2.9990, 4.9992, 6.1299, 7.0975),
       T(0.9995, 2.9991, 2.0602, 6.1203),
       T(2.9990, 4.9992, 6.1299, 7.0975),
-      T(0.9995, 2.9991, 2.0602, 6.1203)))
-    val expectedLable = Tensor[Float](
+      T(0.9995, 2.9991, 2.0602, 6.1203),
+      T(2.9990, 4.9992, 6.1299, 7.0975)))
+    val expectedLabel = Tensor[Float](
       T( 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9,
       10, 10, 11, 11, 12, 12, 13, 13, 14, 14, 15, 15, 16, 16, 17, 17, 18, 18,
       19, 19, 20, 20, 21, 21, 22, 22, 23, 23, 24, 24, 25, 25, 26, 26, 27, 27,
@@ -283,11 +283,12 @@ class BoxHeadSpec extends FlatSpec with Matchers {
       64, 64, 65, 65, 66, 66, 67, 67, 68, 68, 69, 69, 70, 70, 71, 71, 72, 72,
       73, 73, 74, 74, 75, 75, 76, 76, 77, 77, 78, 78, 79, 79, 80, 80))
 
-    output.apply[Table](2)[Tensor[Float]](2).map(expectedBbox, (v1, v2) => {
+    output[Tensor[Float]](1) should be (expectedLabel)
+
+    output[Table](2)[Tensor[Float]](1).map(expectedBbox, (v1, v2) => {
       assert(abs(v1 - v2) < 1e-3)
       v1
     })
-    output.apply[Table](2)[Tensor[Float]](1) should be (expectedLable)
   }
 
   "BoxHead with batch size > 1" should "be ok" in {
@@ -1004,7 +1005,7 @@ class BoxHeadSpec extends FlatSpec with Matchers {
         5.8774e-02, 0.0000e+00, 3.0693e-02, 3.3855e-01, 0.0000e+00, 0.0000e+00,
         9.2428e-02, 4.1654e-01, 0.0000e+00, 0.0000e+00)))
 
-    val output = layer.forward(T(input, proposals, imageInfo)).toTensor[Float]
+    val output = layer.forward(T(input, T(proposals), imageInfo)).toTensor[Float]
 
     output.select(1, 1).apply1(a => {
       a should be(0.1516f +- 1e-3f)

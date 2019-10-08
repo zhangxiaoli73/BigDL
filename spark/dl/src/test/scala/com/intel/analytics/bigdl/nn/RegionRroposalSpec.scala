@@ -263,7 +263,7 @@ class RegionRroposalSpec extends FlatSpec with Matchers {
     }
 
     layer.evaluate()
-    val output = layer.forward(T(T(features), images))
+    val output = layer.forward(T(T(features), images)).toTable
     val outputExpected = Tensor[Float](
       T(T(0.0f, 0.0f, 20.999596f, 19.0f),
       T(0.0f, 0.0f, 12.995603f, 19.0f),
@@ -271,7 +271,7 @@ class RegionRroposalSpec extends FlatSpec with Matchers {
       T(0.0f, 0.0f, 29.011127f, 13.003019f)
     ))
 
-    output should be(outputExpected)
+    output[Tensor[Float]](1) should be(outputExpected)
   }
 
   "RegionRroposal with multi features" should "be ok" in {
@@ -555,7 +555,7 @@ class RegionRroposalSpec extends FlatSpec with Matchers {
     }
 
     layer.evaluate()
-    val output = layer.forward(T(T(features1, features2, features3), images))
+    val output = layer.forward(T(T(features1, features2, features3), images)).toTable
     val outputExpected = Tensor[Float](T(
       T( 0.0000, 0.0000, 35.0363, 19.0000),
       T( 0.0000, 0.0000, 20.9997, 19.0000),
@@ -566,7 +566,7 @@ class RegionRroposalSpec extends FlatSpec with Matchers {
       T( 0.0000, 0.0000, 29.0113, 13.0032),
       T( 0.0000, 11.9920, 37.0000, 19.0000)))
 
-      output should be(outputExpected)
+      output[Tensor[Float]](1) should be(outputExpected)
   }
 
   "RPNPostProcessor" should "be ok" in {
@@ -1393,7 +1393,7 @@ class RegionRroposalSpec extends FlatSpec with Matchers {
     features32.select(1, 1).copy(features3)
     features32.select(1, 2).copy(features3)
 
-    val output = layer.forward(T(T(features12, features22, features32), images))
+    val output = layer.forward(T(T(features12, features22, features32), images)).toTable
     val outputExpected = Tensor[Float](T(
       T( 0.0000, 0.0000, 35.0363, 19.0000),
       T( 0.0000, 0.0000, 20.9997, 19.0000),
@@ -1404,7 +1404,8 @@ class RegionRroposalSpec extends FlatSpec with Matchers {
       T( 0.0000, 0.0000, 29.0113, 13.0032),
       T( 0.0000, 11.9920, 37.0000, 19.0000)))
 
-    output should be(outputExpected)
+    output[Tensor[Float]](1) should be(outputExpected)
+    output[Tensor[Float]](2) should be(outputExpected)
   }
 }
 

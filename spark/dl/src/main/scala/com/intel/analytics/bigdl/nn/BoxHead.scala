@@ -1324,7 +1324,7 @@ private[nn] class BoxPostProcessor(
     if (boxesBuf == null) boxesBuf = Tensor[Float]
     boxesBuf.resizeAs(boxRegression)
     if (concatBoxes == null) concatBoxes = Tensor[Float]
-    concatBoxes.resize(boxesInImage.product, 4)
+    concatBoxes.resize(boxesInImage.sum, 4)
     var start = 1
     for (i <- 0 to boxesInImage.length - 1) {
       val length = boxesInImage(i)
@@ -1350,9 +1350,9 @@ private[nn] class BoxPostProcessor(
     start = 1
     for (i <- 0 to boxesInImage.length - 1) {
       val boxNum = boxesInImage(i)
-
       val proposalNarrow = boxesBuf.narrow(1, start, boxNum)
       val classProbNarrow = classProb.narrow(1, start, boxNum)
+      start += boxNum
 //      // debug
 //      classProbNarrow.fill(0.012345679f)
       val roilabels = filterResults(proposalNarrow, classProbNarrow, nClasses)
