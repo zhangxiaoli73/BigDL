@@ -389,13 +389,11 @@ class BoxHeadSpec extends FlatSpec with Matchers {
 
     val labels2 = T(Tensor[Float](T(1, 3)), Tensor[Float](T(1, 3)))
 
-    val output = layer.forward(T(T(features12, features22), T(bbox), T(labels))).toTable[Table](2)[Table](1)
+    // val output = layer.forward(T(T(features1, features2), T(bbox), T(labels))).toTable[Table](2)
 
-    // val output = layer.forward(T(T(features12, features22), bbox2, labels2)).toTable[Table](2)[Table](1)
+    val output = layer.forward(T(T(features12, features22), bbox2, labels2)).toTable[Table](2)
 
     val expectedBbox = Tensor[Float](T(
-      T(0.9995, 2.9991, 2.0602, 6.1203),
-      T(2.9990, 4.9992, 6.1299, 7.0975),
       T(0.9995, 2.9991, 2.0602, 6.1203),
       T(2.9990, 4.9992, 6.1299, 7.0975),
       T(0.9995, 2.9991, 2.0602, 6.1203),
@@ -563,13 +561,29 @@ class BoxHeadSpec extends FlatSpec with Matchers {
         46, 46, 47, 47, 48, 48, 49, 49, 50, 50, 51, 51, 52, 52, 53, 53, 54, 54,
         55, 55, 56, 56, 57, 57, 58, 58, 59, 59, 60, 60, 61, 61, 62, 62, 63, 63,
         64, 64, 65, 65, 66, 66, 67, 67, 68, 68, 69, 69, 70, 70, 71, 71, 72, 72,
-        73, 73, 74, 74, 75, 75, 76, 76, 77, 77, 78, 78, 79, 79, 80, 80))
+        73, 73, 74, 74, 75, 75, 76, 76, 77, 77, 78, 78, 79, 79,
+        1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10, 11, 11,
+        12, 12, 13, 13, 14, 14, 15, 15, 16, 16, 17, 17, 18, 18,
+        19, 19, 20, 20, 21, 21, 22, 22, 23, 23, 24, 24, 25, 25, 26, 26, 27, 27,
+        28, 28, 29, 29, 30, 30, 31, 31, 32, 32, 33, 33, 34, 34, 35, 35, 36, 36,
+        37, 37, 38, 38, 39, 39, 40, 40, 41, 41, 42, 42, 43, 43, 44, 44, 45, 45,
+        46, 46, 47, 47, 48, 48, 49, 49, 50, 50, 51, 51, 52, 52, 53, 53, 54, 54,
+        55, 55, 56, 56, 57, 57, 58, 58, 59, 59, 60, 60, 61, 61, 62, 62, 63, 63,
+        64, 64, 65, 65, 66, 66, 67, 67, 68, 68, 69, 69, 70, 70, 71, 71, 72, 72,
+        73, 73, 74, 74, 75, 75, 76, 76, 77, 77, 78, 78, 79, 79))
 
-    output[Tensor[Float]](2).map(expectedBbox, (v1, v2) => {
+    output[Tensor[Float]](1) should be (expectedLable)
+
+    output[Table](2)[Tensor[Float]](1).map(expectedBbox, (v1, v2) => {
       assert(abs(v1 - v2) < 1e-3)
       v1
     })
-    output[Tensor[Float]](1) should be (expectedLable)
+
+    output[Table](2)[Tensor[Float]](2).map(expectedBbox, (v1, v2) => {
+      assert(abs(v1 - v2) < 1e-3)
+      v1
+    })
+
   }
 
   "FeatureExtractor in BoxHead" should "be ok" in {
@@ -1001,6 +1015,30 @@ class BoxHeadSpec extends FlatSpec with Matchers {
       a should be(0.1460f +- 1e-3f)
       a
     })
+  }
+
+  "Linear in BoxHead" should "be ok" in {
+    val linear = Linear[Float](1024, 81)
+    linear.getParameters()._1.fill(0.001f)
+
+    val input = Tensor[Float](4, 1024)
+    input.select(1, 1).fill(0.1448116f)
+    input.select(1, 2).fill(0.15635706f)
+    input.select(1, 3).fill(0.1448116f)
+    input.select(1, 4).fill(0.15635706f)
+
+    val output = linear.forward(input).clone()
+
+    val linear2 = Linear[Float](1024, 81)
+    linear2.getParameters()._1.fill(0.001f)
+
+    val input2 = Tensor[Float](2, 1024)
+    input2.select(1, 1).fill(0.1448116f)
+    input2.select(1, 2).fill(0.15635706f)
+
+    val output2 = linear2.forward(input2)
+
+    println("done")
   }
 }
 

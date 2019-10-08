@@ -1069,26 +1069,26 @@ class BoxHead(
 //    T(6.5621e+02, 0.0000e+00, 1.0650e+03, 5.6873e+01),
 //    T(3.9372e+02, 1.0242e+02, 9.0970e+02, 3.1604e+02)))
 //
-  override def updateOutput(input: Activity): Activity = {
-    val n1 = model.asInstanceOf[Graph[Float]].node("featureExtractor")
-    val n2 = model.asInstanceOf[Graph[Float]].node("cls_score")
-    val n3 = model.asInstanceOf[Graph[Float]].node("bbox_pred")
-    val n4 = model.asInstanceOf[Graph[Float]].node("postProcessor")
-
-
-    val features = input.toTable[Table](1)
-    val proposals = input.toTable[Table](2)
-
-    println(input.toTable[Tensor[Float]](2))
-
-    val boxFeatures = n1.element.forward(input)
-    val classLogits = n2.element.forward(boxFeatures)
-    val boxRegression = n3.element.forward(boxFeatures)
-    val result = n4.element.forward(T(classLogits, boxRegression, proposals))
-
-    output = T(boxFeatures, result) // model.updateOutput(input)
-    output
-  }
+//  override def updateOutput(input: Activity): Activity = {
+//    val n1 = model.asInstanceOf[Graph[Float]].node("featureExtractor")
+//    val n2 = model.asInstanceOf[Graph[Float]].node("cls_score")
+//    val n3 = model.asInstanceOf[Graph[Float]].node("bbox_pred")
+//    val n4 = model.asInstanceOf[Graph[Float]].node("postProcessor")
+//
+//
+//    val features = input.toTable[Table](1)
+//    val proposals = input.toTable[Table](2)
+//
+//    println(input.toTable[Tensor[Float]](2))
+//
+//    val boxFeatures = n1.element.forward(input)
+//    val classLogits = n2.element.forward(boxFeatures)
+//    val boxRegression = n3.element.forward(boxFeatures)
+//    val result = n4.element.forward(T(classLogits, boxRegression, proposals))
+//
+//    output = T(boxFeatures, result) // model.updateOutput(input)
+//    output
+//  }
 
   private[nn] def clsPredictor(numClass: Int,
                                inChannels: Int): Module[Float] = {
@@ -1248,10 +1248,10 @@ private[nn] class BoxPostProcessor(
         (1 to label.size()).foreach(j => {
           labels(labelsPos) = c
           scores(scoresPos) = label.classes.valueAt(j)
-          bbox(bboxPos + 1) = label.bboxes.valueAt(j, 1)
-          bbox(bboxPos + 2) = label.bboxes.valueAt(j, 2)
-          bbox(bboxPos + 3) = label.bboxes.valueAt(j, 3)
-          bbox(bboxPos + 4) = label.bboxes.valueAt(j, 4)
+          bbox(bboxPos) = label.bboxes.valueAt(j, 1)
+          bbox(bboxPos + 1) = label.bboxes.valueAt(j, 2)
+          bbox(bboxPos + 2) = label.bboxes.valueAt(j, 3)
+          bbox(bboxPos + 3) = label.bboxes.valueAt(j, 4)
 
           bboxPos += 4
           scoresPos += 1
@@ -1308,10 +1308,10 @@ private[nn] class BoxPostProcessor(
    * @return labels and bbox
    */
   override def updateOutput(input: Table): Table = {
-//    if (isTraining()) {
-//      output = input
-//      return output
-//    }
+    if (isTraining()) {
+      output = input
+      return output
+    }
     val classLogits = input[Tensor[Float]](1)
     val boxRegression = input[Tensor[Float]](2)
     val bbox = input[Table](3)
@@ -1345,7 +1345,7 @@ private[nn] class BoxPostProcessor(
     val outBBoxs = output.toTable[Table](2)
     val outScores = output.toTable[Tensor[Float]](3)
 
-    var totalROILables = T()
+    val totalROILables = T()
     var totalDetections = 0
     start = 1
     for (i <- 0 to boxesInImage.length - 1) {
@@ -1353,6 +1353,8 @@ private[nn] class BoxPostProcessor(
 
       val proposalNarrow = boxesBuf.narrow(1, start, boxNum)
       val classProbNarrow = classProb.narrow(1, start, boxNum)
+//      // debug
+//      classProbNarrow.fill(0.012345679f)
       val roilabels = filterResults(proposalNarrow, classProbNarrow, nClasses)
       if (outBBoxs.getOrElse[Tensor[Float]](i + 1, null) == null) {
         outBBoxs(i + 1) = Tensor[Float]()
@@ -1377,9 +1379,9 @@ private[nn] class BoxPostProcessor(
     var labelsOffset = outLabels.storageOffset() - 1
     var scoresOffset = outScores.storageOffset() - 1
     for (i <- 0 to boxesInImage.length - 1) {
-      val roilabels = totalROILables(i + 1)
-      var bbox = outBBoxs[Tensor[Float]](i + 1).storage().array()
-      var bboxOffset = outBBoxs[Tensor[Float]](i + 1).storageOffset() - 1
+      val roilabels = totalROILables[Array[RoiLabel]](i + 1)
+      val bbox = outBBoxs[Tensor[Float]](i + 1).storage().array()
+      val bboxOffset = outBBoxs[Tensor[Float]](i + 1).storageOffset() - 1
 
       resultToTensor(roilabels, labels, labelsOffset, bbox, bboxOffset, scores, scoresOffset)
       labelsOffset += outBBoxs[Tensor[Float]](i + 1).size(1)
