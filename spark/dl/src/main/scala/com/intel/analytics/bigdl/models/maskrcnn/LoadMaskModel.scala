@@ -62,7 +62,7 @@ object LoadMaskModel {
 //      println(s"${i} done")
 //    }
 
-    val input = MaskUtils.loadWeight(path + "input.txt", Array(1, 3, 800, 1088))
+    val input = MaskTmpUtils.loadWeight(path + "input.txt", Array(1, 3, 800, 1088))
     val inputClone = input.clone()
 
     mask.evaluate()

@@ -21,8 +21,8 @@ import java.nio.file.{Path, Paths}
 
 import breeze.linalg.{*, max, min, shuffle, where}
 import com.intel.analytics.bigdl.dataset.image.BGRImage
-import com.intel.analytics.bigdl.dataset.segmentation.COCO.{MaskAPI, SegmentationMask}
-import com.intel.analytics.bigdl.models.maskrcnn.{Mask, MaskRCNN, MaskUtils}
+import com.intel.analytics.bigdl.dataset.segmentation.MaskUtils
+import com.intel.analytics.bigdl.models.maskrcnn.{Mask, MaskRCNN, MaskTmpUtils}
 import com.intel.analytics.bigdl.nn.ResizeBilinear
 import com.intel.analytics.bigdl.nn.abstractnn.DataFormat
 import com.intel.analytics.bigdl.tensor.Tensor
@@ -45,7 +45,7 @@ object MaskInference {
     val maxSize = 1333
 
     val path = "/home/zhangli/workspace/tmp/mask/maskrcnn-benchmark/demo/weight/"
-    val input = MaskUtils.loadWeight(path + "input.txt", Array(1, 3, 800, 1088))
+    val input = MaskTmpUtils.loadWeight(path + "input.txt", Array(1, 3, 800, 1088))
 
     val imagePath = "/home/zhangli/workspace/tmp/mask/3915380994_2e611b1779_z.jpg"
 
@@ -53,7 +53,7 @@ object MaskInference {
     val imagefeature = ImageFeature(bytes)
 
     // transformer
-    val trans = BytesToMat() -> ResizeMask(minSize, maxSize) ->
+    val trans = BytesToMat() -> Resize(minSize, maxSize) ->
       ChannelNormalize(123f, 115f, 102.9801f) -> MatToTensor[Float]()
 
     val out = trans.transform(imagefeature)
@@ -81,7 +81,7 @@ object MaskInference {
     while (i < boxNumber) {
       val binaryMask = Mask.pasteMaskInImage(
         masks.select(1, i + 1), bboxes.select(1, i + 1), imageHeight, imageWidth)
-      masksRLE(i) = MaskAPI.binaryToRLE(binaryMask).toRLETensor()
+      masksRLE(i) = MaskUtils.binaryToRLE(binaryMask).toRLETensor
       i += 1
     }
 

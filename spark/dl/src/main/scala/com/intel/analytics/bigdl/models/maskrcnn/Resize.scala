@@ -14,25 +14,15 @@
  * limitations under the License.
  */
 
-package com.intel.analytics.bigdl.models.mask
+package com.intel.analytics.bigdl.dataset.segmentation
 
-import breeze.linalg.{max, min}
-import breeze.numerics.round
-import com.intel.analytics.bigdl.dataset.segmentation.COCO.{COCOPoly, COCORLE}
-import com.intel.analytics.bigdl.tensor.Tensor
-import com.intel.analytics.bigdl.transform.vision.image.augmentation.Resize
-import com.intel.analytics.bigdl.transform.vision.image.{FeatureTransformer, ImageFeature, augmentation}
-import com.intel.analytics.bigdl.transform.vision.image.augmentation.Resize._
-import com.intel.analytics.bigdl.transform.vision.image.label.roi.{RoiLabel, RoiResize}
+import com.intel.analytics.bigdl.transform.vision.image.{FeatureTransformer, ImageFeature}
+import com.intel.analytics.bigdl.transform.vision.image.label.roi.RoiLabel
 import com.intel.analytics.bigdl.transform.vision.image.util.BboxUtil
-import org.apache.log4j.Logger
-import org.apache.spark.ml
-import org.apache.spark.ml.feature
-import org.apache.spark.util.random
 import org.opencv.core.Size
 import org.opencv.imgproc.Imgproc
 
-class ResizeMask(minSize: Int = -1, maxSize: Int = -1)
+class Resize(minSize: Int, maxSize: Int = -1, resizeROI: Boolean = false)
   extends FeatureTransformer {
   private def getSize(sizeH: Int, sizeW: Int): (Int, Int) = {
     var size = minSize
@@ -45,75 +35,63 @@ class ResizeMask(minSize: Int = -1, maxSize: Int = -1)
     }
 
     if ((sizeW <= sizeH && sizeW == size) || (sizeH <= sizeW && sizeH == size)) {
-      return (sizeH, sizeW)
-    }
-
-    if (sizeW < sizeH) {
-      return (size * sizeH / sizeW, size)
+      (sizeH, sizeW)
+    } else if (sizeW < sizeH) {
+      (size * sizeH / sizeW, size)
     } else {
-      return (size, size * sizeW / sizeH)
+      (size, size * sizeW / sizeH)
     }
   }
 
   override def transformMat(feature: ImageFeature): Unit = {
     val sizes = this.getSize(feature.getHeight(), feature.getWidth())
-
     val resizeH = sizes._1
     val resizeW = sizes._2
-
     Imgproc.resize(feature.opencvMat(), feature.opencvMat(), new Size(resizeW, resizeH))
 
     // resize roi label
-    if (feature.hasLabel()) {
+    if (feature.hasLabel() && resizeROI) {
       // bbox resize
-      transformBbox(feature)
+      resizeBbox(feature)
       // mask resize
-      transformMaskPoly(feature)
+      resizeMask(feature)
     }
   }
 
-  private def transformBbox(feature: ImageFeature): Unit = {
+  private def resizeBbox(feature: ImageFeature): Unit = {
     val scaledW = feature.getWidth().toFloat / feature.getOriginalWidth
     val scaledH = feature.getHeight().toFloat / feature.getOriginalHeight
     val target = feature.getLabel[RoiLabel]
     BboxUtil.scaleBBox(target.bboxes, scaledH, scaledW)
   }
 
-  private def transformMaskPoly(feature: ImageFeature): Unit = {
+  private def resizeMask(feature: ImageFeature): Unit = {
     val scaledW = feature.getWidth().toFloat / feature.getOriginalWidth
     val scaledH = feature.getHeight().toFloat / feature.getOriginalHeight
 
-    // it is a array
     val mask = feature.getLabel[RoiLabel].masks
     for (i <- 0 to (mask.length - 1)) {
       val oneMask = mask(i)
-      if (oneMask.isInstanceOf[COCOPoly]) {
-        val m = oneMask.asInstanceOf[COCOPoly]
-        val p = m.poly
-        for (i <- 0 to (p.length - 1)) {
-          val pp = p(i)
-          for (j <- 0 to (pp.length - 1)) {
-            if (j % 2 == 0) {
-              // for x
-              pp(j) = pp(j) * scaledW
-            } else {
-              // for y
-              pp(j) = pp(j) * scaledH
-            }
+      require(oneMask.isInstanceOf[PolyMasks],
+        s"Only support poly mask resize, but get ${oneMask}")
+      if (oneMask.isInstanceOf[PolyMasks]) {
+        val polyMask = oneMask.asInstanceOf[PolyMasks]
+        val poly = polyMask.poly
+        for (i <- 0 to (poly.length - 1)) {
+          val p = poly(i)
+          for (j <- 0 to (p.length - 1)) {
+            if (j % 2 == 0) p(j) *= scaledW // for x
+            else p(j) *= scaledH // for y
           }
         }
-        m.height = feature.getHeight()
-        m.width = feature.getWidth()
-      } else if (oneMask.isInstanceOf[COCORLE]) {
-        // TODO: resize for rle format
-        oneMask.asInstanceOf[COCORLE]
+        // change to resized mask
+        mask(i) = PolyMasks(poly, feature.getHeight(), feature.getWidth())
       }
     }
   }
 }
 
-object ResizeMask {
-  val logger = Logger.getLogger(getClass)
-
-  def apply(minSize: Int = -1, maxSize: Int = -1): ResizeMask = new ResizeMask(minSize, maxSize)
+object Resize {
+  def apply(minSize: Int, maxSize: Int = -1, resizeROI: Boolean = false)
+    : Resize = new Resize(minSize, maxSize, resizeROI)
 }

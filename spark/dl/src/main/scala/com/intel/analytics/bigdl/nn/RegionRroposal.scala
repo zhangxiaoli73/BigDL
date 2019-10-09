@@ -48,7 +48,7 @@ class RegionRroposal(
    val postNmsTopNTrain: Int = 2000,
    val nmsThread: Float = 0.7f,
    val minSize: Int = 0)(implicit ev: TensorNumeric[Float])
-   extends AbstractModule[Table, Tensor[Float], Float] {
+   extends AbstractModule[Table, Table, Float] {
 
   // for anchor generation
   require(anchorSizes.length == anchorStride.length,

@@ -20,7 +20,7 @@ import com.intel.analytics.bigdl.tensor.Tensor
 import scala.collection.mutable.ArrayBuffer
 import scala.io.Source
 
-object MaskUtils {
+object MaskTmpUtils {
   def loadWeight(path: String, size: Array[Int]): Tensor[Float] = {
     val weight = Tensor[Float](size)
     val arr = weight.storage().array()

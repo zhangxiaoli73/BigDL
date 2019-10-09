@@ -16,7 +16,7 @@
 
 package com.intel.analytics.bigdl.transform.vision.image.label.roi
 
-import com.intel.analytics.bigdl.dataset.segmentation.COCO.SegmentationMask
+import com.intel.analytics.bigdl.dataset.segmentation.SegmentationMasks
 import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.utils.{T, Table}
 
@@ -29,7 +29,7 @@ import com.intel.analytics.bigdl.utils.{T, Table}
  * @param masks the array of annotation masks of the targets
  */
 case class RoiLabel(classes: Tensor[Float], bboxes: Tensor[Float],
-  masks: Array[SegmentationMask] = null) {
+  masks: Array[SegmentationMasks] = null) {
   def copy(target: RoiLabel): Unit = {
     classes.resizeAs(target.classes).copy(target.classes)
     bboxes.resizeAs(target.bboxes).copy(target.bboxes)
@@ -58,7 +58,7 @@ case class RoiLabel(classes: Tensor[Float], bboxes: Tensor[Float],
     if (masks != null) {
       val masksRLE = new Array[Tensor[Float]](masks.length)
       for (i <- 0 to masks.length - 1) {
-        masksRLE(i) = masks(i).toRLETensor()
+        masksRLE(i) = masks(i).toRLETensor
       }
       table(RoiLabel.MASKS) = masksRLE
     }
@@ -79,6 +79,8 @@ object RoiLabel {
   // ISCROWD and ORIGSIZE are stored in ImageFeature
   val ISCROWD = "is_crowd"
   val ORIGSIZE = "size"
+  val IMGSIZE = "imageSize"
+  val SCORES = "imageSize"
 
 
   def getClasses(tab: Table): Tensor[Float] = tab[Tensor[Float]](CLASSES)
@@ -93,6 +95,9 @@ object RoiLabel {
    */
   def getOrigSize(tab: Table): (Int, Int, Int) =
     tab[(Int, Int, Int)](ORIGSIZE)
+
+  def getIMGSize(tab: Table): (Int, Int, Int) =
+    tab[(Int, Int, Int)](IMGSIZE)
 
 
   def fromTensor(tensor: Tensor[Float]): RoiLabel = {

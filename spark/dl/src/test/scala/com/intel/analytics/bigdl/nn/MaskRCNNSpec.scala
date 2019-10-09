@@ -17,8 +17,9 @@
 package com.intel.analytics.bigdl.nn
 
 import com.intel.analytics.bigdl.Module
+import com.intel.analytics.bigdl.dataset.segmentation.MaskUtils
 import com.intel.analytics.bigdl.models.mask.MaskInference
-import com.intel.analytics.bigdl.models.maskrcnn.{MaskRCNN, MaskUtils}
+import com.intel.analytics.bigdl.models.maskrcnn.{MaskRCNN, MaskTmpUtils}
 import com.intel.analytics.bigdl.models.resnet.ResNetMask
 import com.intel.analytics.bigdl.nn.mkldnn.Equivalent
 import com.intel.analytics.bigdl.tensor.Tensor
@@ -101,7 +102,7 @@ class MaskRCNNSpec extends FlatSpec with Matchers {
       }
 
       name = name + ".txt"
-      val weight = MaskUtils.loadWeight(name, size)
+      val weight = MaskTmpUtils.loadWeight(name, size)
       p.set(weight)
 
       // for bias
@@ -111,14 +112,14 @@ class MaskRCNNSpec extends FlatSpec with Matchers {
         name = path + i.toString + ".bias"
         size.foreach(n => name = name + s"_${n}")
         name = name + ".txt"
-        val bias = MaskUtils.loadWeight(name, size)
+        val bias = MaskTmpUtils.loadWeight(name, size)
         p.set(bias)
       }
 
       println(s"${i} done")
     }
 
-    val input = MaskUtils.loadWeight(path + "input.txt", Array(1, 3, 800, 1088))
+    val input = MaskTmpUtils.loadWeight(path + "input.txt", Array(1, 3, 800, 1088))
 
     mask.evaluate()
     val out = mask.forward(input).toTable

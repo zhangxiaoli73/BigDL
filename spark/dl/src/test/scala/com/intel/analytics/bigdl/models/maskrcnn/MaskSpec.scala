@@ -16,7 +16,7 @@
 
 package com.intel.analytics.bigdl.models.maskrcnn
 
-import com.intel.analytics.bigdl.dataset.segmentation.COCO.MaskAPI
+import com.intel.analytics.bigdl.dataset.segmentation.MaskUtils
 import com.intel.analytics.bigdl.models.mask.MaskInference
 import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.utils.T
@@ -1003,7 +1003,7 @@ class MaskSpec extends FlatSpec with Matchers {
 
   "rleEncode" should "be ok" in {
     val mask = Tensor[Float](T(T(1, 0, 1, 1, 1), T(1, 0, 1, 1, 0)))
-    val out = MaskAPI.binaryToRLE(mask)
+    val out = MaskUtils.binaryToRLE(mask)
     val expectedOut = Array(0, 2, 2, 5, 1)
     out.counts should be(expectedOut)
   }
@@ -1078,7 +1078,7 @@ class MaskSpec extends FlatSpec with Matchers {
 
   "mask api" should "be ok" in {
     val str = ";399K4O1O01Oa0"
-    val out = MaskAPI.string2RLE(str, 19, 7)
+    val out = MaskUtils.string2RLE(str, 19, 7)
 
     val binary = Tensor[Float](T(
       T(0, 0, 0, 0, 0, 0, 0),
@@ -1101,7 +1101,7 @@ class MaskSpec extends FlatSpec with Matchers {
       T(0, 0, 0, 1, 1, 1, 0),
       T(0, 0, 0, 0, 0, 0, 0)))
 
-    val res = MaskAPI.binaryToRLE(binary)
+    val res = MaskUtils.binaryToRLE(binary)
 
     res.counts should be(out.counts)
     println("done")
@@ -1256,9 +1256,9 @@ class MaskSpec extends FlatSpec with Matchers {
 
     val str = "f_U33`>NhA6Q>`0M3O1O1O100" +
       "O100HWOXBj0g=8N2O100000000001O1O2N1POYBe0R>O1O2N3L3M3M2O2M2O0O2N101Nbde5"
-    val expectedRLE = MaskAPI.string2RLE(str, 480, 640)
+    val expectedRLE = MaskUtils.string2RLE(str, 480, 640)
 
-    val outRLE = MaskAPI.binaryToRLE(binaryMask)
+    val outRLE = MaskUtils.binaryToRLE(binaryMask)
     outRLE.counts should be(expectedRLE.counts)
   }
 
