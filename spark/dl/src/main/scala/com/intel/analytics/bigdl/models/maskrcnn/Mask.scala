@@ -52,27 +52,27 @@ object Mask {
 
   // mask with three dims (channel, height, wide)
   def expandMasks(mask: Tensor[Float], padding: Int): (Tensor[Float], Float) = {
+    require(mask.isContiguous(), "Only support contiguous mask")
+
     val N = mask.size(1)
     val M = mask.size(mask.dim() - 1)
     val pad2 = 2 * padding
     val scale = (M + pad2).toFloat / M
-    val padded_mask = Tensor[Float](N, M + pad2, M + pad2)
-
-    require(mask.isContiguous() && padded_mask.isContiguous())
+    val paddedMask = Tensor[Float](N, M + pad2, M + pad2)
 
     val maskHeight = mask.size(2)
     val maskWidth = mask.size(3)
-    val padHeight = padded_mask.size(2)
-    val padWidth = padded_mask.size(3)
+    val padHeight = paddedMask.size(2)
+    val padWidth = paddedMask.size(3)
 
     var i = 1
     while (i <= N) {
       val maskPart = mask.select(1, i)
-      val maskArr = maskPart.storage().array()
+      val maskArray = maskPart.storage().array()
       val maskOffset = maskPart.storageOffset() - 1
 
-      val padPart = padded_mask.select(1, i)
-      val padArr = padPart.storage().array()
+      val padPart = paddedMask.select(1, i)
+      val padArray = padPart.storage().array()
       val padOffset = padPart.storageOffset() - 1
 
       val nElement = padPart.nElement()
@@ -80,60 +80,62 @@ object Mask {
       while (j < nElement) {
         val tempHeight = j / padWidth + 1
         val tempWidth = j % padWidth + 1
-        val tempMaskHeight = if ((tempHeight > padding + maskHeight) || (tempHeight < padding)) {
-          -1
-        } else tempHeight - padding
+        val tempMaskHeight =
+          if ((tempHeight > padding + maskHeight) || (tempHeight < padding)) -1
+          else tempHeight - padding
 
-        val tempMaskWidth = if ((tempWidth > padding + maskWidth) || (tempWidth < padding)) {
-          -1
-        } else tempWidth - padding
+        val tempMaskWidth =
+          if ((tempWidth > padding + maskWidth) || (tempWidth < padding)) -1
+          else tempWidth - padding
 
         if (tempMaskHeight > 0 && tempMaskWidth > 0) {
-          val m = (tempMaskHeight - 1) * maskWidth + tempMaskWidth - 1
-          padArr(j + padOffset) = maskArr(m + maskOffset)
+          val offset = (tempMaskHeight - 1) * maskWidth + tempMaskWidth - 1
+          padArray(j + padOffset) = maskArray(offset + maskOffset)
         }
         j += 1
       }
       i += 1
     }
-    (padded_mask, scale)
+    (paddedMask, scale)
   }
 
   // mask and box should be one by one
   def pasteMaskInImage(mask: Tensor[Float], box: Tensor[Float],
-    im_h: Int, im_w: Int, thresh: Float = 0.5f, padding : Int = 1): Tensor[Float] = {
+    thresh: Float = 0.5f, padding : Int = 1, binaryMask: Tensor[Float]): Unit = {
 
-    val (padded_mask, scale) = expandMasks(mask, padding = padding)
+    val (paddedMask, scale) = expandMasks(mask, padding)
     val boxExpand = expandBoxes(box, scale)
 
     val TO_REMOVE = 1
     val w = math.max(boxExpand.valueAt(3).toInt - boxExpand.valueAt(1).toInt + TO_REMOVE, 1)
     val h = math.max(boxExpand.valueAt(4).toInt - boxExpand.valueAt(2).toInt + TO_REMOVE, 1)
 
-    padded_mask.resize(1, padded_mask.size(2), padded_mask.size(3))
-    val lastMask = Tensor[Float](1, h, w)
-    bilinear(padded_mask, lastMask)
+    paddedMask.resize(1, paddedMask.size(2), paddedMask.size(3))
+    val interpMask = Tensor[Float](1, h, w)
+    bilinear(paddedMask, interpMask)
 
     if (thresh >= 0) {
-      lastMask.apply1(m => if (m > thresh) 1 else 0)
+      interpMask.apply1(m => if (m > thresh) 1 else 0)
     } else {
-      lastMask.mul(255.0f)
+      interpMask.mul(255.0f)
     }
 
-    val im_mask = Tensor[Float](im_h, im_w)
+    val imgHeight = binaryMask.size(1)
+    val imgWide = binaryMask.size(2)
+
     val x_0 = math.max(boxExpand.valueAt(1).toInt, 0)
-    val x_1 = math.min(boxExpand.valueAt(3).toInt + 1, im_w)
+    val x_1 = math.min(boxExpand.valueAt(3).toInt + 1, imgWide)
     val y_0 = math.max(boxExpand.valueAt(2).toInt, 0)
-    val y_1 = math.min(boxExpand.valueAt(4).toInt + 1, im_h)
+    val y_1 = math.min(boxExpand.valueAt(4).toInt + 1, imgHeight)
 
     val maskX0 = y_0 - boxExpand.valueAt(2).toInt
     val maskX1 = y_1 - boxExpand.valueAt(2).toInt
     val maskY0 = x_0 - boxExpand.valueAt(1).toInt
     val maskY1 = x_1 - boxExpand.valueAt(1).toInt
 
-    im_mask.narrow(1, y_0 + 1, y_1 - y_0).narrow(2, x_0 + 1, x_1 - x_0).copy(
-      lastMask.narrow(2, maskX0 + 1, maskX1 - maskX0).narrow(3, maskY0 + 1, maskY1 - maskY0))
-    return im_mask
+    binaryMask.narrow(1, y_0 + 1, y_1 - y_0).narrow(2, x_0 + 1, x_1 - x_0).copy(
+      interpMask.narrow(2, maskX0 + 1, maskX1 - maskX0).narrow(3, maskY0 + 1, maskY1 - maskY0))
+    return binaryMask
   }
 
   // compute rle iou
@@ -288,7 +290,9 @@ object Mask {
      return
     }
 
-    require(input.isContiguous() && output.isContiguous())
+    require(input.isContiguous() && output.isContiguous(),
+      "Only support contiguous tensor for bilinear")
+
     val channels = input.size(1)
     val idata = input.storage().array()
     val odata = output.storage().array()
@@ -302,12 +306,10 @@ object Mask {
       input_width, output_width, alignCorners)
 
     for (h2 <- 0 to (output_height - 1)) {
-      val h1r = areaPixelComputeSourceIndex(
-        rheight, h2, alignCorners)
+      val h1r = areaPixelComputeSourceIndex(rheight, h2, alignCorners)
 
-      val h1 : Int = h1r.toInt
+      val h1 = h1r.toInt
       val h1p = if (h1 < input_height - 1) 1 else 0
-
       val h1lambda = h1r - h1
       val h0lambda = 1.0f - h1lambda
 
@@ -334,7 +336,7 @@ object Mask {
     }
   }
 
-  def areaPixelComputeScale(
+  private def areaPixelComputeScale(
     inputSize: Int, outputSize: Int, alignCorners: Boolean): Float = {
     if (alignCorners) {
       (inputSize - 1).toFloat / (outputSize - 1)
@@ -343,7 +345,7 @@ object Mask {
     }
   }
 
-  def areaPixelComputeSourceIndex(
+  private def areaPixelComputeSourceIndex(
     scale: Float, dstIndex: Int, alignCorners : Boolean) : Float = {
     if (alignCorners) {
       scale * dstIndex
