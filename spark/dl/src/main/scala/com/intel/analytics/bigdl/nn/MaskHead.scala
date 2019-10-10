@@ -54,7 +54,7 @@ class MaskHead(
 
     val maskFeatures = featureExtractor.setName("featureExtractor").inputs(features, proposals)
     val maskLogits = predictor.setName("predictor").inputs(maskFeatures)
-    val result = postProcessor.setName("postProcessor").inputs(maskLogits, proposals, labels)
+    val result = postProcessor.setName("postProcessor").inputs(maskLogits, labels)
 
     Graph(Array(features, proposals, labels), Array(maskFeatures, result))
   }
@@ -73,7 +73,7 @@ class MaskHead(
 
     val maskFeatures = n1.element.forward(input)
     val maskLogits = n2.element.forward(maskFeatures)
-    val result = n3.element.forward(T(maskLogits, proposals, labels))
+    val result = n3.element.forward(T(maskLogits, labels))
 
     output = T(maskFeatures, result) // model.updateOutput(input)
     output
@@ -150,7 +150,7 @@ private[nn] class MaskPostProcessor()(implicit ev: TensorNumeric[Float])
    */
   override def updateOutput(input: Table): Tensor[Float] = {
     val maskLogits = input[Tensor[Float]](1)
-    val labels = input[Tensor[Float]](3)
+    val labels = input[Tensor[Float]](2)
 
     val num_masks = maskLogits.size(1)
     if (rangeBuffer == null || rangeBuffer.nElement() != num_masks) {

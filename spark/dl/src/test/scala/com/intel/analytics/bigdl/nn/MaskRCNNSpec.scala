@@ -19,7 +19,7 @@ package com.intel.analytics.bigdl.nn
 import com.intel.analytics.bigdl.Module
 import com.intel.analytics.bigdl.dataset.segmentation.MaskUtils
 import com.intel.analytics.bigdl.models.mask.MaskInference
-import com.intel.analytics.bigdl.models.maskrcnn.{MaskRCNN, MaskTmpUtils}
+import com.intel.analytics.bigdl.models.maskrcnn.{Mask, MaskRCNN, MaskTmpUtils}
 import com.intel.analytics.bigdl.models.resnet.ResNetMask
 import com.intel.analytics.bigdl.nn.mkldnn.Equivalent
 import com.intel.analytics.bigdl.tensor.Tensor
@@ -58,28 +58,39 @@ class MaskRCNNSpec extends FlatSpec with Matchers {
     input.narrow(1, 1, 1).copy(input1)
     input.narrow(1, 2, 1).copy(input2)
 
-    val output1 = mask.forward(input1).toTable.clone()
-    val output2 = mask3.forward(input2).toTable.clone()
+    val output1 = mask.forward(input1).toTable[Table](1)
+    val output2 = mask3.forward(input2).toTable[Table](1)
     val output = maskBatch.forward(input).toTable
+    val first = output[Table](1)
+    val second = output[Table](2)
 
-    output[Table](1)[Tensor[Float]](1) should be(output1[Table](1)[Tensor[Float]](1))
-    output[Table](1)[Tensor[Float]](2) should be(output2[Table](1)[Tensor[Float]](1))
+    first.get[Tensor[Float]](RoiLabel.BBOXES) should be(
+      output1.get[Tensor[Float]](RoiLabel.BBOXES))
+    first.get[Tensor[Float]](RoiLabel.CLASSES) should be(
+      output1.get[Tensor[Float]](RoiLabel.CLASSES))
+    first.get[Tensor[Float]](RoiLabel.SCORES) should be(
+      output1.get[Tensor[Float]](RoiLabel.SCORES))
 
-    output[Tensor[Float]](2).narrow(1, 1, 100) should be(output1[Tensor[Float]](2))
-    output[Tensor[Float]](2).narrow(1, 101, 100) should be(output2[Tensor[Float]](2))
+    second.get[Tensor[Float]](RoiLabel.BBOXES) should be(
+      output2.get[Tensor[Float]](RoiLabel.BBOXES))
+    second.get[Tensor[Float]](RoiLabel.CLASSES) should be(
+      output2.get[Tensor[Float]](RoiLabel.CLASSES))
+    second.get[Tensor[Float]](RoiLabel.SCORES) should be(
+      output2.get[Tensor[Float]](RoiLabel.SCORES))
 
-    output[Table](3)[Tensor[Float]](1).narrow(1, 1, 100) should be(
-      output1[Table](3)[Tensor[Float]](1))
-    output[Table](3)[Tensor[Float]](1).narrow(1, 101, 100) should be(
-      output2[Table](3)[Tensor[Float]](1))
+    // for masks
+    val firstMasks = first.get[Array[Tensor[Float]]](RoiLabel.MASKS).get
+    val expectedMasks = output1.get[Array[Tensor[Float]]](RoiLabel.MASKS).get
+    for (i <- 0 to firstMasks.length - 1) {
+      firstMasks(i) should be(expectedMasks(i))
+    }
 
-    output[Table](3)[Tensor[Float]](2).narrow(1, 1, 100) should be(
-      output1[Table](3)[Tensor[Float]](2))
-    output[Table](3)[Tensor[Float]](2).narrow(1, 101, 100) should be(
-      output2[Table](3)[Tensor[Float]](2))
+    val secondMasks = second.get[Array[Tensor[Float]]](RoiLabel.MASKS).get
+    val expectedMasks2 = output2.get[Array[Tensor[Float]]](RoiLabel.MASKS).get
 
-    output[Tensor[Float]](4).narrow(1, 1, 100) should be(output1[Tensor[Float]](4))
-    output[Tensor[Float]](4).narrow(1, 101, 100) should be(output2[Tensor[Float]](4))
+    for (i <- 0 to secondMasks.length - 1) {
+      secondMasks(i) should be(expectedMasks2(i))
+    }
   }
 
   "build maskrcnn with loaded weight" should "be ok" in {

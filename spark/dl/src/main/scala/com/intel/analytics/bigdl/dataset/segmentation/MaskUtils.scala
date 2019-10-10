@@ -366,7 +366,6 @@ object MaskUtils {
   }
 
   // convert binary mask to rle with counts
-  // from colume
   def binaryToRLE(binaryMask: Tensor[Float]): RLEMasks = {
     val countsBuffer = new ArrayBuffer[Int]
 

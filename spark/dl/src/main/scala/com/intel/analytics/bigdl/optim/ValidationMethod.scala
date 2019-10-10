@@ -17,12 +17,17 @@
 package com.intel.analytics.bigdl.optim
 
 import com.intel.analytics.bigdl._
+import com.intel.analytics.bigdl.dataset.segmentation.MaskUtils
+import com.intel.analytics.bigdl.models.maskrcnn.Mask
 import com.intel.analytics.bigdl.nn.ClassNLLCriterion
 import com.intel.analytics.bigdl.nn.AbsCriterion
 import com.intel.analytics.bigdl.nn.abstractnn.Activity
 import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
+import com.intel.analytics.bigdl.transform.vision.image.label.roi.RoiLabel
+import com.intel.analytics.bigdl.utils.{T, Table}
 import org.apache.commons.lang3.SerializationUtils
+
 import scala.collection.mutable.ArrayBuffer
 import scala.reflect.ClassTag
 
@@ -444,7 +449,23 @@ private[bigdl] class GroundTruthBBox(val label: Int, val diff: Float,
 class MeanAveragePrecisionObjectDetection[T: ClassTag](
   classes: Int, iou: Float = 0.5f, useVoc2007: Boolean = false, skipClass: Int = -1)(
   implicit ev: TensorNumeric[T]) extends ValidationMethod[T] {
+
+
+
   override def apply(output: Activity, target: Activity): ValidationResult = {
+    // check for
+    if (output.isTable) {
+
+    }
+
+    // preprocessing
+    // bbox iou
+    // mask iou
+    // single map
+    // multi map
+    // pascal
+
+
     val gtTensor = target.toTensor[Float]
     require(gtTensor.dim() == 2 && gtTensor.size(2) == 7,
       "the ground truth tensor should have 2 dimensions " +

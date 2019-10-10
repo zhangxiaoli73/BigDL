@@ -22,7 +22,7 @@ import java.nio.file.{Path, Paths}
 import breeze.linalg.{*, max, min, shuffle, where}
 import com.intel.analytics.bigdl.dataset.image.BGRImage
 import com.intel.analytics.bigdl.dataset.segmentation.MaskUtils
-import com.intel.analytics.bigdl.models.maskrcnn.{Mask, MaskRCNN, MaskTmpUtils}
+import com.intel.analytics.bigdl.models.maskrcnn.{MaskRCNN, MaskRCNNUtils, MaskTmpUtils}
 import com.intel.analytics.bigdl.nn.ResizeBilinear
 import com.intel.analytics.bigdl.nn.abstractnn.DataFormat
 import com.intel.analytics.bigdl.tensor.Tensor
@@ -79,8 +79,9 @@ object MaskInference {
     val masksRLE = new Array[Tensor[Float]](boxNumber)
     var i = 0
     while (i < boxNumber) {
-      val binaryMask = Mask.pasteMaskInImage(
-        masks.select(1, i + 1), bboxes.select(1, i + 1), imageHeight, imageWidth)
+      val binaryMask = Tensor[Float](imageHeight, imageWidth)
+      MaskRCNNUtils.pasteMaskInImage(masks.select(1, i + 1), bboxes.select(1, i + 1),
+        binaryMask = binaryMask)
       masksRLE(i) = MaskUtils.binaryToRLE(binaryMask).toRLETensor
       i += 1
     }

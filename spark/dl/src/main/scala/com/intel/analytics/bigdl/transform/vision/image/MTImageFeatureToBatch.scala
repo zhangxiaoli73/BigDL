@@ -48,7 +48,7 @@ object MTImageFeatureToBatch {
   }
 }
 
-object ImageFeatureToBatchWithMaxSize {
+object ImageFeatureToBatchWithResize {
   /**
    * The transformer from ImageFeature to mini-batches, and extract ROI labels for segmentation
    * if roi labels are set.
