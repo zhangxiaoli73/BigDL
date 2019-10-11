@@ -19,7 +19,7 @@ package com.intel.analytics.bigdl.nn
 import com.intel.analytics.bigdl.Module
 import com.intel.analytics.bigdl.dataset.segmentation.MaskUtils
 import com.intel.analytics.bigdl.models.mask.MaskInference
-import com.intel.analytics.bigdl.models.maskrcnn.{Mask, MaskRCNN, MaskTmpUtils}
+import com.intel.analytics.bigdl.models.maskrcnn.{MaskRCNN, MaskTmpUtils}
 import com.intel.analytics.bigdl.models.resnet.ResNetMask
 import com.intel.analytics.bigdl.nn.mkldnn.Equivalent
 import com.intel.analytics.bigdl.tensor.Tensor
@@ -133,17 +133,7 @@ class MaskRCNNSpec extends FlatSpec with Matchers {
     val input = MaskTmpUtils.loadWeight(path + "input.txt", Array(1, 3, 800, 1088))
 
     mask.evaluate()
-    val out = mask.forward(input).toTable
-
-    val proposalsBox = out[Tensor[Float]](1)
-    val boxLabels = out[Tensor[Float]](2)
-    val maskRes = out[Table](3)[Tensor[Float]](2)
-    val scores = out[Tensor[Float]](4)
-
-    val out2 = MaskInference.postProcessorForSingleImage(
-      boxLabels, proposalsBox, scores, maskRes,
-      imageHeight = 800, imageWidth = 1066)
-    // input.size(3), input.size(4))
+    val out2 = mask.forward(input).toTable[Table](1)
 
     val outMasks = out2.apply[Array[Tensor[Float]]](RoiLabel.MASKS)
     val expectedMask = T(1 ->

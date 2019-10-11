@@ -88,19 +88,22 @@ class RegionRroposal(
   private[nn] def rpnHead(inChannels: Int, numAnchors: Int): Module[Float] = {
     val conv = SpatialConvolution[Float](inChannels, inChannels,
       kernelH = 3, kernelW = 3, strideH = 1, strideW = 1, padH = 1, padW = 1)
+      .setName("rpn.head.conv")
     conv.setInitMethod(RandomNormal(0.0, 0.01), Zeros)
-    val clsLogits = SpatialConvolution[Float](inChannels, numAnchors,
-      kernelH = 1, kernelW = 1, strideH = 1, strideW = 1).setName(this.getName() + "_cls_logits")
-    clsLogits.setInitMethod(RandomNormal(0.0, 0.01), Zeros)
-    val bboxPred = SpatialConvolution[Float](inChannels, numAnchors * 4,
-      kernelH = 1, kernelW = 1, strideH = 1, strideW = 1).setName(this.getName() + "_bbox_pred")
-    bboxPred.setInitMethod(RandomNormal(0.0, 0.01), Zeros)
+    val conv2 = SpatialConvolution[Float](inChannels, numAnchors,
+       kernelH = 1, kernelW = 1, strideH = 1, strideW = 1) // .setName(this.getName() + "_cls_logits")
+      .setName("rpn.head.cls_logits")
+    conv2.setInitMethod(RandomNormal(0.0, 0.01), Zeros)
+    val conv3 = SpatialConvolution[Float](inChannels, numAnchors * 4,
+      kernelH = 1, kernelW = 1, strideH = 1, strideW = 1) // .setName(this.getName() + "_bbox_pred")
+      .setName("rpn.head.bbox_pred")
+    conv3.setInitMethod(RandomNormal(0.0, 0.01), Zeros)
 
     val input = Input()
     val node1 = conv.inputs(input)
     val node2 = ReLU[Float]().inputs(node1)
-    val node3 = clsLogits.inputs(node2)
-    val node4 = bboxPred.inputs(node2)
+    val node3 = conv2.inputs(node2)
+    val node4 = conv3.inputs(node2)
 
     Graph(input, Array(node3, node4))
   }

@@ -17,8 +17,6 @@
 package com.intel.analytics.bigdl.optim
 
 import com.intel.analytics.bigdl._
-import com.intel.analytics.bigdl.dataset.segmentation.MaskUtils
-import com.intel.analytics.bigdl.models.maskrcnn.Mask
 import com.intel.analytics.bigdl.nn.ClassNLLCriterion
 import com.intel.analytics.bigdl.nn.AbsCriterion
 import com.intel.analytics.bigdl.nn.abstractnn.Activity

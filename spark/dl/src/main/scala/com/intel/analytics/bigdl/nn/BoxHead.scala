@@ -64,18 +64,18 @@ class BoxHead(
 
   private[nn] def clsPredictor(numClass: Int,
                                inChannels: Int): Module[Float] = {
-    val clsScore = Linear[Float](inChannels, numClass)
-    clsScore.weight.apply1(_ => RNG.normal(0, 0.01).toFloat)
-    clsScore.bias.fill(0.0f)
-    clsScore.asInstanceOf[Module[Float]]
+    val cls_score = Linear[Float](inChannels, numClass).setName("cls_score")
+    cls_score.weight.apply1(_ => RNG.normal(0, 0.01).toFloat)
+    cls_score.bias.fill(0.0f)
+    cls_score.asInstanceOf[Module[Float]]
   }
 
   private[nn] def bboxPredictor(numClass: Int,
                                inChannels: Int): Module[Float] = {
-    val bboxRegression = Linear[Float](inChannels, numClass * 4)
-    bboxRegression.weight.apply1(_ => RNG.normal(0, 0.001).toFloat)
-    bboxRegression.bias.fill(0.0f)
-    bboxRegression.asInstanceOf[Module[Float]]
+    val bbox_pred = Linear[Float](inChannels, numClass * 4).setName("bbox_pred")
+    bbox_pred.weight.apply1(_ => RNG.normal(0, 0.001).toFloat)
+    bbox_pred.bias.fill(0.0f)
+    bbox_pred.asInstanceOf[Module[Float]]
   }
 
   private[nn] def featureExtractor(inChannels: Int,
@@ -87,8 +87,10 @@ class BoxHead(
 
     val fc1 = Linear[Float](inputSize, representationSize, withBias = true)
       .setInitMethod(Xavier, Zeros)
+      .setName("fc6")
     val fc2 = Linear[Float](representationSize, representationSize, withBias = true)
       .setInitMethod(Xavier, Zeros)
+      .setName("fc7")
 
     val model = Sequential[Float]()
       .add(pooler)

@@ -22,7 +22,7 @@ import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.utils.T
 import org.scalatest.{FlatSpec, Matchers}
 
-class MaskSpec extends FlatSpec with Matchers {
+class MaskRCNNUtilsSpec extends FlatSpec with Matchers {
   "expandBoxes" should "be ok" in {
     val bbox = Tensor[Float](T(415.3202, 176.3966, 441.3445, 251.7300))
     val box = MaskRCNNUtils.expandBoxes(bbox, 1.0714285714285714f)
