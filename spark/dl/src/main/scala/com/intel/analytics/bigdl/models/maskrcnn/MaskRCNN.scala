@@ -157,12 +157,14 @@ class MaskRCNN(val inChannels: Int,
   }
 
   override def updateOutput(input: Activity): Activity = {
-    val inputHeight = input.toTensor[Float].size(3)
-    val inputWidth = input.toTensor[Float].size(4)
-    ImageInfo.setValue(1, inputHeight)
-    ImageInfo.setValue(2, inputWidth)
+    val inputFeatures = input.toTable[Tensor[Float]](1)
+    // shape (batchsize, 2), with height & width value
+    val roiSize = input.toTable[Tensor[Int]](2)
 
-    val features = this.backbone.forward(input)
+    ImageInfo.setValue(1, inputFeatures.size(3))
+    ImageInfo.setValue(2, inputFeatures.size(4))
+
+    val features = this.backbone.forward(inputFeatures)
     val proposals = this.rpn.forward(T(features, ImageInfo))
     val boxOutput = this.boxHead.forward(T(features, proposals)).toTable
     val postProcessorBox = boxOutput[Table](2)
@@ -250,27 +252,29 @@ class MaskRCNN(val inChannels: Int,
       output = T(proposalsBox, labelsBox, masks, scores)
     } else {
       output = postProcessorForMaskRCNN(proposalsBox, labelsBox, masks[Tensor[Float]](2),
-        scores, inputHeight, inputWidth)
+        scores, roiSize)
     }
 
     output
   }
 
-  @transient var binaryMask : Tensor[Float] = _
+  @transient var binaryMask : Tensor[Float] = null
   private def postProcessorForMaskRCNN(bboxes: Table, labels: Tensor[Float],
-    masks: Tensor[Float], scores: Tensor[Float], height: Int, width: Int): Table = {
+    masks: Tensor[Float], scores: Tensor[Float], roiSize: Tensor[Int]): Table = {
     val batchSize = bboxes.length()
     val boxesInImage = new Array[Int](batchSize)
     for (i <- 0 to batchSize - 1) {
       boxesInImage(i) = bboxes[Tensor[Float]](i + 1).size(1)
     }
 
-    if (binaryMask == null) binaryMask = Tensor[Float](height, width)
-    binaryMask.resize(height, width)
-
+    if (binaryMask == null) binaryMask = Tensor[Float]()
     val output = T()
     var start = 1
     for (i <- 0 to batchSize - 1) {
+      val height = roiSize.valueAt(i + 1, 1)
+      val width = roiSize.valueAt(i + 1, 2)
+      binaryMask.resize(height, width)
+
       val boxNumber = boxesInImage(i)
       val maskPerImg = masks.narrow(1, start, boxNumber)
       val bboxPerImg = bboxes[Tensor[Float]](i + 1)

@@ -25,6 +25,10 @@ abstract class SegmentationMasks extends Serializable {
    * Convert to a RLE encoded tensor
    */
   def toRLETensor: Tensor[Float]
+
+  def getHeight: Int
+
+  def getWidth: Int
 }
 
 /**
@@ -40,6 +44,9 @@ class PolyMasks(val poly: Array[Array[Float]], val height: Int, val width: Int) 
     require(height > 0 && width > 0, "the height and width must > 0 for toRLETensor()")
     MaskUtils.mergeRLEs(MaskUtils.poly2RLE(this, height, width), false).toRLETensor
   }
+
+  def getHeight: Int = height
+  def getWidth: Int = width
 }
 
 object PolyMasks {
@@ -79,6 +86,9 @@ class RLEMasks(val counts: Array[Int], val height: Int, val width: Int) extends 
   def get(idx: Int): Long = {
     MaskUtils.uint2long(counts(idx))
   }
+
+  def getHeight: Int = height
+  def getWidth: Int = width
 }
 
 object RLEMasks {

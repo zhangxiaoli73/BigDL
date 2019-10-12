@@ -16,11 +16,14 @@
 package com.intel.analytics.bigdl.transform.vision.image
 
 import java.util.concurrent.atomic.AtomicInteger
+
 import com.intel.analytics.bigdl.dataset.{MiniBatch, Sample, Transformer, Utils}
+import com.intel.analytics.bigdl.nn.abstractnn.Activity
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
 import com.intel.analytics.bigdl.tensor.{Storage, Tensor}
 import com.intel.analytics.bigdl.transform.vision.image.label.roi.RoiLabel
 import com.intel.analytics.bigdl.utils.{Engine, T, Table}
+
 import scala.collection.mutable.IndexedSeq
 
 object MTImageFeatureToBatch {
@@ -204,11 +207,30 @@ class RoiMiniBatch(val input: Tensor[Float], val target: IndexedSeq[RoiLabel],
   val isCrowd: IndexedSeq[Tensor[Float]], val originalSizes: IndexedSeq[(Int, Int, Int)])
   extends MiniBatch[Float] {
 
-  override def size(): Int = {
-    input.size(1)
+  private val batchSize = originalSizes.length
+  private val segmentation: Boolean = target(0).masks != null
+  private val roiSize : Tensor[Float] = null
+
+  initROISize()
+  private def initROISize() : Unit = {
+    if (segmentation) {
+      for (i <- 0 until batchSize) {
+        val masks = target(i).masks
+        val (height, width) = (masks(0).getHeight, masks(0).getWidth)
+        // check mask size
+        masks.foreach(m => require(m.getHeight == height && m.getWidth == width,
+          "size of SegmentationMasks in one image should be same"))
+        roiSize.setValue(i + 1, 1, height)
+        roiSize.setValue(i + 1, 2, width)
+      }
+    }
   }
 
-  override def getInput(): Tensor[Float] = input
+  override def size(): Int = input.size(1)
+
+  override def getInput(): Activity = {
+    if (segmentation) T(input, roiSize) else input
+  }
 
   override def getTarget(): Table = {
     val tables = (target, isCrowd, originalSizes).zipped.map { case (roiLabel, crowd, size) =>

@@ -30,7 +30,7 @@ class MaskRCNNSpec extends FlatSpec with Matchers {
     val mask = new MaskRCNN(resNetOutChannels, backboneOutChannels)
     mask.evaluate()
     val input = Tensor[Float](1, 3, 224, 256).rand()
-    val output = mask.forward(input)
+    val output = mask.forward(T(input, Tensor[Int](T(T(224, 256)))))
   }
 
   "NMS" should "be ok" in {
