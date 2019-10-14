@@ -16,9 +16,9 @@
 
 package com.intel.analytics.bigdl.dataset.segmentation
 
-import com.intel.analytics.bigdl.transform.vision.image.{FeatureTransformer, ImageFeature}
 import com.intel.analytics.bigdl.transform.vision.image.label.roi.RoiLabel
 import com.intel.analytics.bigdl.transform.vision.image.util.BboxUtil
+import com.intel.analytics.bigdl.transform.vision.image.{FeatureTransformer, ImageFeature}
 import org.opencv.core.Size
 import org.opencv.imgproc.Imgproc
 

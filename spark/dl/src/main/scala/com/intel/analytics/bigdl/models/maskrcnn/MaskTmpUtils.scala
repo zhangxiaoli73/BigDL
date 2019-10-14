@@ -16,7 +16,10 @@
 
 package com.intel.analytics.bigdl.models.maskrcnn
 
+import com.intel.analytics.bigdl.Module
 import com.intel.analytics.bigdl.tensor.Tensor
+import com.intel.analytics.bigdl.utils.Table
+
 import scala.collection.mutable.ArrayBuffer
 import scala.io.Source
 
@@ -40,5 +43,43 @@ object MaskTmpUtils {
     weight
   }
 
+  def loadMaskModel(): Module[Float] = {
+    val resNetOutChannels = 256
+    val backboneOutChannels = 256
+    val mask = new MaskRCNN(resNetOutChannels, backboneOutChannels)
 
+    val params = mask.getParametersTable()
+    val keys = params.keySet
+    val path = "/home/zhangli/workspace/tmp/mask/maskrcnn-benchmark/demo/weight/"
+    for(i <- keys) {
+      // for weight
+      var p = params.get[Table](i).get.get[Tensor[Float]]("weight").get
+      var size = p.size()
+      var name = path + i.toString + ".weight"
+      if (size(0) != 1) {
+        size.foreach(n => name = name + s"_${n}")
+      } else {
+        size.slice(1, size.length).foreach(n => name = name + s"_${n}")
+      }
+
+      name = name + ".txt"
+      val weight = MaskTmpUtils.loadWeight(name, size)
+      p.set(weight)
+
+      // for bias
+      p = params.get[Table](i).get.get[Tensor[Float]]("bias").getOrElse(null)
+      if (p != null) {
+        size = p.size()
+        name = path + i.toString + ".bias"
+        size.foreach(n => name = name + s"_${n}")
+        name = name + ".txt"
+        val bias = MaskTmpUtils.loadWeight(name, size)
+        p.set(bias)
+      }
+
+      println(s"${i} done")
+    }
+
+    mask
+  }
 }

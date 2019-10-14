@@ -16,11 +16,15 @@
 
 package com.intel.analytics.bigdl.models.maskrcnn
 
+import com.intel.analytics.bigdl.dataset.image.CropRandom
 import com.intel.analytics.bigdl.models.resnet.Utils.{TestParams, _}
-import com.intel.analytics.bigdl.transform.vision.image.{BytesToMat, MatToTensor}
-import com.intel.analytics.bigdl.transform.vision.image.augmentation.{ChannelNormalize, Resize}
+import com.intel.analytics.bigdl.transform.vision.image._
+import com.intel.analytics.bigdl.transform.vision.image.augmentation._
 import com.intel.analytics.bigdl.utils.T
 import scopt.OptionParser
+import com.intel.analytics.bigdl.dataset.segmentation
+import com.intel.analytics.bigdl.nn.Module
+import com.intel.analytics.bigdl.optim.Top1Accuracy
 
 object Test {
   case class TestParams(
@@ -46,10 +50,29 @@ object Test {
 
   def main(args: Array[String]): Unit = {
     testParser.parse(args, TestParams()).foreach { param => {
-      val dummyInput = T()
+      val rddData =
 
-      val trans = BytesToMat() -> Resize(minSize, maxSize) ->
-        ChannelNormalize(123f, 115f, 102.9801f) -> MatToTensor[Float]()
+      val minSize = 100
+      val maxSize = 600
+      val batchSize = 2
+
+      val transformer = ImageFeatureToBatchWithResize(
+          sizeDivisible = 32,
+          batchSize = batchSize,
+          transformer = BytesToMat() ->
+            segmentation.Resize(minSize, maxSize, resizeROI = false) ->
+            ChannelNormalize(123f, 115f, 102.9801f) ->
+            MatToTensor[Float](),
+            toRGB = false
+        )
+
+      val evaluationSet = transformer(rddData)
+
+      val model = MaskTmpUtils.loadMaskModel() // Module.load[Float](param.model)
+
+      val result = model.evaluate(evaluationSet, Array(new Top1Accuracy[Float]),
+        Some(param.batchSize))
+      result.foreach(r => println(s"${r._2} is ${r._1}"))
 
     }}
   }
