@@ -50,7 +50,7 @@ object Test {
 
   def main(args: Array[String]): Unit = {
     testParser.parse(args, TestParams()).foreach { param => {
-      val rddData =
+//      val rddData =
 
       val minSize = 100
       val maxSize = 600
@@ -66,13 +66,13 @@ object Test {
             toRGB = false
         )
 
-      val evaluationSet = transformer(rddData)
+//      val evaluationSet = transformer(rddData)
 
       val model = MaskTmpUtils.loadMaskModel() // Module.load[Float](param.model)
 
-      val result = model.evaluate(evaluationSet, Array(new Top1Accuracy[Float]),
-        Some(param.batchSize))
-      result.foreach(r => println(s"${r._2} is ${r._1}"))
+//      val result = model.evaluate(evaluationSet, Array(new Top1Accuracy[Float]),
+//        Some(param.batchSize))
+//      result.foreach(r => println(s"${r._2} is ${r._1}"))
 
     }}
   }
