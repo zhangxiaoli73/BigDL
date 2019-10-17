@@ -51,7 +51,7 @@ object MTImageFeatureToBatch {
   }
 }
 
-object ImageFeatureToBatchWithResize {
+object MTImageFeatureToBatchWithResize {
   /**
    * The transformer from ImageFeature to mini-batches, and extract ROI labels for segmentation
    * if roi labels are set.
@@ -62,7 +62,7 @@ object ImageFeatureToBatchWithResize {
    */
   def apply(sizeDivisible: Int = -1, batchSize: Int, transformer: FeatureTransformer,
     toRGB : Boolean = false): MTImageFeatureToBatch =
-    new RoiImageFeatureToBatchWithMaxSize(sizeDivisible, batchSize, transformer, toRGB)
+    new RoiImageFeatureToBatchWithResize(sizeDivisible, batchSize, transformer, toRGB)
 }
 
 /**
@@ -208,12 +208,13 @@ class RoiMiniBatch(val input: Tensor[Float], val target: IndexedSeq[RoiLabel],
   extends MiniBatch[Float] {
 
   private val batchSize = originalSizes.length
-  private val segmentation: Boolean = target(0).masks != null
-  private val roiSize : Tensor[Float] = null
+  private val segmentation: Boolean = target(0) != null && target(0).masks != null
+  private var roiSize : Tensor[Int] = null
 
   initROISize()
   private def initROISize() : Unit = {
     if (segmentation) {
+      if (roiSize == null) roiSize = Tensor[Int](batchSize, 2)
       for (i <- 0 until batchSize) {
         val masks = target(i).masks
         val (height, width) = (masks(0).getHeight, masks(0).getWidth)
@@ -307,12 +308,13 @@ class RoiMTImageFeatureToBatch private[bigdl](width: Int, height: Int,
  * A transformer pipeline wrapper to create RoiMiniBatch in multiple threads.
  * Image features may have different sizes, so firstly we need to calculate max size in one batch,
  * then padding all features to one batch with max size.
- * @param sizeDivisible when it's greater than 0, height and wide should be divisible by this size
+ * @param sizeDivisible when it's greater than 0,
+ *                      height and wide will be round up to multiple of this divisible size
  * @param totalBatchSize global batch size
  * @param transformer pipeline for pre-processing
  * @param toRGB
  */
-class RoiImageFeatureToBatchWithMaxSize private[bigdl](sizeDivisible: Int = -1, totalBatchSize: Int,
+class RoiImageFeatureToBatchWithResize private[bigdl](sizeDivisible: Int = -1, totalBatchSize: Int,
   transformer: FeatureTransformer, toRGB: Boolean = false)
   extends MTImageFeatureToBatch(totalBatchSize, transformer) {
 
@@ -325,9 +327,9 @@ class RoiImageFeatureToBatchWithMaxSize private[bigdl](sizeDivisible: Int = -1, 
   private def getFrameSize(batchSize: Int): (Int, Int) = {
     var maxHeight = 0
     var maxWide = 0
-    for (i <- 0 to (batchSize - 1)) {
-      if (maxHeight < imageBuffer(i).size(2)) maxHeight = imageBuffer(i).size(2)
-      if (maxWide < imageBuffer(i).size(3)) maxWide = imageBuffer(i).size(3)
+    for (i <- 0 until batchSize) {
+      maxHeight = math.max(maxHeight, imageBuffer(i).size(2))
+      maxWide = math.max(maxWide, imageBuffer(i).size(3))
     }
 
     if (sizeDivisible > 0) {
@@ -344,8 +346,10 @@ class RoiImageFeatureToBatchWithMaxSize private[bigdl](sizeDivisible: Int = -1, 
     img.copyTo(imageBuffer(position).storage().array(), 0, toRGB = toRGB)
     val isCrowd = img(RoiLabel.ISCROWD).asInstanceOf[Tensor[Float]]
     val label = img.getLabel.asInstanceOf[RoiLabel]
-    require(label.bboxes.size(1) == isCrowd.size(1), "The number of detections" +
-      "in ImageFeature's ISCROWD should be equal to the number of detections in the RoiLabel")
+    if (isCrowd != null && label != null) {
+      require(label.bboxes.size(1) == isCrowd.size(1), "The number of detections" +
+        "in ImageFeature's ISCROWD should be equal to the number of detections in the RoiLabel")
+    }
     isCrowdData(position) = isCrowd
     labelData(position) = label
     origSizeData(position) = img.getOriginalSize

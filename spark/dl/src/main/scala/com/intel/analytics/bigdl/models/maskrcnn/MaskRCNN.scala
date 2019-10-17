@@ -157,16 +157,26 @@ class MaskRCNN(val inChannels: Int,
   }
 
   override def updateOutput(input: Activity): Activity = {
-    val inputFeatures = input.toTable[Tensor[Float]](1)
-    // shape (batchsize, 2), with height & width value
-    val roiSize = input.toTable[Tensor[Int]](2)
+    val (inputFeatures, roiSize) = if (input.isTensor) {
+      val size1 = input.toTensor[Float].size(3)
+      val size2 = input.toTensor[Float].size(4)
 
+      val out = Tensor[Int](input.toTensor[Float].size(1), 2)
+      for (i <- 0 until out.size(1)) {
+        out.setValue(i + 1, 1, size1)
+        out.setValue(i + 1, 2, size2)
+      }
+
+      (input.toTensor[Float], out)
+     } else {
+      (input.toTable[Tensor[Float]](1), input.toTable[Tensor[Int]](2))
+    }
     ImageInfo.setValue(1, inputFeatures.size(3))
     ImageInfo.setValue(2, inputFeatures.size(4))
 
     val features = this.backbone.forward(inputFeatures)
     val proposals = this.rpn.forward(T(features, ImageInfo))
-    val boxOutput = this.boxHead.forward(T(features, proposals)).toTable
+    val boxOutput = this.boxHead.forward(T(features, proposals, ImageInfo)).toTable
     val postProcessorBox = boxOutput[Table](2)
     val labelsBox = postProcessorBox[Tensor[Float]](1)
     val proposalsBox = postProcessorBox[Table](2)
@@ -258,6 +268,9 @@ class MaskRCNN(val inChannels: Int,
     output
   }
 
+  // debug for filtering useless bbox
+
+
   @transient var binaryMask : Tensor[Float] = null
   private def postProcessorForMaskRCNN(bboxes: Table, labels: Tensor[Float],
     masks: Tensor[Float], scores: Tensor[Float], roiSize: Tensor[Int]): Table = {
@@ -271,6 +284,7 @@ class MaskRCNN(val inChannels: Int,
     val output = T()
     var start = 1
     for (i <- 0 to batchSize - 1) {
+      println(s"pppppppppppppppp ${i}")
       val height = roiSize.valueAt(i + 1, 1)
       val width = roiSize.valueAt(i + 1, 2)
       binaryMask.resize(height, width)

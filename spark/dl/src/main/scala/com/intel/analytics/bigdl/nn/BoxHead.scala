@@ -15,6 +15,8 @@
  */
 package com.intel.analytics.bigdl.nn
 
+import javafx.scene.control.Tab
+
 import breeze.linalg.dim
 import com.intel.analytics.bigdl.Module
 import com.intel.analytics.bigdl.nn.abstractnn.{AbstractModule, Activity}
@@ -53,13 +55,14 @@ class BoxHead(
 
     val features = Input()
     val proposals = Input()
+    val imageInfo = Input()
 
     val boxFeatures = featureExtractor.inputs(features, proposals)
     val classLogits = clsPredictor.inputs(boxFeatures)
     val boxRegression = bboxPredictor.inputs(boxFeatures)
-    val result = postProcessor.inputs(classLogits, boxRegression, proposals)
+    val result = postProcessor.inputs(classLogits, boxRegression, proposals, imageInfo)
 
-    Graph(Array(features, proposals), Array(boxFeatures, result))
+    Graph(Array(features, proposals, imageInfo), Array(boxFeatures, result))
   }
 
   private[nn] def clsPredictor(numClass: Int,
@@ -287,6 +290,7 @@ private[nn] class BoxPostProcessor(
     val classLogits = input[Tensor[Float]](1)
     val boxRegression = input[Tensor[Float]](2)
     val bbox = input[Table](3)
+    val imageInfo = input[Tensor[Float]](4) // height & width
 
     val boxesInImage = new Array[Int](bbox.length())
     for (i <- 0 to boxesInImage.length - 1) {
@@ -306,6 +310,8 @@ private[nn] class BoxPostProcessor(
 
     val classProb = softMax.forward(classLogits)
     BboxUtil.decodeWithWeight(boxRegression, concatBoxes, weight, boxesBuf)
+    // clip to images
+    BboxUtil.clipBoxes(boxesBuf, imageInfo.valueAt(1), imageInfo.valueAt(2))
 
     if (output.toTable.length() == 0) {
       output.toTable(1) = Tensor[Float]() // for labels
