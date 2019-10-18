@@ -28,6 +28,7 @@ import com.intel.analytics.bigdl.utils.{Engine, T}
 import scopt.OptionParser
 import com.intel.analytics.bigdl.dataset.{DataSet, MiniBatch, segmentation}
 import com.intel.analytics.bigdl.dataset.segmentation.COCODataset
+import com.intel.analytics.bigdl.models.mask.CoCo
 import com.intel.analytics.bigdl.models.utils.ModelBroadcast
 import com.intel.analytics.bigdl.nn.Module
 import com.intel.analytics.bigdl.optim._
@@ -79,6 +80,9 @@ object TestDebug {
   def loadFromSource(): Array[ImageFeature] = {
     val f = "/home/zhangli/CodeSpace/forTrain/coco-2017/val2017"
     val m = "/home/zhangli/CodeSpace/forTrain/coco-2017/annotations/instances_val2017.json"
+
+    val tt = CoCo.loadDetectionBBox(m)
+    println("done")
     //    val fileNames = Array[String](
     //      "000000000139.jpg", "000000000285.jpg", "000000000632.jpg",
     //      "000000000724.jpg", "000000000776.jpg", "000000000785.jpg",

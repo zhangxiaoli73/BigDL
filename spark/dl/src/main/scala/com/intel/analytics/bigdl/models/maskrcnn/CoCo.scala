@@ -24,7 +24,7 @@ import com.intel.analytics.bigdl.tensor.{Storage, Tensor}
 import com.intel.analytics.bigdl.transform.vision.image.{BytesToMat, ImageFeature, MatToFloats}
 import com.intel.analytics.bigdl.transform.vision.image.augmentation.{ChannelNormalize, ColorJitter, Resize}
 import com.intel.analytics.bigdl.transform.vision.image.label.roi.RoiLabel
-import com.intel.analytics.bigdl.utils.T
+import com.intel.analytics.bigdl.utils.{T, Table}
 import org.apache.commons.io.FileUtils
 import org.apache.log4j.Logger
 
@@ -166,6 +166,77 @@ object CoCo {
     }
   }
 
+  // load annotations to target
+
+  def loadDetectionBBox(path: String): Table = {
+    val text = FileUtils.readFileToString(new File(path))
+    val annotations = JSON.parseFull(text).getOrElse(null).asInstanceOf[List[Map[String, Any]]]
+
+    val keys = T()
+    for (i <- 0 until annotations.length) {
+      val anno = annotations(i).get("image_id").get.asInstanceOf[Double].toString
+      if (keys contains anno) {
+        keys.get[ArrayBuffer[Map[String, Any]]](anno).get.append(annotations(i))
+      } else {
+        val buffer = new ArrayBuffer[Map[String, Any]]
+        buffer.append(annotations(i))
+        keys.update(anno, buffer)
+      }
+    }
+
+    val output = T()
+    var num = 1
+    for (k <- keys.keySet) {
+      val anno = keys.apply[ArrayBuffer[Map[String, Any]]](k).toArray
+
+      val validBoxes = new ArrayBuffer[Float]()
+      val validClasses = new ArrayBuffer[Float]()
+      val validScores = new ArrayBuffer[Float]()
+
+      var i = 0
+      while (i < anno.length) {
+        val boxes = anno(i)("bbox").asInstanceOf[List[Double]]
+        val scores = anno(i)("score").asInstanceOf[Double].toFloat
+        validScores.append(scores)
+
+        val x1 = Math.max(0, boxes(0)).toFloat
+        val y1 = Math.max(0, boxes(1)).toFloat
+        val width = boxes(2)
+        val height = boxes(3)
+        val x2 = (x1 + width - 1).toFloat
+        val y2 = (y1 + height - 1).toFloat
+
+        if (x2 >= x1 && y2 >= y1) {
+          validBoxes.append(x1)
+          validBoxes.append(y1)
+          validBoxes.append(x2)
+          validBoxes.append(y2)
+          val clsInd = cocoCatIdToClassInd(
+            anno(i)("category_id").asInstanceOf[Double].toInt)
+          validClasses.append(clsInd.toFloat)
+        }
+        i += 1
+      }
+      val masksRLE = null
+      val bboxPerImg = Tensor(Storage(validBoxes.toArray)).resize(validBoxes.length / 4, 4)
+      val scorePerImg = Tensor(Storage(validScores.toArray)).resize(validScores.length)
+      val classPerImg = Tensor(Storage(validClasses.toArray)).resize(validClasses.length)
+
+      val postOutput = T()
+      postOutput.update(RoiLabel.MASKS, masksRLE)
+      postOutput.update(RoiLabel.BBOXES, bboxPerImg)
+      postOutput.update(RoiLabel.CLASSES, classPerImg)
+      postOutput.update(RoiLabel.SCORES, scorePerImg)
+      postOutput.update(RoiLabel.ISCROWD, Tensor[Float](scorePerImg.nElement()).fill(0.0f))
+
+      output(num) = postOutput
+      num += 1
+    }
+
+    output
+  }
+
+
   def getRoidb(readImage: Boolean = true, imageSet: String, devkitPath: String)
   : Array[ImageFeature] = {
     val imageSetFile = Paths.get(devkitPath, "ImageSets", s"$imageSet.txt").toFile
@@ -182,21 +253,5 @@ object CoCo {
 
   def loadImage(imagePath: String): Array[Byte] = {
     FileUtils.readFileToByteArray(new File(imagePath))
-  }
-
-  def transformer(train: Boolean): Unit = {
-    ColorJitter()
-    //      BytesToMat() ->
-    //      ChannelNormalize(meanR = 102.9801f, meanG = 115.9465f, meanB = 122.7717f,
-    //        stdR = 1, stdG = 1, stdB = 1) ->
-    //      ColorJitter() ->
-
-    //      Resize(resolution, resolution, -1) ->
-    //      ChannelNormalize(123f, 117f, 104f) ->
-    //      MatToFloats()
-  }
-
-  def postPrecessiong(): Unit = {
-
   }
 }

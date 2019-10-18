@@ -28,6 +28,7 @@ import com.intel.analytics.bigdl.utils.{Engine, T}
 import scopt.OptionParser
 import com.intel.analytics.bigdl.dataset.{DataSet, MiniBatch, segmentation}
 import com.intel.analytics.bigdl.dataset.segmentation.COCODataset
+import com.intel.analytics.bigdl.models.mask.CoCo
 import com.intel.analytics.bigdl.models.utils.ModelBroadcast
 import com.intel.analytics.bigdl.nn.Module
 import com.intel.analytics.bigdl.optim._
@@ -65,6 +66,18 @@ object Test {
         .set("spark.akka.frameSize", 64.toString)
         .set("spark.task.maxFailures", "1")
       val sc = new SparkContext(conf)
+
+      val f = "/home/zhangli/CodeSpace/forTrain/coco-2017/val2017"
+      val m = "/home/zhangli/CodeSpace/forTrain/coco-2017/annotations/instances_val2017.json"
+
+      val p = "/home/zhangli/workspace/tmp/mask/maskrcnn-benchmark/tools/inference/coco_2014_minival/bbox.json"
+
+      val dt = CoCo.loadDetectionBBox(p)
+      val gt = CoCo.loadDetectionBBox("/home/zhangli/workspace/tmp/mask/maskrcnn-benchmark/tools/inference/coco_2014_minival/bbox-gt.json")
+
+      val map = MeanAveragePrecisionObjectDetection.createCOCO(81)
+
+      val out = map(dt, gt)
 
       Engine.init
       val partitionNum = 2 // Engine.nodeNumber() * Engine.coreNumber()
