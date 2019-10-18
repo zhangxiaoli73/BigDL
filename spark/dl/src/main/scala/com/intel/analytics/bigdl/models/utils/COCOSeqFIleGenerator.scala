@@ -90,9 +90,15 @@ object COCOSeqFileGenerator {
           context.dump(COCODataset.MAGIC_NUM)
           val keyBytes = context.toByteArray
           key.set(keyBytes, 0, keyBytes.length)
-          val bytes = Files.readAllBytes(Paths.get(param.folder, img.fileName))
-          value.set(bytes, 0, bytes.length)
-          writer.append(key, value)
+          try {
+            val bytes = Files.readAllBytes(Paths.get(param.folder, img.fileName))
+            value.set(bytes, 0, bytes.length)
+            writer.append(key, value)
+          } catch {
+            case e: Exception =>
+              println(s"skip ${img.fileName}")
+          }
+
           val cnt = doneCount.incrementAndGet()
           if (cnt % 500 == 0) {
             System.err.print(s"\r$cnt / ${meta.images.length} = ${cnt.toFloat/meta.images.length}")

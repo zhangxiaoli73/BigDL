@@ -25,6 +25,7 @@ import com.intel.analytics.bigdl.serialization.Bigdl.{AttrValue, BigDLModule}
 import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
 import com.intel.analytics.bigdl.transform.vision.image.label.roi.RoiLabel
+import com.intel.analytics.bigdl.transform.vision.image.util.BboxUtil
 import com.intel.analytics.bigdl.utils.serializer._
 import com.intel.analytics.bigdl.utils.serializer.converters.DataConverter
 import com.intel.analytics.bigdl.utils.{T, Table}
@@ -156,6 +157,101 @@ class MaskRCNN(val inChannels: Int,
     model
   }
 
+
+  val expectedOut = Tensor[Float](
+    T(T( 773.2141,  296.3130,  875.2629,  552.9583),
+    T( 721.3090,  324.9946,  752.7162,  389.9704),
+    T( 779.3743,  331.2612,  828.2104,  472.7323),
+    T( 392.5202,  560.9691,  480.7394,  618.4543),
+    T( 748.3901,  378.4600,  761.3455,  405.6181),
+    T(1031.1133,  564.7753, 1100.8037,  748.8037),
+    T( 589.2441,  359.1905,  606.4996,  402.1176),
+    T( 676.6932,  404.4970,  699.2147,  435.6399),
+    T( 659.0489,  409.6111,  676.9818,  432.5181),
+    T( 313.5537,  438.9217,  346.3749,  500.0252),
+    T( 676.1137,  404.8569,  699.4940,  433.0020),
+    T( 747.1718,  385.9903,  762.1301,  405.0909),
+    T( 683.5575,  403.5381,  808.5747,  591.3973),
+    T( 406.6740,  432.7628,  555.1910,  587.7978),
+    T( 554.4664,  409.7568,  658.4654,  600.3703),
+    T( 569.7878,  398.3322,  640.3930,  407.5323),
+    T( 558.7061,  408.4832,  645.4119,  439.1050),
+    T( 592.9282,  408.7379,  636.5220,  435.5891),
+    T( 655.9454,  407.5283,  701.6070,  431.7154),
+    T( 768.2619,  419.3383,  831.6115,  576.7205),
+    T( 677.5145,  436.7480,  725.4089,  583.5943),
+    T( 688.2695,  403.3298,  802.8898,  433.7748),
+    T( 812.2385,  437.6575,  834.5898,  575.3691),
+    T( 597.9655,  411.4805,  758.9082,  437.1466),
+    T( 623.3500,  423.3210,  698.1733,  586.9970),
+    T( 629.6942,  407.1843,  653.2764,  430.6839),
+    T( 554.9944,  409.3045,  571.3876,  437.7670),
+    T( 771.7344,  346.0293,  890.8207,  572.5835),
+    T( 559.6937,  409.6031,  589.6943,  441.4942),
+    T( 778.4492,  412.4941,  823.3328,  481.5043),
+    T( 689.3013,  439.5727,  723.2800,  473.1665),
+    T( 606.3994,  359.7384,  884.5941,  571.9915),
+    T( 549.7070,  411.6304,  610.3748,  575.2234),
+    T( 781.2462,  413.5138,  868.9754,  564.1168),
+    T( 716.9775,  400.7548,  796.5267,  459.0146),
+    T( 600.6643,  428.5961,  662.8142,  586.5216),
+    T( 663.1320,  411.0425,  711.1903,  571.7260),
+    T( 716.7535,  412.2285,  777.9933,  573.2582),
+    T( 432.3186,  328.5717,  500.3239,  400.2412),
+    T( 625.9670,  347.8021,  654.2154,  404.8483),
+    T(1085.8599,  468.2574, 1142.2051,  505.4545),
+    T( 402.0193,  276.5902,  503.8932,  396.3457),
+    T( 641.5566,  341.7755,  662.1937,  404.9708),
+    T( 640.7853,  330.5719,  689.8660,  413.0108),
+    T( 600.5721,  339.0362,  722.3686,  413.6837),
+    T(1024.8645,  532.5353, 1120.7439,  742.8309),
+    T( 610.1445,  431.6295,  725.0405,  440.6628),
+    T( 713.0613,  402.6470,  797.7988,  413.3405),
+    T( 558.3385,  404.0588,  707.2322,  434.6863),
+    T( 893.2620,  659.1650, 1189.4641,  795.1557),
+    T( 545.6807,  413.0492,  807.0984,  449.4756),
+    T( 565.2603,  401.1346,  657.5267,  411.8421),
+    T( 572.2771,  420.9645,  736.6688,  444.8611),
+    T( 647.1559,  432.3820,  746.5234,  589.2875),
+    T( 572.8163,  427.7688,  795.8904,  455.4704),
+    T( 559.2021,  418.8543,  824.1280,  598.1257),
+    T( 711.5480,  406.1088,  795.3193,  417.7105),
+    T( 612.4866,  433.0777,  722.3948,  448.4608),
+    T( 609.8746,  427.4308,  711.2715,  590.2625),
+    T( 594.6610,  434.1769,  734.1844,  469.4973),
+    T( 150.7211,  661.1986, 1101.2495,  790.3402),
+    T( 865.2886,  532.9861, 1192.7415,  791.5900),
+    T( 587.4130,  415.6507,  732.3098,  540.1763),
+    T( 677.3251,  408.9467,  847.2313,  587.6925),
+    T(  14.3146,  312.8906,  287.1800,  490.9341),
+    T(1044.6263,  397.6257, 1199.5004,  536.5251),
+    T( 961.5424,  415.4434, 1015.2215,  525.6513),
+    T( 841.4992,  316.1215,  960.4450,  537.3554),
+    T( 921.7211,  322.3628,  961.6239,  537.0927),
+    T( 867.0925,  353.1292,  918.9283,  537.2457),
+    T( 387.3448,  388.3776,  450.3015,  399.5246),
+    T( 329.6013,  511.6688,  351.8520,  521.9038),
+    T(   0.0000,  299.3038, 1125.7285,  612.2000),
+    T( 842.4726,  226.9476,  863.9404,  265.5812),
+    T( 452.6361,  371.9380,  476.6905,  398.0472),
+    T( 633.2029,  378.6836,  649.3560,  402.3392),
+    T( 649.1407,  387.1259,  662.6000,  404.5518),
+    T(1031.8019,  549.2963, 1102.1632,  745.5969),
+    T( 655.5341,  378.9940,  673.5594,  405.9376),
+    T( 660.4626,  386.1741,  674.0916,  411.5026),
+    T( 747.2353,  385.4892,  761.9861,  404.3753),
+    T( 312.7620,  437.5042,  347.6777,  501.1268),
+    T( 661.9788,  405.4046,  681.2984,  431.1189),
+    T( 660.0209,  392.6873,  675.5620,  431.6780),
+    T( 659.3785,  377.8599,  676.6752,  420.1386),
+    T( 592.2844,  368.5396,  605.6808,  401.5074),
+    T( 626.2499,  380.5099,  638.7192,  401.6520),
+    T( 626.3574,  358.3291,  647.9949,  402.8525),
+    T( 675.8460,  402.8233,  698.6690,  432.2182),
+    T( 663.6592,  379.8636,  676.8243,  406.0887),
+    T( 646.8254,  390.9072,  663.8757,  429.9691),
+    T( 654.1721,  389.4158,  695.9028,  432.6222)))
+
   override def updateOutput(input: Activity): Activity = {
     val (inputFeatures, roiSize) = if (input.isTensor) {
       val size1 = input.toTensor[Float].size(3)
@@ -262,7 +358,7 @@ class MaskRCNN(val inChannels: Int,
       output = T(proposalsBox, labelsBox, masks, scores)
     } else {
       output = postProcessorForMaskRCNN(proposalsBox, labelsBox, masks[Tensor[Float]](2),
-        scores, roiSize)
+        scores, roiSize, imageHeight = inputFeatures.size(3), imageWidth = inputFeatures.size(4))
     }
 
     output
@@ -273,7 +369,8 @@ class MaskRCNN(val inChannels: Int,
 
   @transient var binaryMask : Tensor[Float] = null
   private def postProcessorForMaskRCNN(bboxes: Table, labels: Tensor[Float],
-    masks: Tensor[Float], scores: Tensor[Float], roiSize: Tensor[Int]): Table = {
+    masks: Tensor[Float], scores: Tensor[Float], roiSize: Tensor[Int],
+    imageHeight: Int, imageWidth: Int): Table = {
     val batchSize = bboxes.length()
     val boxesInImage = new Array[Int](batchSize)
     for (i <- 0 to batchSize - 1) {
@@ -284,7 +381,6 @@ class MaskRCNN(val inChannels: Int,
     val output = T()
     var start = 1
     for (i <- 0 to batchSize - 1) {
-      println(s"pppppppppppppppp ${i}")
       val height = roiSize.valueAt(i + 1, 1)
       val width = roiSize.valueAt(i + 1, 2)
       binaryMask.resize(height, width)
@@ -298,6 +394,10 @@ class MaskRCNN(val inChannels: Int,
       require(maskPerImg.size(1) == bboxPerImg.size(1),
         s"mask number ${maskPerImg.size(1)} should be same with box number ${bboxPerImg.size(1)}")
 
+      // bbox resize as roisize
+      if (height != imageHeight || width != imageWidth) {
+        BboxUtil.scaleBBox(bboxPerImg, width.toFloat / imageWidth, height.toFloat / imageHeight)
+      }
       // mask decode
       val masksRLE = new Array[Tensor[Float]](boxNumber)
       for (j <- 0 to boxNumber - 1) {

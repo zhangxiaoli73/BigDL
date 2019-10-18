@@ -38,12 +38,12 @@ import org.apache.spark.rdd.RDD
 
 import scala.collection.mutable.ArrayBuffer
 
-object Test {
+object TestDebug {
   case class TestParams(
-     folder: String = "./",
-     model: String = "",
-     batchSize: Int = 128
-   )
+                         folder: String = "./",
+                         model: String = "",
+                         batchSize: Int = 128
+                       )
 
   val testParser = new OptionParser[TestParams]("BigDL ResNet on Cifar10 Test Example") {
     opt[String]('f', "folder")
@@ -59,6 +59,48 @@ object Test {
       .action((x, c) => c.copy(batchSize = x))
   }
 
+  def testMiniBatch(dataset: RDD[MiniBatch[Float]],
+                    model : Module[Float]): Unit = {
+    val rdd = dataset
+    val modelBroad = ModelBroadcast[Float]().broadcast(rdd.sparkContext, model.evaluate())
+
+    val out = rdd.mapPartitions(miniBatch => {
+      val localModel = modelBroad.value()
+      miniBatch.map(batch => {
+        val input = batch.getInput()
+        val target = null // batch.getTarget()
+
+        val output = localModel.forward(input)
+        (output, target)
+      })
+    }).collect()
+  }
+
+  def loadFromSource(): Array[ImageFeature] = {
+    val f = "/home/zhangli/CodeSpace/forTrain/coco-2017/val2017"
+    val m = "/home/zhangli/CodeSpace/forTrain/coco-2017/annotations/instances_val2017.json"
+    //    val fileNames = Array[String](
+    //      "000000000139.jpg", "000000000285.jpg", "000000000632.jpg",
+    //      "000000000724.jpg", "000000000776.jpg", "000000000785.jpg",
+    //      "000000000802.jpg", "000000000872.jpg", "000000000885.jpg")
+
+    val fileNames = Array[String](
+      "000000000632.jpg")
+
+
+    val features = new ArrayBuffer[ImageFeature]()
+    val meta = COCODataset.load(m)
+    meta.images.foreach(img => {
+      if (fileNames.contains(img.fileName)) {
+        val bytes = Files.readAllBytes(Paths.get(f, img.fileName))
+        val feature = ImageFeature(bytes)
+        features.append(ImageFeature(bytes))
+        println("done")
+      }
+    })
+    features.toArray
+  }
+
   def main(args: Array[String]): Unit = {
     testParser.parse(args, TestParams()).foreach { param => {
       val conf = Engine.createSparkConf().setAppName("Test MaskRCNN on COCO")
@@ -68,31 +110,26 @@ object Test {
 
       Engine.init
       val partitionNum = 2 // Engine.nodeNumber() * Engine.coreNumber()
+      val rddData = DataSet.array[ImageFeature](loadFromSource(), sc).toDistributed().data(train = false)
 
-      val url = "./coco-seq-0.seq"
-      val rddData = DataSet.SeqFileFolder.filesToRoiImageFrame(url, sc, Some(partitionNum))
-        .toDistributed().data(train = false)
-
+      val minSize = 800
+      val maxSize = 1333
       val batchSize = 1
 
       val transformer = MTImageFeatureToBatchWithResize(
-          sizeDivisible = 32,
-          batchSize = batchSize,
-          transformer =
-            PixelBytesToMat() ->
-            ScaleResize(minSize = 800, maxSize = 1333) ->
-            ChannelNormalize(122.7717f, 115.9465f, 102.9801f) ->
-            MatToTensor[Float](),
-            toRGB = false
-        )
-      val evaluationSet = transformer(rddData)
+        sizeDivisible = 32,
+        batchSize = batchSize,
+        transformer = BytesToMat() ->
+          ScaleResize(minSize, maxSize, resizeROI = true) ->
+          ChannelNormalize(122.7717f, 115.9465f, 102.9801f) ->
+          MatToTensor[Float](),
+        toRGB = false
+      )
 
-      val model = MaskTmpUtils.loadMaskModel() // Module.load[Float](param.model)
+      val evaluationSet = transformer.apply(rddData)
+      val model = MaskTmpUtils.loadMaskModel()
 
-      val result = model.evaluate(evaluationSet,
-        Array(MeanAveragePrecisionObjectDetection.createCOCO(81)))
-      result.foreach(r => println(s"${r._2} is ${r._1}"))
-
+      println("done")
       sc.stop()
     }}
   }
