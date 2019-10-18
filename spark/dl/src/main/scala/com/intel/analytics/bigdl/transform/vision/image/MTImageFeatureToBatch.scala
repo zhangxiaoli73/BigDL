@@ -25,6 +25,7 @@ import com.intel.analytics.bigdl.transform.vision.image.label.roi.RoiLabel
 import com.intel.analytics.bigdl.utils.{Engine, T, Table}
 
 import scala.collection.mutable.IndexedSeq
+import scala.reflect.ClassTag
 
 object MTImageFeatureToBatch {
   /**
@@ -204,37 +205,17 @@ class ClassificationMTImageFeatureToBatch private[bigdl](width: Int, height: Int
  * RoiLabel.ORIGSIZE  The original size of the image, tuple of (height, width, channels)
  */
 class RoiMiniBatch(val input: Tensor[Float], val target: IndexedSeq[RoiLabel],
-  val isCrowd: IndexedSeq[Tensor[Float]], val originalSizes: IndexedSeq[(Int, Int, Int)])
+  val isCrowd: IndexedSeq[Tensor[Float]], val imageInfo: IndexedSeq[Tensor[Float]])
   extends MiniBatch[Float] {
-
-  private val batchSize = originalSizes.length
-  private val segmentation: Boolean = target(0) != null && target(0).masks != null
-  private var roiSize : Tensor[Int] = null
-
-  initROISize()
-  private def initROISize() : Unit = {
-    if (segmentation) {
-      if (roiSize == null) roiSize = Tensor[Int](batchSize, 2)
-      for (i <- 0 until batchSize) {
-        val masks = target(i).masks
-        val (height, width) = (masks(0).getHeight, masks(0).getWidth)
-        // check mask size
-        masks.foreach(m => require(m.getHeight == height && m.getWidth == width,
-          "size of SegmentationMasks in one image should be same"))
-        roiSize.setValue(i + 1, 1, height)
-        roiSize.setValue(i + 1, 2, width)
-      }
-    }
-  }
 
   override def size(): Int = input.size(1)
 
   override def getInput(): Activity = {
-    if (segmentation) T(input, roiSize) else input
+    if (imageInfo == null) input else T(input, T.seq(imageInfo))
   }
 
   override def getTarget(): Table = {
-    val tables = (target, isCrowd, originalSizes).zipped.map { case (roiLabel, crowd, size) =>
+    val tables = (target, isCrowd, imageInfo).zipped.map { case (roiLabel, crowd, size) =>
       roiLabel.toTable
         .update(RoiLabel.ISCROWD, crowd)
         .update(RoiLabel.ORIGSIZE, size)
@@ -246,7 +227,7 @@ class RoiMiniBatch(val input: Tensor[Float], val target: IndexedSeq[RoiLabel],
     val subInput = input.narrow(1, offset, length)
     val subTarget = target.view(offset - 1, length) // offset starts from 1
     val subIsCrowd = isCrowd.view(offset - 1, length) // offset starts from 1
-    val subSize = originalSizes.view(offset - 1, length) // offset starts from 1
+    val subSize = imageInfo.view(offset - 1, length) // offset starts from 1
     RoiMiniBatch(subInput, subTarget, subIsCrowd, subSize)
   }
 
@@ -258,7 +239,7 @@ class RoiMiniBatch(val input: Tensor[Float], val target: IndexedSeq[RoiLabel],
 
 object RoiMiniBatch {
   def apply(data: Tensor[Float], target: IndexedSeq[RoiLabel],
-    isCrowd: IndexedSeq[Tensor[Float]], originalSizes: IndexedSeq[(Int, Int, Int)]):
+    isCrowd: IndexedSeq[Tensor[Float]], originalSizes: IndexedSeq[Tensor[Float]]):
   RoiMiniBatch = new RoiMiniBatch(data, target, isCrowd, originalSizes)
 }
 
@@ -281,7 +262,7 @@ class RoiMTImageFeatureToBatch private[bigdl](width: Int, height: Int,
   private val featureData: Array[Float] = new Array[Float](batchSize * frameLength * 3)
   private val labelData: Array[RoiLabel] = new Array[RoiLabel](batchSize)
   private val isCrowdData: Array[Tensor[Float]] = new Array[Tensor[Float]](batchSize)
-  private val origSizeData: Array[(Int, Int, Int)] = new Array[(Int, Int, Int)](batchSize)
+  private val origSizeData: Array[Tensor[Float]] = new Array[Tensor[Float]](batchSize)
   private var featureTensor: Tensor[Float] = null
 
   override protected def processImageFeature(img: ImageFeature, position: Int): Unit = {
@@ -292,7 +273,7 @@ class RoiMTImageFeatureToBatch private[bigdl](width: Int, height: Int,
       "in ImageFeature's ISCROWD should be equal to the number of detections in the RoiLabel")
     isCrowdData(position) = isCrowd
     labelData(position) = label
-    origSizeData(position) = img.getOriginalSize
+    origSizeData(position) = img.getImInfo()
   }
 
   override protected def createBatch(batchSize: Int): MiniBatch[Float] = {
@@ -320,7 +301,7 @@ class RoiImageFeatureToBatchWithResize private[bigdl](sizeDivisible: Int = -1, t
 
   private val labelData: Array[RoiLabel] = new Array[RoiLabel](batchSize)
   private val isCrowdData: Array[Tensor[Float]] = new Array[Tensor[Float]](batchSize)
-  private val origSizeData: Array[(Int, Int, Int)] = new Array[(Int, Int, Int)](batchSize)
+  private val imgInfoData: Array[Tensor[Float]] = new Array[Tensor[Float]](batchSize)
   private var featureTensor: Tensor[Float] = null
   private val imageBuffer = new Array[Tensor[Float]](batchSize)
 
@@ -352,7 +333,7 @@ class RoiImageFeatureToBatchWithResize private[bigdl](sizeDivisible: Int = -1, t
     }
     isCrowdData(position) = isCrowd
     labelData(position) = label
-    origSizeData(position) = img.getOriginalSize
+    imgInfoData(position) = img.getImInfo()
   }
 
   override protected def createBatch(batchSize: Int): MiniBatch[Float] = {
@@ -365,6 +346,6 @@ class RoiImageFeatureToBatchWithResize private[bigdl](sizeDivisible: Int = -1, t
         .narrow(3, 1, imageBuffer(i).size(3)).copy(imageBuffer(i))
     }
     RoiMiniBatch(featureTensor, labelData.view(0, batchSize),
-      isCrowdData.view(0, batchSize), origSizeData.view(0, batchSize))
+      isCrowdData.view(0, batchSize), imgInfoData.view(0, batchSize))
   }
 }

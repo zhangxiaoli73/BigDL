@@ -157,6 +157,26 @@ class MaskRCNN(val inChannels: Int,
     model
   }
 
+  val expectLabels = Tensor[Float](
+    T( 1,  1, 27, 27, 40, 40, 41, 41, 42, 42, 42, 42, 57, 57, 57, 57, 57, 57,
+    57, 57, 57, 57, 57, 57, 57, 57, 57, 57, 57, 57, 57, 57, 57, 57, 57, 57,
+    57, 57, 59, 59, 59, 59, 59, 59, 59, 59, 61, 61, 61, 61, 61, 61, 61, 61,
+    61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 63, 63, 73, 73, 73, 73, 74, 74,
+    74, 75, 76, 76, 76, 76, 76, 76, 76, 76, 76, 76, 76, 76, 76, 76, 76, 76,
+    76, 76))
+
+  val expectedScores = Tensor[Float](
+    T(0.9897, 0.3390, 0.0938, 0.0661, 0.0552, 0.8071, 0.3236, 0.0721, 0.1017,
+    0.2883, 0.3787, 0.0858, 0.9533, 0.1806, 0.9872, 0.0926, 0.5350, 0.7239,
+    0.0588, 0.8923, 0.5787, 0.1139, 0.3128, 0.0530, 0.0646, 0.1337, 0.1409,
+    0.0748, 0.0653, 0.2000, 0.1046, 0.0654, 0.2355, 0.0886, 0.0651, 0.2385,
+    0.1539, 0.1182, 0.8796, 0.3098, 0.0840, 0.0688, 0.0761, 0.6139, 0.1464,
+    0.0906, 0.3684, 0.2710, 0.0905, 0.8570, 0.1083, 0.0691, 0.1531, 0.0829,
+    0.0556, 0.7639, 0.0550, 0.1064, 0.2722, 0.2447, 0.1884, 0.2467, 0.0611,
+    0.0883, 0.9855, 0.7253, 0.0580, 0.9583, 0.9121, 0.3129, 0.1780, 0.0566,
+    0.0581, 0.8686, 0.8609, 0.4773, 0.3759, 0.6044, 0.0887, 0.5057, 0.1647,
+    0.6098, 0.1122, 0.5854, 0.2609, 0.6136, 0.0885, 0.0601, 0.6302, 0.0511,
+    0.0685, 0.0714))
 
   val expectedOut = Tensor[Float](
     T(T( 773.2141,  296.3130,  875.2629,  552.9583),
@@ -253,20 +273,9 @@ class MaskRCNN(val inChannels: Int,
     T( 654.1721,  389.4158,  695.9028,  432.6222)))
 
   override def updateOutput(input: Activity): Activity = {
-    val (inputFeatures, roiSize) = if (input.isTensor) {
-      val size1 = input.toTensor[Float].size(3)
-      val size2 = input.toTensor[Float].size(4)
+    val inputFeatures = input.toTable[Tensor[Float]](1)
+    val imageInfo = input.toTable[Table](2)
 
-      val out = Tensor[Int](input.toTensor[Float].size(1), 2)
-      for (i <- 0 until out.size(1)) {
-        out.setValue(i + 1, 1, size1)
-        out.setValue(i + 1, 2, size2)
-      }
-
-      (input.toTensor[Float], out)
-     } else {
-      (input.toTable[Tensor[Float]](1), input.toTable[Tensor[Int]](2))
-    }
     ImageInfo.setValue(1, inputFeatures.size(3))
     ImageInfo.setValue(2, inputFeatures.size(4))
 
@@ -358,19 +367,15 @@ class MaskRCNN(val inChannels: Int,
       output = T(proposalsBox, labelsBox, masks, scores)
     } else {
       output = postProcessorForMaskRCNN(proposalsBox, labelsBox, masks[Tensor[Float]](2),
-        scores, roiSize, imageHeight = inputFeatures.size(3), imageWidth = inputFeatures.size(4))
+        scores, imageInfo)
     }
 
     output
   }
 
-  // debug for filtering useless bbox
-
-
   @transient var binaryMask : Tensor[Float] = null
   private def postProcessorForMaskRCNN(bboxes: Table, labels: Tensor[Float],
-    masks: Tensor[Float], scores: Tensor[Float], roiSize: Tensor[Int],
-    imageHeight: Int, imageWidth: Int): Table = {
+    masks: Tensor[Float], scores: Tensor[Float], imageInfo: Table): Table = {
     val batchSize = bboxes.length()
     val boxesInImage = new Array[Int](batchSize)
     for (i <- 0 to batchSize - 1) {
@@ -381,9 +386,13 @@ class MaskRCNN(val inChannels: Int,
     val output = T()
     var start = 1
     for (i <- 0 to batchSize - 1) {
-      val height = roiSize.valueAt(i + 1, 1)
-      val width = roiSize.valueAt(i + 1, 2)
-      binaryMask.resize(height, width)
+      val info = imageInfo[Tensor[Float]](i + 1)
+      val height = info.valueAt(1).toInt // image height after scale, no padding
+      val width = info.valueAt(2).toInt // image width after scale, no padding
+      val originalHeight = (info.valueAt(1) / info.valueAt(3)).toInt // Original height
+      val originalWidth = (info.valueAt(2) / info.valueAt(4)).toInt // Original width
+
+      binaryMask.resize(originalHeight, originalWidth)
 
       val boxNumber = boxesInImage(i)
       val maskPerImg = masks.narrow(1, start, boxNumber)
@@ -394,11 +403,12 @@ class MaskRCNN(val inChannels: Int,
       require(maskPerImg.size(1) == bboxPerImg.size(1),
         s"mask number ${maskPerImg.size(1)} should be same with box number ${bboxPerImg.size(1)}")
 
-      // bbox resize as roisize
-      if (height != imageHeight || width != imageWidth) {
-        BboxUtil.scaleBBox(bboxPerImg, width.toFloat / imageWidth, height.toFloat / imageHeight)
+      // bbox resize as original size
+      if (height != originalHeight || width != originalWidth) {
+        BboxUtil.scaleBBox(bboxPerImg,
+          originalHeight.toFloat / height, originalWidth.toFloat / width)
       }
-      // mask decode
+      // mask decode to original size
       val masksRLE = new Array[Tensor[Float]](boxNumber)
       for (j <- 0 to boxNumber - 1) {
         binaryMask.fill(0.0f)
@@ -414,6 +424,7 @@ class MaskRCNN(val inChannels: Int,
       postOutput.update(RoiLabel.BBOXES, bboxPerImg)
       postOutput.update(RoiLabel.CLASSES, classPerImg)
       postOutput.update(RoiLabel.SCORES, scorePerImg)
+      postOutput.update(RoiLabel.ROISIZE, T(originalHeight, originalWidth))
 
       output(i + 1) = postOutput
     }
