@@ -17,7 +17,6 @@
 package com.intel.analytics.bigdl.models.maskrcnn
 
 import com.intel.analytics.bigdl.dataset.segmentation.MaskUtils
-import com.intel.analytics.bigdl.models.mask.MaskInference
 import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.utils.T
 import org.scalatest.{FlatSpec, Matchers}

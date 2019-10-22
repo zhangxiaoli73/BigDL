@@ -17,7 +17,7 @@
 package com.intel.analytics.bigdl.models.maskrcnn
 
 import com.intel.analytics.bigdl.Module
-import com.intel.analytics.bigdl.dataset.segmentation.MaskUtils
+import com.intel.analytics.bigdl.dataset.segmentation.{MaskUtils, RLEMasks}
 import com.intel.analytics.bigdl.models.resnet.{Convolution, Sbn}
 import com.intel.analytics.bigdl.nn._
 import com.intel.analytics.bigdl.nn.abstractnn.{AbstractModule, Activity}
@@ -273,15 +273,8 @@ class MaskRCNN(val inChannels: Int,
     T( 654.1721,  389.4158,  695.9028,  432.6222)))
 
   override def updateOutput(input: Activity): Activity = {
-//    val inputFeatures = input.toTable[Tensor[Float]](1)
-//    val imageInfo = input.toTable[Table](2)
-
-    val inputFeatures = input.toTensor[Float]
-    val imageInfo = if (inputFeatures.size(1) == 1) {
-      Tensor[Float](T(T(224.0f, 256.0f, 1.0f, 1.0f)))
-    } else {
-      Tensor[Float](T(T(224.0f, 256.0f, 1.0f, 1.0f), T(224.0f, 256.0f, 1.0f, 1.0f)))
-    }
+    val inputFeatures = input.toTable[Tensor[Float]](1)
+    val imageInfo = input.toTable[Table](2)
 
     ImageInfo.setValue(1, inputFeatures.size(3))
     ImageInfo.setValue(2, inputFeatures.size(4))
@@ -382,7 +375,7 @@ class MaskRCNN(val inChannels: Int,
 
   @transient var binaryMask : Tensor[Float] = null
   private def postProcessorForMaskRCNN(bboxes: Table, labels: Tensor[Float],
-    masks: Tensor[Float], scores: Tensor[Float], imageInfo: Tensor[Float]): Table = {
+    masks: Tensor[Float], scores: Tensor[Float], imageInfo: Table): Table = {
     val batchSize = bboxes.length()
     val boxesInImage = new Array[Int](batchSize)
     for (i <- 0 to batchSize - 1) {
@@ -393,11 +386,11 @@ class MaskRCNN(val inChannels: Int,
     val output = T()
     var start = 1
     for (i <- 0 to batchSize - 1) {
-      val info = imageInfo.select(1, i + 1)
+      val info = imageInfo[Tensor[Float]](i + 1)
       val height = info.valueAt(1).toInt // image height after scale, no padding
       val width = info.valueAt(2).toInt // image width after scale, no padding
-      val originalHeight = info.valueAt(3).toInt // Original height
-      val originalWidth = info.valueAt(4).toInt // Original width
+      val originalHeight = (info.valueAt(1) / info.valueAt(3)).toInt // Original height
+      val originalWidth = (info.valueAt(2) / info.valueAt(4)).toInt // Original width
 
       binaryMask.resize(originalHeight, originalWidth)
 
@@ -410,18 +403,18 @@ class MaskRCNN(val inChannels: Int,
       require(maskPerImg.size(1) == bboxPerImg.size(1),
         s"mask number ${maskPerImg.size(1)} should be same with box number ${bboxPerImg.size(1)}")
 
-      // bbox resize as original size
+      // bbox resize to original size
       if (height != originalHeight || width != originalWidth) {
         BboxUtil.scaleBBox(bboxPerImg,
           originalHeight.toFloat / height, originalWidth.toFloat / width)
       }
       // mask decode to original size
-      val masksRLE = new Array[Tensor[Float]](boxNumber)
+      val masksRLE = new Array[RLEMasks](boxNumber)
       for (j <- 0 to boxNumber - 1) {
         binaryMask.fill(0.0f)
         MaskRCNNUtils.pasteMaskInImage(maskPerImg.select(1, j + 1), bboxPerImg.select(1, j + 1),
           binaryMask = binaryMask)
-        masksRLE(j) = MaskUtils.binaryToRLE(binaryMask).toRLETensor
+        masksRLE(j) = MaskUtils.binaryToRLE(binaryMask)
       }
       start += boxNumber
 
@@ -431,7 +424,6 @@ class MaskRCNN(val inChannels: Int,
       postOutput.update(RoiLabel.BBOXES, bboxPerImg)
       postOutput.update(RoiLabel.CLASSES, classPerImg)
       postOutput.update(RoiLabel.SCORES, scorePerImg)
-      postOutput.update(RoiLabel.ROISIZE, T(originalHeight, originalWidth))
 
       output(i + 1) = postOutput
     }

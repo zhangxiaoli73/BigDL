@@ -592,14 +592,14 @@ object DataSet {
     }
 
     /**
-      * Extract hadoop sequence files from an HDFS path as ImageFrame
-      * @param url sequence files folder path
-      * @param sc spark context
-      * @param partitionNum partition number, default: Engine.nodeNumber() * Engine.coreNumber()
-      * @return
-      */
+     * Extract hadoop sequence files from an HDFS path as ImageFrame
+     * @param url sequence files folder path
+     * @param sc spark context
+     * @param partitionNum partition number, default: Engine.nodeNumber() * Engine.coreNumber()
+     * @return
+     */
     private[bigdl] def filesToRoiImageFrame(url: String, sc: SparkContext,
-      partitionNum: Option[Int] = None): DistributedDataSet[ImageFeature] = {
+      partitionNum: Option[Int] = None): DataSet[ImageFeature] = {
       val num = partitionNum.getOrElse(Engine.nodeNumber() * Engine.coreNumber())
       val rawData = sc.sequenceFile(url, classOf[BytesWritable], classOf[BytesWritable], num)
         .map { data =>
@@ -610,10 +610,10 @@ object DataSet {
           val labelClasses = Tensor(anno.map(_.categoryId.toFloat), Array(anno.length))
           val bboxes = Tensor(
             anno.toIterator.flatMap(ann => {
-              val x1 = Math.max(0, ann.bbox1)
-              val y1 = Math.max(0, ann.bbox2)
-              val x2 = Math.min(width - 1, x1 + Math.max(0, ann.bbox3 - 1))
-              val y2 = Math.min(height - 1, y1 + Math.max(0, ann.bbox4 - 1))
+              val x1 = ann.bbox1
+              val y1 = ann.bbox2
+              val x2 = ann.bbox3
+              val y2 = ann.bbox4
               Iterator(x1, y1, x2, y2)
             }).toArray,
             Array(anno.length, 4))
@@ -627,11 +627,10 @@ object DataSet {
           val imf = ImageFeature(rawdata, RoiLabel(labelClasses, bboxes, masks), fileName)
           imf(ImageFeature.originalSize) = (height, width, 3)
           imf(RoiLabel.ISCROWD) = isCrowd
-
           imf
         }
         .coalesce(num)
-      DataSet.rdd(rawData)
+     DataSet.rdd(rawData)
     }
 
     private[bigdl] def filesToImageFeatureDataset(url: String, sc: SparkContext,

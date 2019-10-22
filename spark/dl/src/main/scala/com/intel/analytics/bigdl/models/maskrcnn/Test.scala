@@ -77,7 +77,7 @@ object Test {
 
       val map = MeanAveragePrecisionObjectDetection.createCOCO(81)
 
-      val out = map(dt, gt)
+//      val out = map(dt, gt)
 
       Engine.init
       val partitionNum = 2 // Engine.nodeNumber() * Engine.coreNumber()
@@ -103,7 +103,8 @@ object Test {
       val model = MaskTmpUtils.loadMaskModel() // Module.load[Float](param.model)
 
       val result = model.evaluate(evaluationSet,
-        Array(MeanAveragePrecisionObjectDetection.createCOCO(81)))
+        Array(MeanAveragePrecisionObjectDetection.createCOCO(81, topK = -1),
+          MeanAveragePrecisionObjectDetection.createCOCO(81, topK = -1, isSegmentation = true)))
       result.foreach(r => println(s"${r._2} is ${r._1}"))
 
       sc.stop()

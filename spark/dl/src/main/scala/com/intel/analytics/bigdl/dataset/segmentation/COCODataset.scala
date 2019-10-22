@@ -23,6 +23,7 @@ import com.google.gson.stream.{JsonReader, JsonWriter}
 import java.io.{BufferedReader, FileReader}
 import java.lang.reflect.Type
 import java.nio.ByteBuffer
+import java.nio.file.{Files, Path, Paths}
 import scala.collection.mutable.ArrayBuffer
 
 private[bigdl] class COCOSerializeContext {
@@ -90,7 +91,7 @@ private[bigdl] class COCODeserializer(buffer: ByteBuffer) {
     new String(arr)
   }
   case class SimpleAnnotation(categoryId: Int, area: Float, bbox1: Float, bbox2: Float,
-  bbox3: Float, bbox4: Float, isCrowd: Boolean, masks: SegmentationMasks)
+    bbox3: Float, bbox4: Float, isCrowd: Boolean, masks: SegmentationMasks)
 
   // returns an image's height, width, all annotations
   def getAnnotations: (Int, Int, Array[SimpleAnnotation]) = {
@@ -109,7 +110,7 @@ private[bigdl] class COCODeserializer(buffer: ByteBuffer) {
     val bbox3 = getFloat
     val bbox4 = getFloat
     val isCrowd = getBoolean
-    val rle = if (isCrowd) {
+    val masks = if (isCrowd) {
       // is RLE
       val countLen = getInt
       val arr = new Array[Int](countLen)
@@ -130,48 +131,77 @@ private[bigdl] class COCODeserializer(buffer: ByteBuffer) {
       }
       PolyMasks(poly, height, width)
     }
-    SimpleAnnotation(categoryId, area, bbox1, bbox2, bbox3, bbox4, isCrowd, rle)
+    SimpleAnnotation(categoryId, area, bbox1, bbox2, bbox3, bbox4, isCrowd, masks)
   }
 }
 
-case class COCODataset(info: COCOInfo, images: Array[COCOImage],
-                       annotations: Array[COCOAnotationOD],
-                       licenses: Array[COCOLicence], categories: Array[COCOCategory]) {
+case class COCODataset(info: COCODatasetInfo, images: Array[COCOImage],
+  annotations: Array[COCOAnotationOD],
+  licenses: Array[COCOLicence], categories: Array[COCOCategory]) {
 
   private lazy val cateId2catIdx = scala.collection.mutable.Map[Long, Int]()
-  def init(): Unit = {
+  private lazy val imageId2Image = scala.collection.mutable.Map[Long, COCOImage]()
+
+  private[segmentation] def init(imgRoot: String): Unit = {
     val id2img = images.toIterator.map(img => (img.id, img)).toMap
     annotations.foreach(anno => {
       require(id2img.contains(anno.imageId), s"Cannot find image_id ${anno.imageId}")
       val img = id2img(anno.imageId)
       anno.image = img
       img.annotations += anno
+      anno.segmentation match {
+        case poly: COCOPoly =>
+          anno.segmentation = COCOPoly(poly.poly, img.height, img.width)
+        case _ =>
+      }
+    })
+    images.foreach(img => {
+      img.imgRootPath = imgRoot
+      imageId2Image(img.id) = img
     })
     categories.zipWithIndex.foreach { case (cate, idx) =>
       cateId2catIdx(cate.id) = idx + 1 // the ids starts from 1, because 0 is for background
     }
   }
 
+  def getImageById(id: Long): COCOImage = imageId2Image(id)
+
+  /**
+   * Convert COCO categoryId into category index.
+   * COCO dataset's categoryId is not continuous from 1 to number of categories.
+   * This function maps every categoryId to a number from 1 to number of categories - The result is
+   * called category index. The category index 0 is reserved for "background" class.
+   * @param id categoryId
+   * @return category index
+   */
   def categoryId2Idx(id: Long): Int = cateId2catIdx(id)
+
+  /**
+   * Get the category data by the category index
+   * @param idx category index
+   * @return category data
+   */
+  def getCategoryByIdx(idx: Int): COCOCategory = categories(idx - 1)
 }
 
-case class COCOInfo(
-                     year: Int,
-                     version: String,
-                     description: String,
-                     contributor: String,
-                     url: String
-                   ) {
+case class COCODatasetInfo(
+  year: Int,
+  version: String,
+  description: String,
+  contributor: String,
+  url: String
+  ) {
   @SerializedName("date_created") var dateCreated: String = _
 }
 
 case class COCOImage(
-                      id: Long,
-                      height: Int,
-                      width : Int,
-                      license: Int
-                    ) {
+  id: Long,
+  height: Int,
+  width : Int,
+  license: Int
+) {
   @transient lazy val annotations: ArrayBuffer[COCOAnotationOD] = new ArrayBuffer[COCOAnotationOD]
+  @transient private[segmentation] var imgRootPath: String = _
   @SerializedName("flickr_url") var flickrUrl: String = _
   @SerializedName("coco_url") var cocoUrl: String = _
   @SerializedName("date_captured") var dateCaptured: String = _
@@ -184,12 +214,38 @@ case class COCOImage(
     annotations.foreach(_.dumpTo(context, dataset))
   }
 
+  /**
+   * Get the path of the image in local file system
+   * @return
+   */
+  def path: Path = Paths.get(imgRootPath, fileName)
+
+  /**
+   * Read the data from the image file
+   * @return
+   */
+  def data: Array[Byte] = Files.readAllBytes(path)
+
 }
 
+/**
+ * An annotation for an image (OD in the name for Object Detection)
+ * @param id
+ * @param imageId the Id of the image
+ * @param categoryId the Id of the category. Note that categoryId is not continuous from 0 to
+ *                   the number of categories. You can use COCODataset.cateId2Idx to convert an
+ *                   categoryId to a compact category index.
+ * @param segmentation the segmentation data
+ * @param area  area
+ * @param bbox  the bounding box, (xmin, ymin, xmax, ymax)
+ * @param isCrowd if the annotation is a crowd. e.g. a crowd of people. If true, segmentation is
+ *                an COCORLE object
+ * @param image the reference to the image
+ */
 case class COCOAnotationOD(id: Long, imageId: Long, categoryId: Long,
-   segmentation: COCOSegmentation, area: Float, bbox: (Float, Float, Float, Float),
-   isCrowd: Boolean, @transient var image: COCOImage = null
-  ) {
+  var segmentation: COCOSegmentation, area: Float,
+  bbox: (Float, Float, Float, Float), isCrowd: Boolean, @transient var image: COCOImage = null) {
+
   def dumpTo(context: COCOSerializeContext, dataSet: COCODataset): Unit = {
     context.dump(dataSet.categoryId2Idx(categoryId))
     context.dump(area)
@@ -203,20 +259,20 @@ case class COCOAnotationOD(id: Long, imageId: Long, categoryId: Long,
 }
 
 case class COCOLicence(
-                        id: Long, name: String, url: String
-                      )
+  id: Long, name: String, url: String
+)
 
 case class COCOCategory(
-                         id: Long, name: String) {
+  id: Long, name: String) {
   @SerializedName("supercategory") var superCategory: String = _
 }
 
-trait COCOSegmentation extends SegmentationMasks {
+trait COCOSegmentation {
   def dumpTo(context: COCOSerializeContext): Unit
 }
 
-case class COCOPoly(_poly: Array[Array[Float]])
-  extends PolyMasks(_poly, -1, -1) with COCOSegmentation {
+case class COCOPoly(_poly: Array[Array[Float]], _height: Int, _width: Int)
+  extends PolyMasks(_poly, _height, _width) with COCOSegmentation {
   override def dumpTo(context: COCOSerializeContext): Unit = {
     context.dump(poly.length)
     poly.foreach(p => {
@@ -228,15 +284,15 @@ case class COCOPoly(_poly: Array[Array[Float]])
   }
 }
 
-case class COCORLE(_counts: Array[Int], _height: Int, _width: Int)
-  extends RLEMasks(_counts, _height, _width) with COCOSegmentation {
-  override def dumpTo(context: COCOSerializeContext): Unit = {
-    context.dump(counts.length)
-    counts.foreach(p => {
-      context.dump(p)
-    })
-  }
-}
+ case class COCORLE(_counts: Array[Int], _height: Int, _width: Int)
+   extends RLEMasks(_counts, _height, _width) with COCOSegmentation {
+   override def dumpTo(context: COCOSerializeContext): Unit = {
+     context.dump(counts.length)
+     counts.foreach(p => {
+       context.dump(p)
+     })
+   }
+ }
 
 object COCODataset {
   private[bigdl] val MAGIC_NUM = 0x1f3d4e5a
@@ -245,7 +301,7 @@ object COCODataset {
     private lazy val intArrAdapter = COCODataset.gson.getAdapter(classOf[Array[Int]])
     private lazy val polyAdapter = COCODataset.gson.getAdapter(classOf[Array[Array[Float]]])
     override def deserialize(json: JsonElement, ty: Type,
-                             context: JsonDeserializationContext): COCOAnotationOD = {
+      context: JsonDeserializationContext): COCOAnotationOD = {
       val obj = json.getAsJsonObject
       val id = obj.get("id").getAsLong
       val imageId = obj.get("image_id").getAsLong
@@ -253,8 +309,9 @@ object COCODataset {
       val area = obj.get("area").getAsFloat
       val rawBbox = obj.get("bbox").getAsJsonArray
       require(rawBbox.size() == 4, "The bbox in the COCO annotation data should have 4 elements")
-      val bbox = (rawBbox.get(0).getAsFloat, rawBbox.get(1).getAsFloat, rawBbox.get(2).getAsFloat,
-        rawBbox.get(3).getAsFloat)
+      val (x1, y1, w, h) = (rawBbox.get(0).getAsFloat, rawBbox.get(1).getAsFloat,
+        rawBbox.get(2).getAsFloat, rawBbox.get(3).getAsFloat)
+      val bbox = (x1, y1, x1 + w - 1, y1 + h - 1)
       val isCrowd = if (obj.get("iscrowd").getAsInt == 1) true else false
       val seg = if (isCrowd) {
         val segJson = obj.getAsJsonObject("segmentation")
@@ -264,13 +321,13 @@ object COCODataset {
         COCORLE(cnts, size(0), size(1))
       } else {
         val polys = polyAdapter.fromJsonTree(obj.get("segmentation"))
-        COCOPoly(polys)
+        COCOPoly(polys, -1, -1)
       }
       COCOAnotationOD(id, imageId, categoryId, seg, area, bbox, isCrowd)
     }
   }
 
-  lazy val gson = {
+  private lazy val gson = {
     val gsonBuilder = new GsonBuilder()
     val theType = new TypeToken[COCOAnotationOD]() {}.getType
     val deserializer = new AnnotationDeserializer
@@ -278,15 +335,16 @@ object COCODataset {
     gsonBuilder.create()
   }
 
-  def load(path: String): COCODataset = {
+  /**
+   * Load COCO dataset
+   * @param jsonPath the JSON metadata file path
+   * @param imageRoot the root path of the image files
+   * @return
+   */
+  def load(jsonPath: String, imageRoot: String = "."): COCODataset = {
     val d = gson.fromJson(
-      new BufferedReader(new FileReader(path)), classOf[COCODataset])
-    d.init()
+      new BufferedReader(new FileReader(jsonPath)), classOf[COCODataset])
+    d.init(imageRoot)
     d
-  }
-
-  def main(args: Array[String]): Unit = {
-    val ds = load("/home/menooker/work/coco/instances_val2014.json")
-    println(ds.licenses(0).name)
   }
 }

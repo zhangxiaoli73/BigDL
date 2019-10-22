@@ -18,7 +18,6 @@ package com.intel.analytics.bigdl.nn
 
 import com.intel.analytics.bigdl.Module
 import com.intel.analytics.bigdl.dataset.segmentation.MaskUtils
-import com.intel.analytics.bigdl.models.mask.MaskInference
 import com.intel.analytics.bigdl.models.maskrcnn.{MaskRCNN, MaskTmpUtils}
 import com.intel.analytics.bigdl.models.resnet.ResNetMask
 import com.intel.analytics.bigdl.nn.mkldnn.Equivalent
