@@ -167,7 +167,6 @@ object CoCo {
   }
 
   // load annotations to target
-
   def loadDetectionBBox(path: String): Table = {
     val text = FileUtils.readFileToString(new File(path))
     val annotations = JSON.parseFull(text).getOrElse(null).asInstanceOf[List[Map[String, Any]]]
@@ -196,7 +195,9 @@ object CoCo {
       var i = 0
       while (i < anno.length) {
         val boxes = anno(i)("bbox").asInstanceOf[List[Double]]
-        val scores = anno(i)("score").asInstanceOf[Double].toFloat
+        val scores = if (anno(i).getOrElse("scores", null) == null) {
+          -1.0f
+        } else anno(i)("score").asInstanceOf[Double].toFloat
         validScores.append(scores)
 
         val x1 = Math.max(0, boxes(0)).toFloat
@@ -211,8 +212,7 @@ object CoCo {
           validBoxes.append(y1)
           validBoxes.append(x2)
           validBoxes.append(y2)
-          val clsInd = cocoCatIdToClassInd(
-            anno(i)("category_id").asInstanceOf[Double].toInt)
+          val clsInd = anno(i)("category_id").asInstanceOf[Double].toInt
           validClasses.append(clsInd.toFloat)
         }
         i += 1
