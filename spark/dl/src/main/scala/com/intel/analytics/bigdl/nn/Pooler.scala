@@ -157,14 +157,11 @@ class Pooler[T: ClassTag] (
     }
 
     output.resize(totalNum, num_channels, resolution, resolution)
-    if (totalNum == 0) {
-      val tmp = 0
-    }
     var start = 1
     for (i <- 0 to batchSize - 1) {
       val tmp = out[Tensor[T]](i + 1)
       val length = tmp.size(1)
-      output.narrow(1, start, length).copy(tmp)
+      if (length > 0) output.narrow(1, start, length).copy(tmp)
       start += length
     }
 

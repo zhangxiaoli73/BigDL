@@ -282,11 +282,6 @@ class MaskRCNN(val inChannels: Int,
     batchImgInfo.setValue(2, inputFeatures.size(4))
 
     val features = this.backbone.forward(inputFeatures)
-
-    if (features.toTable[Tensor[Float]](1).size(1) == 1) {
-      val tmp = 0
-    }
-
     val proposals = this.rpn.forward(T(features, batchImgInfo))
     val boxOutput = this.boxHead.forward(T(features, proposals, batchImgInfo)).toTable
     val postProcessorBox = boxOutput[Table](2)
@@ -369,13 +364,15 @@ class MaskRCNN(val inChannels: Int,
 //      T( 867.5575,  344.1192,  905.8793,  387.5363)))
 //    )
     val scores = postProcessorBox[Tensor[Float]](3)
-    val masks = this.maskHead.forward(T(features, proposalsBox, labelsBox)).toTable
-    if (this.isTraining()) {
-      output = T(proposalsBox, labelsBox, masks, scores)
-    } else {
-      output = postProcessorForMaskRCNN(proposalsBox, labelsBox, masks[Tensor[Float]](2),
-        scores, imageInfo)
-    }
+    if (labelsBox.size(1) > 0) {
+      val masks = this.maskHead.forward(T(features, proposalsBox, labelsBox)).toTable
+      if (this.isTraining()) {
+        output = T(proposalsBox, labelsBox, masks, scores)
+      } else {
+        output = postProcessorForMaskRCNN(proposalsBox, labelsBox, masks[Tensor[Float]](2),
+          scores, imageInfo)
+      }
+    } else output = T() // detect nothing
 
     output
   }
@@ -401,36 +398,39 @@ class MaskRCNN(val inChannels: Int,
 
       binaryMask.resize(originalHeight, originalWidth)
 
-      val boxNumber = boxesInImage(i)
-      val maskPerImg = masks.narrow(1, start, boxNumber)
-      val bboxPerImg = bboxes[Tensor[Float]](i + 1)
-      val classPerImg = labels.narrow(1, start, boxNumber)
-      val scorePerImg = scores.narrow(1, start, boxNumber)
-
-      require(maskPerImg.size(1) == bboxPerImg.size(1),
-        s"mask number ${maskPerImg.size(1)} should be same with box number ${bboxPerImg.size(1)}")
-
-      // bbox resize to original size
-      if (height != originalHeight || width != originalWidth) {
-        BboxUtil.scaleBBox(bboxPerImg,
-          originalHeight.toFloat / height, originalWidth.toFloat / width)
-      }
-      // mask decode to original size
-      val masksRLE = new Array[RLEMasks](boxNumber)
-      for (j <- 0 to boxNumber - 1) {
-        binaryMask.fill(0.0f)
-        MaskRCNNUtils.pasteMaskInImage(maskPerImg.select(1, j + 1), bboxPerImg.select(1, j + 1),
-          binaryMask = binaryMask)
-        masksRLE(j) = MaskUtils.binaryToRLE(binaryMask)
-      }
-      start += boxNumber
-
       // prepare for evaluation
       val postOutput = T()
-      postOutput.update(RoiLabel.MASKS, masksRLE)
-      postOutput.update(RoiLabel.BBOXES, bboxPerImg)
-      postOutput.update(RoiLabel.CLASSES, classPerImg)
-      postOutput.update(RoiLabel.SCORES, scorePerImg)
+
+      val boxNumber = boxesInImage(i)
+      if (boxNumber > 0) {
+        val maskPerImg = masks.narrow(1, start, boxNumber)
+        val bboxPerImg = bboxes[Tensor[Float]](i + 1)
+        val classPerImg = labels.narrow(1, start, boxNumber)
+        val scorePerImg = scores.narrow(1, start, boxNumber)
+
+        require(maskPerImg.size(1) == bboxPerImg.size(1),
+          s"mask number ${maskPerImg.size(1)} should be same with box number ${bboxPerImg.size(1)}")
+
+        // bbox resize to original size
+        if (height != originalHeight || width != originalWidth) {
+          BboxUtil.scaleBBox(bboxPerImg,
+            originalHeight.toFloat / height, originalWidth.toFloat / width)
+        }
+        // mask decode to original size
+        val masksRLE = new Array[RLEMasks](boxNumber)
+        for (j <- 0 to boxNumber - 1) {
+          binaryMask.fill(0.0f)
+          MaskRCNNUtils.pasteMaskInImage(maskPerImg.select(1, j + 1), bboxPerImg.select(1, j + 1),
+            binaryMask = binaryMask)
+          masksRLE(j) = MaskUtils.binaryToRLE(binaryMask)
+        }
+        start += boxNumber
+
+        postOutput.update(RoiLabel.MASKS, masksRLE)
+        postOutput.update(RoiLabel.BBOXES, bboxPerImg)
+        postOutput.update(RoiLabel.CLASSES, classPerImg)
+        postOutput.update(RoiLabel.SCORES, scorePerImg)
+      }
 
       output(i + 1) = postOutput
     }

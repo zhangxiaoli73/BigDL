@@ -690,22 +690,24 @@ class MeanAveragePrecisionObjectDetection[T: ClassTag](
         for (imgId <- 1 to outTable.length()) {
           val gtBbox = gtImages(imgId - 1)
           val imgOut = outTable[Table](imgId)
-          val bboxes = RoiLabel.getBBoxes(imgOut)
-          val scores = RoiLabel.getScores(imgOut)
-          val labels = RoiLabel.getClasses(imgOut)
-          require(bboxes.dim() == 2, "the bbox tensor should have 2 dimensions")
-          val masks = if (isSegmentation) Some(RoiLabel.getMasks(imgOut)) else None
-          val batchSize = bboxes.size(1)
-          for (bboxIdx <- 1 to batchSize) {
-            val score = scores.valueAt(bboxIdx)
-            val x1 = bboxes.valueAt(bboxIdx, 1)
-            val y1 = bboxes.valueAt(bboxIdx, 2)
-            val x2 = bboxes.valueAt(bboxIdx, 3)
-            val y2 = bboxes.valueAt(bboxIdx, 4)
-            val label = labels.valueAt(bboxIdx).toInt
-            val mask = masks.map(_(bboxIdx - 1)).orNull
-            MAPUtil.parseDetection(gtBbox, label, score, x1, y1, x2, y2, mask, classes, iouThres,
-              predictByClasses)
+          if (imgOut.length() > 0) {
+            val bboxes = RoiLabel.getBBoxes(imgOut)
+            val scores = RoiLabel.getScores(imgOut)
+            val labels = RoiLabel.getClasses(imgOut)
+            require(bboxes.dim() == 2, "the bbox tensor should have 2 dimensions")
+            val masks = if (isSegmentation) Some(RoiLabel.getMasks(imgOut)) else None
+            val batchSize = bboxes.size(1)
+            for (bboxIdx <- 1 to batchSize) {
+              val score = scores.valueAt(bboxIdx)
+              val x1 = bboxes.valueAt(bboxIdx, 1)
+              val y1 = bboxes.valueAt(bboxIdx, 2)
+              val x2 = bboxes.valueAt(bboxIdx, 3)
+              val y2 = bboxes.valueAt(bboxIdx, 4)
+              val label = labels.valueAt(bboxIdx).toInt
+              val mask = masks.map(_(bboxIdx - 1)).orNull
+              MAPUtil.parseDetection(gtBbox, label, score, x1, y1, x2, y2, mask, classes, iouThres,
+                predictByClasses)
+            }
           }
         }
     }
