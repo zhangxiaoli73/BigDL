@@ -17,6 +17,7 @@
 package com.intel.analytics.bigdl.models.maskrcnn
 
 import com.intel.analytics.bigdl.Module
+import com.intel.analytics.bigdl.nn.Module
 import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.utils.Table
 
@@ -80,6 +81,8 @@ object MaskTmpUtils {
       println(s"${i} done")
     }
 
-    mask
+    val modelPath = "/home/zhangli/workspace/tmp/mask/maskrcnn-benchmark/demo/maskrcnn.model"
+    mask.saveModule(modelPath)
+    Module.loadModule[Float](modelPath)
   }
 }

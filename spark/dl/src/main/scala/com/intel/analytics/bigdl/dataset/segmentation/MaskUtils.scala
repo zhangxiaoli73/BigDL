@@ -394,7 +394,8 @@ object MaskUtils {
     val gtBbox = groundTruth.bbox
     val dtBbox = detection.bbox
     require((detection.width, detection.height) == (groundTruth.width, groundTruth.height),
-      "The sizes of RLEs must be the same to compute IOU")
+      s"The sizes of RLEs must be the same to compute IOU " +
+      s"${detection.width} ${detection.height} ${groundTruth.width} ${groundTruth.height}")
     val iou = bboxIOU(gtBbox, dtBbox, isCrowd)
 
     if (iou > 0) {

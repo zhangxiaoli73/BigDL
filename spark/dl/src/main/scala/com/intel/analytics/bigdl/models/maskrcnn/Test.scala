@@ -41,9 +41,10 @@ import scala.collection.mutable.ArrayBuffer
 
 object Test {
   case class TestParams(
-     folder: String = "./",
+     folder: String = "/home/zhangli/CodeSpace/forTrain/coco-2017/coco-seq-0.seq",
      model: String = "",
-     batchSize: Int = 128
+     batchSize: Int = 2,
+     partitionNum: Int = -1
    )
 
   val testParser = new OptionParser[TestParams]("BigDL ResNet on Cifar10 Test Example") {
@@ -58,6 +59,10 @@ object Test {
     opt[Int]('b', "batchSize")
       .text("batch size")
       .action((x, c) => c.copy(batchSize = x))
+
+    opt[Int]('p', "partitionNum")
+      .text("partition number")
+      .action((x, c) => c.copy(partitionNum = x))
   }
 
   def main(args: Array[String]): Unit = {
@@ -66,31 +71,17 @@ object Test {
         .set("spark.akka.frameSize", 64.toString)
         .set("spark.task.maxFailures", "1")
       val sc = new SparkContext(conf)
-
-      val f = "/home/zhangli/CodeSpace/forTrain/coco-2017/val2017"
-      val m = "/home/zhangli/CodeSpace/forTrain/coco-2017/annotations/instances_val2017.json"
-
-      val p = "/home/zhangli/workspace/tmp/mask/maskrcnn-benchmark/tools/inference/coco_2014_minival/bbox.json"
-
-      val dt = CoCo.loadDetectionBBox(p)
-      val gt = CoCo.loadDetectionBBox("/home/zhangli/workspace/tmp/mask/maskrcnn-benchmark/tools/inference/coco_2014_minival/bbox-gt.json")
-
-      val map = MeanAveragePrecisionObjectDetection.createCOCO(81)
-
-//      val out = map(dt, gt)
-
       Engine.init
-      val partitionNum = 2 // Engine.nodeNumber() * Engine.coreNumber()
 
-      val url = "./coco-seq-0.seq"
-      val rddData = DataSet.SeqFileFolder.filesToRoiImageFrame(url, sc, Some(partitionNum))
+      val partitionNum = if (param.partitionNum > 0) param.partitionNum
+      else Engine.nodeNumber() * Engine.coreNumber()
+
+      val rddData = DataSet.SeqFileFolder.filesToRoiImageFrame(param.folder, sc, Some(partitionNum))
         .toDistributed().data(train = false)
-
-      val batchSize = 1
 
       val transformer = MTImageFeatureToBatchWithResize(
           sizeDivisible = 32,
-          batchSize = batchSize,
+          batchSize = param.batchSize,
           transformer =
             PixelBytesToMat() ->
             ScaleResize(minSize = 800, maxSize = 1333) ->
@@ -100,7 +91,7 @@ object Test {
         )
       val evaluationSet = transformer(rddData)
 
-      val model = MaskTmpUtils.loadMaskModel() // Module.load[Float](param.model)
+      val model = Module.loadModule[Float](param.model) // MaskTmpUtils.loadMaskModel()
 
       val result = model.evaluate(evaluationSet,
         Array(MeanAveragePrecisionObjectDetection.createCOCO(81, topK = -1),

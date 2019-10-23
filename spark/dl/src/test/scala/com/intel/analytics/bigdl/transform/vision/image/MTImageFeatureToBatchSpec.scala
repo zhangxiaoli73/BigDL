@@ -179,7 +179,7 @@ class MTImageFeatureToBatchSpec extends FlatSpec with Matchers with BeforeAndAft
         in should be(expectedOutput)
         val t = target(i).asInstanceOf[Table]
         t[Tensor[Float]](RoiLabel.ISCROWD) should be (Tensor(Array(0f, 1f), Array(2)))
-        t[(Int, Int, Int)](RoiLabel.ORIGSIZE) should be((8, 16, 3))
+        t[Tensor[Float]](RoiLabel.IMGINFO) should be((Tensor[Float](T(8, 16, 3))))
         t[Tensor[Float]](RoiLabel.BBOXES).size() should be (Array(2, 4))
         t[Tensor[Float]](RoiLabel.CLASSES).size() should be (Array(2))
       }

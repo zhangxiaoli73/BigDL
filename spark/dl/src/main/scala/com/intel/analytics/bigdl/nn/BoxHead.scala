@@ -15,8 +15,6 @@
  */
 package com.intel.analytics.bigdl.nn
 
-import javafx.scene.control.Tab
-
 import breeze.linalg.dim
 import com.intel.analytics.bigdl.Module
 import com.intel.analytics.bigdl.nn.abstractnn.{AbstractModule, Activity}
@@ -344,6 +342,10 @@ private[nn] class BoxPostProcessor(
       totalDetections += maxDetection
       outBBoxs[Tensor[Float]](i + 1).resize(maxDetection, 4)
       totalROILables(i + 1) = roilabels
+    }
+    // clear others tensors in output
+    for (i <- (boxesInImage.length + 1) to outBBoxs.length()) {
+      outBBoxs.remove[Tensor[Float]](i)
     }
 
     // resize labels and scores

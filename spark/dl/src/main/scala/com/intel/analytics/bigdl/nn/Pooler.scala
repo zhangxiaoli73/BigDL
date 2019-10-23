@@ -33,7 +33,8 @@ import scala.reflect._
 class Pooler[T: ClassTag] (
   val resolution: Int,
   val scales: Array[Float],
-  val samplingRatio: Int
+  val samplingRatio: Int,
+  from: String = ""
 ) (implicit ev: TensorNumeric[T]) extends AbstractModule[Table, Tensor[T], T]{
   private val num_levels = scales.length
   private val poolers = new Array[RoiAlign[T]](num_levels)
@@ -109,10 +110,13 @@ class Pooler[T: ClassTag] (
     } else { // for batch support
       input[Table](2)
     }
+
+    println(s"fffffffffff ${from}")
+    val batchSize = featureMaps.get[Tensor[Float]](1).get.size(1)
     var totalNum = 0
     val num_channels = featureMaps.get[Tensor[T]](1).get.size(2)
     val out = T()
-    for (i <- 0 to roiBatch.length() - 1) {
+    for (i <- 0 to batchSize - 1) {
       val rois = roiBatch[Tensor[T]](i + 1)
 
       val roi_levels = levelMapping(lvl_min, lvl_max, rois)
@@ -125,7 +129,10 @@ class Pooler[T: ClassTag] (
         .fill(ev.fromType[Float](Float.MinValue))
 
       for (level <- 0 until num_levels) {
-        val tmp = featureMaps.get[Tensor[T]](level + 1).get.narrow(1, i + 1, 1)
+        val tt = featureMaps.get[Tensor[T]](level + 1).get
+        println(s"ppppppp ${tt.dim()} ${i + 1}")
+        tt.size.foreach(println(_))
+        val tmp = tt.narrow(1, i + 1, 1)
         val feature_per_level = Tensor[T]().resizeAs(tmp).copy(tmp)
         val rois_ind_per_level = roi_levels.zipWithIndex.filter(_._1 == level).map(_._2)
         val num_rois_per_level = rois_ind_per_level.length
@@ -145,9 +152,16 @@ class Pooler[T: ClassTag] (
     }
 
     // merge to one tensor
+    if (totalNum == 0) {
+      val tmp = 0
+    }
+
     output.resize(totalNum, num_channels, resolution, resolution)
+    if (totalNum == 0) {
+      val tmp = 0
+    }
     var start = 1
-    for (i <- 0 to roiBatch.length() - 1) {
+    for (i <- 0 to batchSize - 1) {
       val tmp = out[Tensor[T]](i + 1)
       val length = tmp.size(1)
       output.narrow(1, start, length).copy(tmp)
@@ -176,7 +190,8 @@ object Pooler {
   def apply[@specialized(Float, Double) T: ClassTag](
     resolution: Int,
     scales: Array[Float],
-    samplingRatio: Int) (implicit ev: TensorNumeric[T]): Pooler[T] =
+    samplingRatio: Int,
+    from : String = "") (implicit ev: TensorNumeric[T]): Pooler[T] =
     new Pooler[T](resolution, scales, samplingRatio)
 }
 

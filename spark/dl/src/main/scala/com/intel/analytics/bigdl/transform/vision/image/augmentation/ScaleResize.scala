@@ -61,7 +61,7 @@ class ScaleResize(minSize: Int, maxSize: Int = -1, resizeROI: Boolean = false)
     val resizeH = sizes._1
     val resizeW = sizes._2
 
-    println(s"9999999999 ${resizeH} ${resizeW} ${feature.getHeight()} ${feature.getWidth()}")
+    println(s"9999999999 ${feature.uri()} ${resizeH} ${resizeW} ${feature.getHeight()} ${feature.getWidth()}")
 
     Resize.transform(feature.opencvMat(), feature.opencvMat(), resizeW, resizeH,
       useScaleFactor = false)

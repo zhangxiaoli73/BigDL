@@ -61,7 +61,7 @@ class MaskRCNN(val inChannels: Int,
                val config: MaskRCNNParams = new MaskRCNNParams)(implicit ev: TensorNumeric[Float])
   extends Container[Activity, Activity, Float] {
 
-    private val ImageInfo : Tensor[Float] = Tensor[Float](2)
+    private val batchImgInfo : Tensor[Float] = Tensor[Float](2)
     private val backbone = buildBackbone(inChannels, outChannels)
     private val rpn = RegionProposal(inChannels, config.anchorSizes, config.aspectRatios,
       config.anchorStride, config.preNmsTopNTest, config.postNmsTopNTest, config.preNmsTopNTrain,
@@ -274,14 +274,21 @@ class MaskRCNN(val inChannels: Int,
 
   override def updateOutput(input: Activity): Activity = {
     val inputFeatures = input.toTable[Tensor[Float]](1)
-    val imageInfo = input.toTable[Table](2)
+    // image info with shape (batchSize, 4)
+    // contains all images info (height, width, original height, original width)
+    val imageInfo = input.toTable[Tensor[Float]](2)
 
-    ImageInfo.setValue(1, inputFeatures.size(3))
-    ImageInfo.setValue(2, inputFeatures.size(4))
+    batchImgInfo.setValue(1, inputFeatures.size(3))
+    batchImgInfo.setValue(2, inputFeatures.size(4))
 
     val features = this.backbone.forward(inputFeatures)
-    val proposals = this.rpn.forward(T(features, ImageInfo))
-    val boxOutput = this.boxHead.forward(T(features, proposals, ImageInfo)).toTable
+
+    if (features.toTable[Tensor[Float]](1).size(1) == 1) {
+      val tmp = 0
+    }
+
+    val proposals = this.rpn.forward(T(features, batchImgInfo))
+    val boxOutput = this.boxHead.forward(T(features, proposals, batchImgInfo)).toTable
     val postProcessorBox = boxOutput[Table](2)
     val labelsBox = postProcessorBox[Tensor[Float]](1)
     val proposalsBox = postProcessorBox[Table](2)
@@ -375,7 +382,7 @@ class MaskRCNN(val inChannels: Int,
 
   @transient var binaryMask : Tensor[Float] = null
   private def postProcessorForMaskRCNN(bboxes: Table, labels: Tensor[Float],
-    masks: Tensor[Float], scores: Tensor[Float], imageInfo: Table): Table = {
+    masks: Tensor[Float], scores: Tensor[Float], imageInfo: Tensor[Float]): Table = {
     val batchSize = bboxes.length()
     val boxesInImage = new Array[Int](batchSize)
     for (i <- 0 to batchSize - 1) {
@@ -386,11 +393,11 @@ class MaskRCNN(val inChannels: Int,
     val output = T()
     var start = 1
     for (i <- 0 to batchSize - 1) {
-      val info = imageInfo[Tensor[Float]](i + 1)
+      val info = imageInfo.select(1, i + 1)
       val height = info.valueAt(1).toInt // image height after scale, no padding
       val width = info.valueAt(2).toInt // image width after scale, no padding
-      val originalHeight = (info.valueAt(1) / info.valueAt(3)).toInt // Original height
-      val originalWidth = (info.valueAt(2) / info.valueAt(4)).toInt // Original width
+      val originalHeight = info.valueAt(3).toInt // Original height
+      val originalWidth = info.valueAt(4).toInt // Original width
 
       binaryMask.resize(originalHeight, originalWidth)
 

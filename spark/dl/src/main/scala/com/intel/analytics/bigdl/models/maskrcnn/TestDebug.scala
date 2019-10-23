@@ -112,6 +112,18 @@ object TestDebug {
         .set("spark.task.maxFailures", "1")
       val sc = new SparkContext(conf)
 
+      val f = "/home/zhangli/CodeSpace/forTrain/coco-2017/val2017"
+      val m = "/home/zhangli/CodeSpace/forTrain/coco-2017/annotations/instances_val2017.json"
+
+      val p = "/home/zhangli/workspace/tmp/mask/maskrcnn-benchmark/tools/inference/coco_2014_minival/bbox.json"
+
+      val dt = CoCo.loadDetectionBBox(p)
+      val gt = CoCo.loadDetectionBBox("/home/zhangli/workspace/tmp/mask/maskrcnn-benchmark/tools/inference/coco_2014_minival/bbox-gt.json")
+
+      val map = MeanAveragePrecisionObjectDetection.createCOCO(81)
+
+      //      val out = map(dt, gt)
+
       Engine.init
       val partitionNum = 2 // Engine.nodeNumber() * Engine.coreNumber()
       val rddData = DataSet.array[ImageFeature](loadFromSource(), sc).toDistributed().data(train = false)
