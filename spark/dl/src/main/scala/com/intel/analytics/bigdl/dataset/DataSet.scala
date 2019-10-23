@@ -16,13 +16,9 @@
 
 package com.intel.analytics.bigdl.dataset
 
-import java.awt.image.DataBufferByte
-import java.io.ByteArrayInputStream
 import java.nio.ByteBuffer
 import java.nio.file.{Files, Path, Paths}
 import java.util.concurrent.atomic.AtomicInteger
-import javax.imageio.ImageIO
-
 import com.intel.analytics.bigdl.DataSet
 import com.intel.analytics.bigdl.dataset.image.{LabeledBGRImage, _}
 import com.intel.analytics.bigdl.dataset.segmentation.{COCODataset, COCODeserializer}
@@ -30,11 +26,13 @@ import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.transform.vision.image.label.roi.RoiLabel
 import com.intel.analytics.bigdl.transform.vision.image.{DistributedImageFrame, ImageFeature, ImageFrame, LocalImageFrame}
 import com.intel.analytics.bigdl.utils.{Engine, RandomGenerator, T}
+import java.awt.image.DataBufferByte
+import java.io.ByteArrayInputStream
+import javax.imageio.ImageIO
 import org.apache.hadoop.io.{BytesWritable, Text}
 import org.apache.log4j.Logger
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
-
 import scala.reflect._
 
 /**

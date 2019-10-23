@@ -34,10 +34,10 @@ import scala.reflect.ClassTag
 import spire.macros.Auto.scala
 
 /**
-  * A method defined to evaluate the model.
-  * This trait can be extended by user-defined method. Such
-  * as Top1Accuracy
-  */
+ * A method defined to evaluate the model.
+ * This trait can be extended by user-defined method. Such
+ * as Top1Accuracy
+ */
 trait ValidationMethod[T] extends Serializable {
   def apply(output: Activity, target: Activity): ValidationResult
 
@@ -52,10 +52,10 @@ trait ValidationMethod[T] extends Serializable {
 }
 
 /**
-  * A result that calculate the numeric value of a validation method.
-  * User-defined valuation results must override the + operation and result() method.
-  * It is executed over the samples in each batch.
-  */
+ * A result that calculate the numeric value of a validation method.
+ * User-defined valuation results must override the + operation and result() method.
+ * It is executed over the samples in each batch.
+ */
 trait ValidationResult extends Serializable {
 
   // return the calculation results over all the samples in the batch
@@ -72,10 +72,10 @@ trait ValidationResult extends Serializable {
 }
 
 /**
-  * Represent an accuracy result. Accuracy means a ratio of correct number and total number.
-  * @param correct correct number
-  * @param count total count number
-  */
+ * Represent an accuracy result. Accuracy means a ratio of correct number and total number.
+ * @param correct correct number
+ * @param count total count number
+ */
 class AccuracyResult(private var correct: Int, private var count: Int)
   extends ValidationResult {
 
@@ -119,9 +119,9 @@ class AccuracyResult(private var correct: Int, private var count: Int)
 }
 
 /**
-  * This is a metric to measure the accuracy of Tree Neural Network/Recursive Neural Network
-  *
-  */
+ * This is a metric to measure the accuracy of Tree Neural Network/Recursive Neural Network
+ *
+ */
 class TreeNNAccuracy[T: ClassTag]()(
   implicit ev: TensorNumeric[T])
   extends ValidationMethod[T] {
@@ -172,10 +172,10 @@ class TreeNNAccuracy[T: ClassTag]()(
 }
 
 /**
-  * Caculate the percentage that output's max probability index equals target
-  */
+ * Caculate the percentage that output's max probability index equals target
+ */
 class Top1Accuracy[T: ClassTag](
-                                 implicit ev: TensorNumeric[T])
+  implicit ev: TensorNumeric[T])
   extends ValidationMethod[T] {
   override def apply(output: Activity, target: Activity):
   ValidationResult = {
@@ -226,11 +226,11 @@ class Top1Accuracy[T: ClassTag](
 }
 
 /**
-  * Calculate the Mean Average Precision (MAP). The algorithm follows VOC Challenge after 2007
-  * Require class label beginning with 0
-  * @param k Take top-k confident predictions into account. If k=-1, calculate on all predictions
-  * @param classes The number of classes
-  */
+ * Calculate the Mean Average Precision (MAP). The algorithm follows VOC Challenge after 2007
+ * Require class label beginning with 0
+ * @param k Take top-k confident predictions into account. If k=-1, calculate on all predictions
+ * @param classes The number of classes
+ */
 class MeanAveragePrecision[T: ClassTag](k: Int, classes: Int)(
   implicit ev: TensorNumeric[T]) extends ValidationMethod[T] {
 

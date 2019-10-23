@@ -17,6 +17,7 @@
 package com.intel.analytics.bigdl.models.utils
 
 import com.intel.analytics.bigdl.dataset.segmentation.{COCODataset, COCOSerializeContext}
+import java.io.File
 import java.nio.file.{Files, Paths}
 import java.util.concurrent.atomic.AtomicInteger
 import org.apache.hadoop.conf.Configuration
@@ -30,22 +31,22 @@ import scopt.OptionParser
 object COCOSeqFileGenerator {
 
   /**
-    * Configuration class for COCO sequence file
-    * generator
-    *
-    * @param folder the COCO image files location
-    * @param metaPath the metadata json file location
-    * @param output generated seq files location
-    * @param parallel number of parallel
-    * @param blockSize block size
-    */
+   * Configuration class for COCO sequence file
+   * generator
+   *
+   * @param folder the COCO image files location
+   * @param metaPath the metadata json file location
+   * @param output generated seq files location
+   * @param parallel number of parallel
+   * @param blockSize block size
+   */
   case class COCOSeqFileGeneratorParams(
-                                         folder: String = ".",
-                                         metaPath: String = "instances_val2014.json",
-                                         output: String = ".",
-                                         parallel: Int = 1,
-                                         blockSize: Int = 12800
-                                       )
+    folder: String = ".",
+    metaPath: String = "instances_val2014.json",
+    output: String = ".",
+    parallel: Int = 1,
+    blockSize: Int = 12800
+  )
 
   private val parser = new OptionParser[COCOSeqFileGeneratorParams]("BigDL COCO " +
     "Sequence File Generator") {
@@ -69,10 +70,19 @@ object COCOSeqFileGenerator {
 
   def main(args: Array[String]): Unit = {
     parser.parse(args, COCOSeqFileGeneratorParams()).foreach { param =>
-      val meta = COCODataset.load(param.metaPath)
+      println("Loading COCO metadata")
+      val meta = COCODataset.load(param.metaPath, param.folder)
+      println("Metadata loaded")
       val conf: Configuration = new Configuration
       val doneCount = new AtomicInteger(0)
-      val tasks = meta.images.grouped(param.blockSize).zipWithIndex.toArray.par
+      val tasks = meta.images.filter(img => {
+        val path = img.path
+        val valid = Files.exists(path) && !Files.isDirectory(path)
+        if (!valid) {
+          System.err.print(s"[Warning] The image file ${path.getFileName} does not exist.\n")
+        }
+        valid
+      }).grouped(param.blockSize).zipWithIndex.toArray.par
       tasks.tasksupport = new ForkJoinTaskSupport(
         new scala.concurrent.forkjoin.ForkJoinPool(param.parallel))
       tasks.foreach { case (imgs, blkId) =>
@@ -90,15 +100,9 @@ object COCOSeqFileGenerator {
           context.dump(COCODataset.MAGIC_NUM)
           val keyBytes = context.toByteArray
           key.set(keyBytes, 0, keyBytes.length)
-          try {
-            val bytes = Files.readAllBytes(Paths.get(param.folder, img.fileName))
-            value.set(bytes, 0, bytes.length)
-            writer.append(key, value)
-          } catch {
-            case e: Exception =>
-              println(s"skip ${img.fileName}")
-          }
-
+          val bytes = img.data
+          value.set(bytes, 0, bytes.length)
+          writer.append(key, value)
           val cnt = doneCount.incrementAndGet()
           if (cnt % 500 == 0) {
             System.err.print(s"\r$cnt / ${meta.images.length} = ${cnt.toFloat/meta.images.length}")

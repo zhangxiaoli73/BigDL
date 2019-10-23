@@ -26,7 +26,7 @@ class MaskHead(
   val inChannels: Int,
   val resolution: Int,
   val scales: Array[Float],
-  val samplingRratio: Int,
+  val samplingRatio: Int,
   val layers: Array[Int],
   val dilation: Int,
   val numClasses: Int,
@@ -35,7 +35,7 @@ class MaskHead(
 
   override def buildModel(): Module[Float] = {
     val featureExtractor = this.maskFeatureExtractor(
-      inChannels, resolution, scales, samplingRratio.toInt, layers, dilation, useGn)
+      inChannels, resolution, scales, samplingRatio, layers, dilation, useGn)
     val dimReduced = layers(layers.length - 1)
     val predictor = this.maskPredictor(dimReduced, numClasses, dimReduced)
     val postProcessor = new MaskPostProcessor()
@@ -57,26 +57,6 @@ class MaskHead(
     val result = postProcessor.setName("postProcessor").inputs(maskLogits, labels)
 
     Graph(Array(features, proposals, labels), Array(maskFeatures, result))
-  }
-
-  override def updateOutput(input: Activity): Activity = {
-    val n1 = model.asInstanceOf[Graph[Float]].node("featureExtractor")
-    val n2 = model.asInstanceOf[Graph[Float]].node("predictor")
-    val n3 = model.asInstanceOf[Graph[Float]].node("postProcessor")
-
-
-    val features = input.toTable[Table](1)
-    val proposals = input.toTable[Table](2)
-    val labels = input.toTable[Tensor[Float]](3)
-
-    println(input.toTable[Tensor[Float]](2))
-
-    val maskFeatures = n1.element.forward(input)
-    val maskLogits = n2.element.forward(maskFeatures)
-    val result = n3.element.forward(T(maskLogits, labels))
-
-    output = T(maskFeatures, result) // model.updateOutput(input)
-    output
   }
 
   private[nn] def maskPredictor(inChannels: Int,
@@ -170,7 +150,6 @@ private[nn] class MaskPostProcessor()(implicit ev: TensorNumeric[Float])
     while (i <= rangeBuffer.nElement()) {
       val dim = rangeBuffer.valueAt(i).toInt + 1
       val index = labels.valueAt(i).toInt // start from 1
-      // todo: bug fix
       output.narrow(1, i, 1).copy(mask_prob.narrow(1, i, 1).narrow(2, index + 1, 1))
       i += 1
     }

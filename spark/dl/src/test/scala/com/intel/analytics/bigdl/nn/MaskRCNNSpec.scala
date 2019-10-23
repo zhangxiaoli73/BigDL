@@ -615,7 +615,7 @@ class MaskRCNNSpec extends FlatSpec with Matchers {
       48,  55,  64,  77,  80, 94,  98, 101, 108, 115, 120, 129, 131, 175)
 
     val nmsTool: Nms = new Nms
-    val out = nmsTool.nms(scores, bbox, 0.5f, index, bboxIdx = true)
+    val out = nmsTool.nms(scores, bbox, 0.5f, index, orderWithBBox = true)
 
     out should be(expectedOut.length)
     for (i <- 0 to (out - 1)) {

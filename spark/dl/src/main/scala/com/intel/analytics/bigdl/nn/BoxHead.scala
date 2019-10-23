@@ -152,7 +152,7 @@ private[nn] class BoxPostProcessor(
     val clsScores = selectTensor(scores.select(2, clsInd + 1), inds, 1)
     val clsBoxes = selectTensor(boxes.narrow(2, clsInd * 4 + 1, 4), inds, 1)
 
-    val keepN = nmsTool.nms(clsScores, clsBoxes, nmsThresh, inds, bboxIdx = true)
+    val keepN = nmsTool.nms(clsScores, clsBoxes, nmsThresh, inds, orderWithBBox = true)
 
     val bboxNms = selectTensor(clsBoxes, inds, 1, keepN)
     val scoresNms = selectTensor(clsScores, inds, 1, keepN)
@@ -331,8 +331,6 @@ private[nn] class BoxPostProcessor(
       val proposalNarrow = boxesBuf.narrow(1, start, boxNum)
       val classProbNarrow = classProb.narrow(1, start, boxNum)
       start += boxNum
-//      // debug
-//      classProbNarrow.fill(0.012345679f)
       val roilabels = filterResults(proposalNarrow, classProbNarrow, nClasses)
       if (outBBoxs.getOrElse[Tensor[Float]](i + 1, null) == null) {
         outBBoxs(i + 1) = Tensor[Float]()
