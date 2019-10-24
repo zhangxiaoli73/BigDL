@@ -80,6 +80,8 @@ object Test {
       val rddData = DataSet.SeqFileFolder.filesToRoiImageFrame(param.folder, sc, Some(partitionNum))
         .toDistributed().data(train = false)
 
+      println(s"partition number ${rddData.partitions.length}")
+
       val transformer = MTImageFeatureToBatchWithResize(
           sizeDivisible = 32,
           batchSize = param.batchSize,

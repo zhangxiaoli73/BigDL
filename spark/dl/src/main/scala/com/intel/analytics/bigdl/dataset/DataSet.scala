@@ -370,6 +370,15 @@ object DataSet {
     )
   }
 
+  def rddNew[T: ClassTag](data: RDD[T]): DistributedDataSet[T] = {
+    new CachedDistriDataSet[T](
+      data.mapPartitions(iter => {
+          Iterator.single(iter.toArray)
+        }).setName("cached dataset")
+        .cache()
+    )
+  }
+
   def imageFrame(imageFrame: ImageFrame): DataSet[ImageFeature] = {
     imageFrame match {
       case distributedImageFrame: DistributedImageFrame =>
@@ -644,9 +653,8 @@ object DataSet {
           imf(ImageFeature.originalSize) = (height, width, 3)
           imf(RoiLabel.ISCROWD) = isCrowd
           imf
-        }
-        .coalesce(num)
-     DataSet.rdd(rawData)
+        }.coalesce(num, shuffle = true)
+     DataSet.rddNew(rawData)
     }
 
     private[bigdl] def filesToImageFeatureDataset(url: String, sc: SparkContext,
