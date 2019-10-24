@@ -111,7 +111,6 @@ class Pooler[T: ClassTag] (
       input[Table](2)
     }
 
-    println(s"fffffffffff ${from}")
     val batchSize = featureMaps.get[Tensor[Float]](1).get.size(1)
     var totalNum = 0
     val num_channels = featureMaps.get[Tensor[T]](1).get.size(2)
@@ -130,8 +129,6 @@ class Pooler[T: ClassTag] (
 
       for (level <- 0 until num_levels) {
         val tt = featureMaps.get[Tensor[T]](level + 1).get
-        println(s"ppppppp ${tt.dim()} ${i + 1}")
-        tt.size.foreach(println(_))
         val tmp = tt.narrow(1, i + 1, 1)
         val feature_per_level = Tensor[T]().resizeAs(tmp).copy(tmp)
         val rois_ind_per_level = roi_levels.zipWithIndex.filter(_._1 == level).map(_._2)

@@ -34,7 +34,8 @@ import com.intel.analytics.bigdl.nn.Module
 import com.intel.analytics.bigdl.optim._
 import com.intel.analytics.bigdl.transform.vision.image.label.roi.RoiLabel
 import com.intel.analytics.bigdl.utils.intermediate.ConversionUtils
-import org.apache.spark.SparkContext
+import org.apache.spark
+import org.apache.spark.{SparkContext, rdd}
 import org.apache.spark.rdd.RDD
 
 import scala.collection.mutable.ArrayBuffer

@@ -321,7 +321,14 @@ object MAPUtil {
       val isCrowd = RoiLabel.getIsCrowd(roiLabel)
       val masks = if (isSegmentation) RoiLabel.getMasks(roiLabel) else null
       val (height, width, _) = (0, 0, 0) // if (isSegmentation) RoiLabel.getOrigSize(roiLabel) else (0, 0, 0)
-      for (j <- 1 to bbox.size(1)) {
+      val bboxCnt = bbox.size(1)
+      require(bboxCnt == tclasses.size(1), "CLASSES of target tables should have the" +
+        "same size of the bbox counts")
+      require(bboxCnt == isCrowd.nElement(), "ISCROWD of target tables should have the" +
+        "same size of the bbox counts")
+      require(masks == null || bboxCnt == masks.length, "MASKS of target tables should have the" +
+        "same size of the bbox counts")
+      for (j <- 1 to bboxCnt) {
         val (label, _diff) = if (tclasses.dim() == 2) {
           (tclasses.valueAt(1, j).toInt, tclasses.valueAt(2, j))
         } else {
