@@ -51,7 +51,8 @@ object MaskTmpUtils {
 
     val params = mask.getParametersTable()
     val keys = params.keySet
-    val path = "/home/zhangli/workspace/tmp/mask/maskrcnn-benchmark/demo/weight/"
+    // val path = "/home/zhangli/workspace/tmp/mask/maskrcnn-benchmark/demo/weight/"
+    val path = "/home/zhangli/CodeSpace/forTrain/coco-2017/maskrcnn-original/"
     for(i <- keys) {
       // for weight
       var p = params.get[Table](i).get.get[Tensor[Float]]("weight").get
@@ -78,10 +79,32 @@ object MaskTmpUtils {
         p.set(bias)
       }
 
+      // for running mean
+      p = params.get[Table](i).get.get[Tensor[Float]]("runningMean").getOrElse(null)
+      if (p != null) {
+        size = p.size()
+        name = path + i.toString + ".running_mean"
+        size.foreach(n => name = name + s"_${n}")
+        name = name + ".txt"
+        val bias = MaskTmpUtils.loadWeight(name, size)
+        p.set(bias)
+      }
+
+      // for running variance
+      p = params.get[Table](i).get.get[Tensor[Float]]("runningVar").getOrElse(null)
+      if (p != null) {
+        size = p.size()
+        name = path + i.toString + ".running_var"
+        size.foreach(n => name = name + s"_${n}")
+        name = name + ".txt"
+        val bias = MaskTmpUtils.loadWeight(name, size)
+        p.set(bias)
+      }
+
       println(s"${i} done")
     }
 
-    val modelPath = "/home/zhangli/workspace/tmp/mask/maskrcnn-benchmark/demo/maskrcnn.model"
+    val modelPath = "/home/zhangli/CodeSpace/forTrain/coco-2017/maskrcnn-state.model"
     mask.saveModule(modelPath)
     Module.loadModule[Float](modelPath)
   }

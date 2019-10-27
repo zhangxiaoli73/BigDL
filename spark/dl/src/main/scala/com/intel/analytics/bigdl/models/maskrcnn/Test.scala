@@ -97,8 +97,8 @@ object Test {
       val model = Module.loadModule[Float](param.model) // MaskTmpUtils.loadMaskModel()
 
       val result = model.evaluate(evaluationSet,
-        Array(MeanAveragePrecisionObjectDetection.createCOCO(81, topK = -1),
-          MeanAveragePrecisionObjectDetection.createCOCO(81, topK = -1, isSegmentation = true)))
+        Array(MeanAveragePrecision.cocoBBox(81),
+          MeanAveragePrecision.cocoSegmentation(81)))
       result.foreach(r => println(s"${r._2} is ${r._1}"))
 
       sc.stop()

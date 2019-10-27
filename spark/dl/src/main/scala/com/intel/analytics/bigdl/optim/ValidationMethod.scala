@@ -16,8 +16,6 @@
 
 package com.intel.analytics.bigdl.optim
 
-import java.security.Security
-
 import com.intel.analytics.bigdl._
 import com.intel.analytics.bigdl.dataset.segmentation.{MaskUtils, RLEMasks}
 import com.intel.analytics.bigdl.nn.ClassNLLCriterion
@@ -28,16 +26,14 @@ import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
 import com.intel.analytics.bigdl.transform.vision.image.label.roi.RoiLabel
 import com.intel.analytics.bigdl.utils.Table
 import org.apache.commons.lang3.SerializationUtils
-
 import scala.collection.mutable.ArrayBuffer
 import scala.reflect.ClassTag
-import spire.macros.Auto.scala
 
 /**
- * A method defined to evaluate the model.
- * This trait can be extended by user-defined method. Such
- * as Top1Accuracy
- */
+  * A method defined to evaluate the model.
+  * This trait can be extended by user-defined method. Such
+  * as Top1Accuracy
+  */
 trait ValidationMethod[T] extends Serializable {
   def apply(output: Activity, target: Activity): ValidationResult
 
@@ -52,10 +48,10 @@ trait ValidationMethod[T] extends Serializable {
 }
 
 /**
- * A result that calculate the numeric value of a validation method.
- * User-defined valuation results must override the + operation and result() method.
- * It is executed over the samples in each batch.
- */
+  * A result that calculate the numeric value of a validation method.
+  * User-defined valuation results must override the + operation and result() method.
+  * It is executed over the samples in each batch.
+  */
 trait ValidationResult extends Serializable {
 
   // return the calculation results over all the samples in the batch
@@ -72,10 +68,10 @@ trait ValidationResult extends Serializable {
 }
 
 /**
- * Represent an accuracy result. Accuracy means a ratio of correct number and total number.
- * @param correct correct number
- * @param count total count number
- */
+  * Represent an accuracy result. Accuracy means a ratio of correct number and total number.
+  * @param correct correct number
+  * @param count total count number
+  */
 class AccuracyResult(private var correct: Int, private var count: Int)
   extends ValidationResult {
 
@@ -119,9 +115,9 @@ class AccuracyResult(private var correct: Int, private var count: Int)
 }
 
 /**
- * This is a metric to measure the accuracy of Tree Neural Network/Recursive Neural Network
- *
- */
+  * This is a metric to measure the accuracy of Tree Neural Network/Recursive Neural Network
+  *
+  */
 class TreeNNAccuracy[T: ClassTag]()(
   implicit ev: TensorNumeric[T])
   extends ValidationMethod[T] {
@@ -172,10 +168,10 @@ class TreeNNAccuracy[T: ClassTag]()(
 }
 
 /**
- * Caculate the percentage that output's max probability index equals target
- */
+  * Caculate the percentage that output's max probability index equals target
+  */
 class Top1Accuracy[T: ClassTag](
-  implicit ev: TensorNumeric[T])
+                                 implicit ev: TensorNumeric[T])
   extends ValidationMethod[T] {
   override def apply(output: Activity, target: Activity):
   ValidationResult = {
@@ -226,11 +222,11 @@ class Top1Accuracy[T: ClassTag](
 }
 
 /**
- * Calculate the Mean Average Precision (MAP). The algorithm follows VOC Challenge after 2007
- * Require class label beginning with 0
- * @param k Take top-k confident predictions into account. If k=-1, calculate on all predictions
- * @param classes The number of classes
- */
+  * Calculate the Mean Average Precision (MAP). The algorithm follows VOC Challenge after 2007
+  * Require class label beginning with 0
+  * @param k Take top-k confident predictions into account. If k=-1, calculate on all predictions
+  * @param classes The number of classes
+  */
 class MeanAveragePrecision[T: ClassTag](k: Int, classes: Int)(
   implicit ev: TensorNumeric[T]) extends ValidationMethod[T] {
 
@@ -308,44 +304,45 @@ object MAPUtil {
     * @return (array of GT BBoxes of images, # of GT bboxes for each class)
     */
   def gtTablesToGroundTruthRegions(gtTable: Table, classes: Int, numIOU: Int, isCOCO: Boolean,
-      isSegmentation: Boolean): (Array[ArrayBuffer[GroundTruthRegion]], Array[Int]) = {
+                                   isSegmentation: Boolean): (Array[ArrayBuffer[GroundTruthRegion]], Array[Int]) = {
     // the number of GT bboxes for each class
     val gtCntByClass = new Array[Int](classes)
 
     // one image may contain multiple Ground truth bboxes
-    val gtImages = (1 to gtTable.length()).map { case i =>
+    val gtImages = (1 to gtTable.length()).map { i =>
       val gtImage = new ArrayBuffer[GroundTruthRegion]()
       val roiLabel = gtTable[Table](i)
-      val bbox = RoiLabel.getBBoxes(roiLabel)
-      val tclasses = RoiLabel.getClasses(roiLabel)
-      val isCrowd = RoiLabel.getIsCrowd(roiLabel)
-      val masks = if (isSegmentation) RoiLabel.getMasks(roiLabel) else null
-      val (height, width, _) = (0, 0, 0) // if (isSegmentation) RoiLabel.getOrigSize(roiLabel) else (0, 0, 0)
-      val bboxCnt = bbox.size(1)
-      require(bboxCnt == tclasses.size(1), "CLASSES of target tables should have the" +
-        "same size of the bbox counts")
-      require(bboxCnt == isCrowd.nElement(), "ISCROWD of target tables should have the" +
-        "same size of the bbox counts")
-      require(masks == null || bboxCnt == masks.length, "MASKS of target tables should have the" +
-        "same size of the bbox counts")
-      for (j <- 1 to bboxCnt) {
-        val (label, _diff) = if (tclasses.dim() == 2) {
-          (tclasses.valueAt(1, j).toInt, tclasses.valueAt(2, j))
-        } else {
-          (tclasses.valueAt(j).toInt, 0f)
-        }
-        val diff = if (isCrowd.valueAt(j) != 0 || _diff != 0) 1f else 0f
-        val newGt = if (isSegmentation) {
-          new GroundTruthRLE(numIOU, label, diff, masks(j - 1), height, width)
-        } else {
-          new GroundTruthBBox(isCOCO, numIOU, label, diff, bbox.valueAt(j, 1),
-            bbox.valueAt(j, 2), bbox.valueAt(j, 3), bbox.valueAt(j, 4))
-        }
-        gtImage += newGt
-        require(label >= 0 && label < classes, s"Bad label id $label")
+      if (roiLabel.length() > 0) {
+        val bbox = RoiLabel.getBBoxes(roiLabel)
+        val tclasses = RoiLabel.getClasses(roiLabel)
+        val isCrowd = RoiLabel.getIsCrowd(roiLabel)
+        val masks = if (isSegmentation) RoiLabel.getMasks(roiLabel) else null
+        val bboxCnt = bbox.size(1)
+        require(bboxCnt == tclasses.size(1), "CLASSES of target tables should have the" +
+          "same size of the bbox counts")
+        require(bboxCnt == isCrowd.nElement(), "ISCROWD of target tables should have the" +
+          "same size of the bbox counts")
+        require(masks == null || bboxCnt == masks.length, "MASKS of target tables should have the" +
+          "same size of the bbox counts")
+        for (j <- 1 to bboxCnt) {
+          val (label, _diff) = if (tclasses.dim() == 2) {
+            (tclasses.valueAt(1, j).toInt, tclasses.valueAt(2, j))
+          } else {
+            (tclasses.valueAt(j).toInt, 0f)
+          }
+          val diff = if (isCrowd.valueAt(j) != 0 || _diff != 0) 1f else 0f
+          val newGt = if (isSegmentation) {
+            new GroundTruthRLE(numIOU, label, diff, masks(j - 1))
+          } else {
+            new GroundTruthBBox(isCOCO, numIOU, label, diff, bbox.valueAt(j, 1),
+              bbox.valueAt(j, 2), bbox.valueAt(j, 3), bbox.valueAt(j, 4))
+          }
+          gtImage += newGt
+          require(label >= 0 && label < classes, s"Bad label id $label")
 
-        if (diff == 0) {
-          gtCntByClass(label) += 1
+          if (diff == 0) {
+            gtCntByClass(label) += 1
+          }
         }
       }
       gtImage
@@ -424,10 +421,11 @@ class MAPValidationResult(
                            // take the first k samples, or -1 for all samples
                            private val k: Int,
                            // the predicts for each classes. (Confidence, GT)
-                           private var predictForClass: Array[ArrayBuffer[(Float, Boolean)]],
-                           private var gtCntForClass: Array[Int],
+                           private[bigdl] var predictForClass: Array[ArrayBuffer[(Float, Boolean)]],
+                           private[bigdl] var gtCntForClass: Array[Int],
                            private val theType: MAPType = MAPPascalVoc2010,
-                           private val skipClass: Int = -1
+                           private val skipClass: Int = -1,
+                           private val isSegmentation: Boolean = false
                          )
   extends ValidationResult {
 
@@ -517,9 +515,13 @@ class MAPValidationResult(
     require(gtCntForClass.length == o.gtCntForClass.length)
     for (i <- predictForClass.indices) {
       val (left, right) = (predictForClass(i), o.predictForClass(i))
-      val sorted = sortPredictions(left ++ right)
-      val refinedK = if (k > 0) k else sorted.size
-      predictForClass(i) = sorted.take(refinedK)
+      left ++= right
+      predictForClass(i) = if (k < 0) {
+        left
+      } else {
+        val sorted = sortPredictions(left)
+        sorted.take(k)
+      }
     }
     this
   }
@@ -534,9 +536,10 @@ class MAPValidationResult(
   // scalastyle:on methodName
 
   override protected def format(): String = {
+    val segOrBbox = if (isSegmentation) "segm" else "bbox"
     val resultStr = (0 until nClass).map { clz => calculateClassAP(clz) }.zipWithIndex
       .map { t => s"AP of class ${t._2} = ${t._1}\n"}.reduceOption( _ + _).getOrElse("")
-    s"MeanAveragePrecision@$k(${result()._1})\n $resultStr"
+    s"MeanAveragePrecision_$segOrBbox@$k(${result()._1})\n $resultStr"
   }
 }
 
@@ -587,8 +590,7 @@ private[bigdl] class GroundTruthBBox(isCOCO: Boolean, numIOU: Int, label: Int, d
   }
 }
 
-private[bigdl] class GroundTruthRLE(numIOU: Int, label: Int, diff: Float, rle: RLEMasks,
-                                    height: Int, width: Int)
+private[bigdl] class GroundTruthRLE(numIOU: Int, label: Int, diff: Float, rle: RLEMasks)
   extends GroundTruthRegion(true, numIOU, label, diff) {
 
   override def getIOURate(x1: Float, y1: Float, x2: Float, y2: Float,
@@ -607,12 +609,12 @@ class MAPMultiIOUValidationResult(
                                    private var gtCntForClass: Array[Int],
                                    private val iouRange: (Float, Float),
                                    private val theType: MAPType = MAPPascalVoc2010,
-                                   private val skipClass: Int = -1
-                                 )
-  extends ValidationResult {
+                                   private val skipClass: Int = -1,
+                                   private val isSegmentation: Boolean = false) extends ValidationResult {
 
   val impl = predictForClassIOU.map(predictForClass => {
-    new MAPValidationResult(nClass, k, predictForClass, gtCntForClass, theType, skipClass)
+    new MAPValidationResult(nClass, k, predictForClass,
+      gtCntForClass, theType, skipClass, isSegmentation)
   })
   override def result(): (Float, Int) = (impl.map(_.result()._1).sum / impl.length, 1)
 
@@ -634,7 +636,9 @@ class MAPMultiIOUValidationResult(
     val resultStr = results.zipWithIndex
       .map { t => s"\t IOU(${iouRange._1 + t._2 * step}) = ${t._1}\n"}
       .reduceOption( _ + _).getOrElse("")
-    s"MAP@IOU(${iouRange._1}:$step:${iouRange._2})=${results.sum / impl.length}\n$resultStr"
+    val segOrBbox = if (isSegmentation) "segm" else "bbox"
+    f"MAP_$segOrBbox@IOU(${iouRange._1}%1.3f:$step%1.3f:${iouRange._2}%1.3f)=" +
+      s"${results.sum / impl.length}\n$resultStr"
   }
 }
 
@@ -668,9 +672,9 @@ class MAPMultiIOUValidationResult(
   *                       the output and target must have "masks" data
   */
 class MeanAveragePrecisionObjectDetection[T: ClassTag](
-  classes: Int, topK: Int = -1, iouThres: Array[Float] = Array(0.5f),
-  theType: MAPType = MAPPascalVoc2010, skipClass: Int = -1, isSegmentation: Boolean = false)(
-  implicit ev: TensorNumeric[T]) extends ValidationMethod[T] {
+                                                        classes: Int, topK: Int = -1, iouThres: Array[Float] = Array(0.5f),
+                                                        theType: MAPType = MAPPascalVoc2010, skipClass: Int = -1, isSegmentation: Boolean = false)(
+                                                        implicit ev: TensorNumeric[T]) extends ValidationMethod[T] {
   override def apply(output: Activity, target: Activity): ValidationResult = {
     // one image may contain multiple Ground truth bboxes
     val (gtImages, gtCntByClass) =
@@ -694,9 +698,12 @@ class MeanAveragePrecisionObjectDetection[T: ClassTag](
               predictByClasses = predictByClasses)
           })
       case outTable: Table =>
+        require(gtImages.length == outTable.length(), "The number of images in the output and " +
+          "in the target should be the same")
         for (imgId <- 1 to outTable.length()) {
           val gtBbox = gtImages(imgId - 1)
           val imgOut = outTable[Table](imgId)
+          // if the image contains empty predictions, do nothing
           if (imgOut.length() > 0) {
             val bboxes = RoiLabel.getBBoxes(imgOut)
             val scores = RoiLabel.getScores(imgOut)
@@ -704,6 +711,14 @@ class MeanAveragePrecisionObjectDetection[T: ClassTag](
             require(bboxes.dim() == 2, "the bbox tensor should have 2 dimensions")
             val masks = if (isSegmentation) Some(RoiLabel.getMasks(imgOut)) else None
             val batchSize = bboxes.size(1)
+            require(batchSize == labels.size(1), "CLASSES of target tables should have the" +
+              "same size of the bbox counts")
+            require(batchSize == scores.nElement(), "ISCROWD of target tables should have the" +
+              "same size of the bbox counts")
+            require(masks.isEmpty || batchSize == masks.get.length, "MASKS of target tables " +
+              "should have the same size of the bbox counts")
+            val detections = new ArrayBuffer[(Int, Float, Float, Float, Float,
+              Float, RLEMasks)]()
             for (bboxIdx <- 1 to batchSize) {
               val score = scores.valueAt(bboxIdx)
               val x1 = bboxes.valueAt(bboxIdx, 1)
@@ -711,40 +726,77 @@ class MeanAveragePrecisionObjectDetection[T: ClassTag](
               val x2 = bboxes.valueAt(bboxIdx, 3)
               val y2 = bboxes.valueAt(bboxIdx, 4)
               val label = labels.valueAt(bboxIdx).toInt
-              val mask = masks.map(_(bboxIdx - 1)).orNull
-              MAPUtil.parseDetection(gtBbox, label, score, x1, y1, x2, y2, mask, classes, iouThres,
-                predictByClasses)
+              val mask = masks.map(_ (bboxIdx - 1)).orNull
+              detections.append((label, score, x1, y1, x2, y2, mask))
+            }
+            detections.sortBy(v => v._2)(Ordering.Float.reverse).foreach {
+              case (label, score, x1, y1, x2, y2, mask) =>
+                MAPUtil.parseDetection(gtBbox, label, score, x1, y1, x2, y2, mask, classes,
+                  iouThres, predictByClasses)
             }
           }
         }
     }
     if (iouThres.length != 1) {
       new MAPMultiIOUValidationResult(classes, topK, predictByClasses, gtCntByClass,
-        (iouThres.head, iouThres.last), theType, skipClass)
+        (iouThres.head, iouThres.last), theType, skipClass, isSegmentation)
     } else {
       new MAPValidationResult(classes, topK, predictByClasses.head, gtCntByClass, theType,
-        skipClass)
+        skipClass, isSegmentation)
     }
   }
 
   override protected def format(): String = s"MAPObjectDetection"
 }
 
-object MeanAveragePrecisionObjectDetection {
+object MeanAveragePrecision {
   /**
-    * Create MeanAveragePrecision validation method using COCO's algorithm
+    * Create MeanAveragePrecision validation method using COCO's algorithm for object detection.
+    * IOU computed by the segmentation masks
     *
     * @param nClasses the number of classes (including skipped class)
     * @param topK only take topK confident predictions (-1 for all predictions)
     * @param skipClass skip calculating on a specific class (e.g. background)
     *                  the class index starts from 0, or is -1 if no skipping
     * @param iouThres the IOU thresholds, (rangeStart, stepSize, numOfThres), inclusive
-    * @param isSegmentation if true, compute the IOU of the segmentation masks. Otherwise,
-    *                       IOU of bounding boxes are computed
     * @return MeanAveragePrecisionObjectDetection
     */
-  def createCOCO(nClasses: Int, topK: Int = 100, skipClass: Int = 0,
-                 iouThres: (Float, Float, Int) = (0.5f, 0.05f, 10), isSegmentation: Boolean = false)
+  def cocoSegmentation(nClasses: Int, topK: Int = -1, skipClass: Int = 0,
+                       iouThres: (Float, Float, Int) = (0.5f, 0.05f, 10))
+  : MeanAveragePrecisionObjectDetection[Float] = {
+    createCOCOMAP(nClasses, topK, skipClass, iouThres, true)
+  }
+
+  /**
+    * Create MeanAveragePrecision validation method using COCO's algorithm for object detection.
+    * IOU computed by the bounding boxes
+    *
+    * @param nClasses the number of classes (including skipped class)
+    * @param topK only take topK confident predictions (-1 for all predictions)
+    * @param skipClass skip calculating on a specific class (e.g. background)
+    *                  the class index starts from 0, or is -1 if no skipping
+    * @param iouThres the IOU thresholds, (rangeStart, stepSize, numOfThres), inclusive
+    * @return MeanAveragePrecisionObjectDetection
+    */
+  def cocoBBox(nClasses: Int, topK: Int = -1, skipClass: Int = 0,
+               iouThres: (Float, Float, Int) = (0.5f, 0.05f, 10))
+  : MeanAveragePrecisionObjectDetection[Float] = {
+    createCOCOMAP(nClasses, topK, skipClass, iouThres, false)
+  }
+
+  /**
+    * Calculate the Mean Average Precision (MAP) for classification output and target
+    * The algorithm follows VOC Challenge after 2007
+    * Require class label beginning with 0
+    *
+    * @param nClasses The number of classes
+    * @param topK Take top-k confident predictions into account. If k=-1,calculate on all predictions
+    */
+  def classification(nClasses: Int, topK: Int = -1)
+  : MeanAveragePrecision[Float] = new MeanAveragePrecision[Float](topK, nClasses)
+
+  private def createCOCOMAP(nClasses: Int, topK: Int, skipClass: Int,
+                            iouThres: (Float, Float, Int), isSegmentation: Boolean)
   : MeanAveragePrecisionObjectDetection[Float] = {
     new MeanAveragePrecisionObjectDetection[Float](nClasses, topK,
       (0 until iouThres._3).map(iouThres._1 + _ * iouThres._2).toArray,
@@ -752,17 +804,17 @@ object MeanAveragePrecisionObjectDetection {
   }
 
   /**
-    * Create MeanAveragePrecision validation method using Pascal VOC's algorithm
+    * Create MeanAveragePrecision validation method using Pascal VOC's algorithm for object detection
     *
     * @param nClasses the number of classes
-    * @param useVoc2007 if using the algorithm in Voc2007 (11 points)
+    * @param useVoc2007 if using the algorithm in Voc2007 (11 points). Otherwise, use Voc2010
     * @param topK only take topK confident predictions (-1 for all predictions)
     * @param skipClass skip calculating on a specific class (e.g. background)
     *                  the class index starts from 0, or is -1 if no skipping
     * @return MeanAveragePrecisionObjectDetection
     */
-  def createPascalVOC(nClasses: Int, useVoc2007: Boolean = false, topK: Int = -1,
-                      skipClass: Int = 0) : MeanAveragePrecisionObjectDetection[Float] = {
+  def pascalVOC(nClasses: Int, useVoc2007: Boolean = false, topK: Int = -1,
+                skipClass: Int = 0) : MeanAveragePrecisionObjectDetection[Float] = {
     new MeanAveragePrecisionObjectDetection[Float](nClasses, topK,
       theType = if (useVoc2007) MAPPascalVoc2007 else MAPPascalVoc2010,
       skipClass = skipClass)

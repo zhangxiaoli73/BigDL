@@ -372,10 +372,18 @@ class MaskRCNN(val inChannels: Int,
         output = postProcessorForMaskRCNN(proposalsBox, labelsBox, masks[Tensor[Float]](2),
           scores, imageInfo)
       }
-    } else output = T() // detect nothing
+    } else {
+      output = T() // detecte nothing
+      val batchSize = inputFeatures.size(1)
+      for (i <- 1 to batchSize) {
+        output.toTable(i) = T()
+      }
+    }
 
     output
   }
+
+
 
   @transient var binaryMask : Tensor[Float] = null
   private def postProcessorForMaskRCNN(bboxes: Table, labels: Tensor[Float],

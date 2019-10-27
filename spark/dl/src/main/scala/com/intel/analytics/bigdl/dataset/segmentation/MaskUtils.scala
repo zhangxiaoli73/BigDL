@@ -414,9 +414,9 @@ object MaskUtils {
 
       var cb = gCnts.get(0)
       val kb = gCnts.counts.length
-      var i = 0.0f
-      var u = 0.0f
-      var ct = 1.0f
+      var i = 0L
+      var u = 0L
+      var ct = 1L
 
       while (ct > 0) {
         val c = math.min(ca, cb)
@@ -447,7 +447,7 @@ object MaskUtils {
       } else if (crowd) {
         u = dCnts.area
       }
-      i / u
+      i.toFloat / u
     } else {
       iou
     }

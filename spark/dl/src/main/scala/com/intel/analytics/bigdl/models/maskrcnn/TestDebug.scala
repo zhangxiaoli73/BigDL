@@ -120,7 +120,7 @@ object TestDebug {
       val dt = CoCo.loadDetectionBBox(p)
       val gt = CoCo.loadDetectionBBox("/home/zhangli/workspace/tmp/mask/maskrcnn-benchmark/tools/inference/coco_2014_minival/bbox-gt.json")
 
-      val map = MeanAveragePrecisionObjectDetection.createCOCO(81)
+      // val map = MeanAveragePrecisionObjectDetection.createCOCO(81)
 
       //      val out = map(dt, gt)
 
