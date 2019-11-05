@@ -94,50 +94,59 @@ class MaskRCNN(val inChannels: Int,
       }
 
     def shortcut(nInputPlane: Int, nOutputPlane: Int, stride: Int,
-                 useConv: Boolean = false): Module[Float] = {
+                 useConv: Boolean = false, preName: String = ""): Module[Float] = {
       if (useConv) {
         Sequential()
-          .add(convolution(nInputPlane, nOutputPlane, 1, 1, stride, stride))
-          .add(sbn(nOutputPlane))
+          .add(convolution(nInputPlane, nOutputPlane, 1, 1, stride, stride).setName(preName + ".downsample.0"))
+          .add(sbn(nOutputPlane).setName(preName + ".downsample.1"))
       } else {
         Identity()
       }
     }
 
     def bottleneck(nInputPlane: Int, internalPlane: Int, nOutputPlane: Int,
-                   stride: Int, useConv: Boolean = false): Module[Float] = {
+                   stride: Int, useConv: Boolean = false, preName: String = ""): Module[Float] = {
       val s = Sequential()
-        .add(convolution(nInputPlane, internalPlane, 1, 1, stride, stride, 0, 0))
-        .add(sbn(internalPlane))
+        .add(convolution(nInputPlane, internalPlane, 1, 1, stride, stride, 0, 0)
+          .setName(preName + ".conv1"))
+        .add(sbn(internalPlane)
+          .setName(preName + ".bn1"))
         .add(ReLU(true))
-        .add(convolution(internalPlane, internalPlane, 3, 3, 1, 1, 1, 1))
-        .add(sbn(internalPlane))
+        .add(convolution(internalPlane, internalPlane, 3, 3, 1, 1, 1, 1)
+          .setName(preName + ".conv2"))
+        .add(sbn(internalPlane)
+          .setName(preName + ".bn2"))
         .add(ReLU(true))
-        .add(convolution(internalPlane, nOutputPlane, 1, 1, 1, 1, 0, 0))
-        .add(sbn(nOutputPlane))
+        .add(convolution(internalPlane, nOutputPlane, 1, 1, 1, 1, 0, 0)
+          .setName(preName + ".conv3"))
+        .add(sbn(nOutputPlane)
+          .setName(preName + ".bn3"))
 
       val m = Sequential()
         .add(ConcatTable()
           .add(s)
-          .add(shortcut(nInputPlane, nOutputPlane, stride, useConv)))
+          .add(shortcut(nInputPlane, nOutputPlane, stride, useConv, preName)))
         .add(CAddTable(true))
         .add(ReLU(true))
       m
     }
 
     def layer(count: Int, nInputPlane: Int, nOutputPlane: Int,
-              downOutputPlane: Int, stride: Int = 1): Module[Float] = {
+              downOutputPlane: Int, stride: Int = 1, preName: String): Module[Float] = {
       val s = Sequential()
-        .add(bottleneck(nInputPlane, nOutputPlane, downOutputPlane, stride, true))
+          .add(bottleneck(nInputPlane, nOutputPlane, downOutputPlane, stride, true,
+          preName = preName + ".0"))
       for (i <- 2 to count) {
-        s.add(bottleneck(downOutputPlane, nOutputPlane, downOutputPlane, 1, false))
+        s.add(bottleneck(downOutputPlane, nOutputPlane, downOutputPlane, 1, false,
+          preName = preName + s".${i - 1}"))
       }
       s
     }
 
     val model = Sequential[Float]()
-      .add(convolution(3, 64, 7, 7, 2, 2, 3, 3, propagateBack = false))
-      .add(sbn(64))
+      .add(convolution(3, 64, 7, 7, 2, 2, 3, 3, propagateBack = false)
+        .setName("conv1"))
+      .add(sbn(64).setName("bn1"))
       .add(ReLU(true))
       .add(SpatialMaxPooling(3, 3, 2, 2, 1, 1))
 
@@ -145,10 +154,10 @@ class MaskRCNN(val inChannels: Int,
     val node0 = model.inputs(input)
 
     val startChannels = 64
-    val node1 = layer(3, startChannels, 64, inChannels, 1).inputs(node0)
-    val node2 = layer(4, inChannels, 128, inChannels * 2, 2).inputs(node1)
-    val node3 = layer(6, inChannels * 2, 256, inChannels * 4, 2).inputs(node2)
-    val node4 = layer(3, inChannels * 4, 512, inChannels * 8, 2).inputs(node3)
+    val node1 = layer(3, startChannels, 64, inChannels, 1, "layer1").inputs(node0)
+    val node2 = layer(4, inChannels, 128, inChannels * 2, 2, "layer2").inputs(node1)
+    val node3 = layer(6, inChannels * 2, 256, inChannels * 4, 2, "layer3").inputs(node2)
+    val node4 = layer(3, inChannels * 4, 512, inChannels * 8, 2, "layer4").inputs(node3)
 
     Graph(input, Array(node1, node2, node3, node4))
   }

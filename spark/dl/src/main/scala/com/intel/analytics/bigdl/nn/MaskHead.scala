@@ -63,8 +63,10 @@ class MaskHead(
                                 dimReduced: Int): Module[Float] = {
     val convMask = SpatialFullConvolution(inChannels, dimReduced,
       kW = 2, kH = 2, dW = 2, dH = 2)
+      .setName("conv5_mask")
     val maskLogits = SpatialConvolution(nInputPlane = dimReduced,
       nOutputPlane = numClasses, kernelW = 1, kernelH = 1, strideH = 1, strideW = 1)
+      .setName("mask_fcn_logits")
 
     // init weight & bias, MSRAFill by default
     convMask.setInitMethod(MsraFiller(false), Zeros)

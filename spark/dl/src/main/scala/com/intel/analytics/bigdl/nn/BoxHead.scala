@@ -65,7 +65,7 @@ class BoxHead(
 
   private[nn] def clsPredictor(numClass: Int,
                                inChannels: Int): Module[Float] = {
-    val clsScore = Linear[Float](inChannels, numClass)
+    val clsScore = Linear[Float](inChannels, numClass).setName("cls_score")
     clsScore.weight.apply1(_ => RNG.normal(0, 0.01).toFloat)
     clsScore.bias.fill(0.0f)
     clsScore.asInstanceOf[Module[Float]]
@@ -73,7 +73,7 @@ class BoxHead(
 
   private[nn] def bboxPredictor(numClass: Int,
                                inChannels: Int): Module[Float] = {
-    val bboxRegression = Linear[Float](inChannels, numClass * 4)
+    val bboxRegression = Linear[Float](inChannels, numClass * 4).setName("bbox_pred")
     bboxRegression.weight.apply1(_ => RNG.normal(0, 0.001).toFloat)
     bboxRegression.bias.fill(0.0f)
     bboxRegression.asInstanceOf[Module[Float]]
@@ -88,8 +88,10 @@ class BoxHead(
 
     val fc1 = Linear[Float](inputSize, representationSize, withBias = true)
       .setInitMethod(Xavier, Zeros)
+      .setName("fc6")
     val fc2 = Linear[Float](representationSize, representationSize, withBias = true)
       .setInitMethod(Xavier, Zeros)
+      .setName("fc7")
 
     val model = Sequential[Float]()
       .add(pooler)
