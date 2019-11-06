@@ -88,13 +88,15 @@ class RegionProposal(
   private[nn] def rpnHead(inChannels: Int, numAnchors: Int): Module[Float] = {
     val conv = SpatialConvolution[Float](inChannels, inChannels,
       kernelH = 3, kernelW = 3, strideH = 1, strideW = 1, padH = 1, padW = 1)
-      .setName("rpn.head.conv")
+      .setName("proposal_generator.rpn_head.conv")
     conv.setInitMethod(RandomNormal(0.0, 0.01), Zeros)
     val clsLogits = SpatialConvolution[Float](inChannels, numAnchors,
-       kernelH = 1, kernelW = 1, strideH = 1, strideW = 1).setName(this.getName() + "rpn.head.cls_logits")
+       kernelH = 1, kernelW = 1, strideH = 1, strideW = 1)
+      .setName("proposal_generator.rpn_head.objectness_logits")
     clsLogits.setInitMethod(RandomNormal(0.0, 0.01), Zeros)
     val bboxPred = SpatialConvolution[Float](inChannels, numAnchors * 4,
-      kernelH = 1, kernelW = 1, strideH = 1, strideW = 1).setName(this.getName() + "rpn.head.bbox_pred")
+      kernelH = 1, kernelW = 1, strideH = 1, strideW = 1)
+      .setName("proposal_generator.rpn_head.anchor_deltas")
     bboxPred.setInitMethod(RandomNormal(0.0, 0.01), Zeros)
 
     val input = Input()

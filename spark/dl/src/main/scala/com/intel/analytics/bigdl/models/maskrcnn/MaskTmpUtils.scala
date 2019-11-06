@@ -47,12 +47,11 @@ object MaskTmpUtils {
   def loadMaskModel(): Module[Float] = {
     val resNetOutChannels = 256
     val backboneOutChannels = 256
-    val mask = new MaskRCNN(resNetOutChannels, backboneOutChannels)
+    val mask = new MaskRCNN(resNetOutChannels, backboneOutChannels, numClasses = 81)
 
     val params = mask.getParametersTable()
     val keys = params.keySet
-    // val path = "/home/zhangli/workspace/tmp/mask/maskrcnn-benchmark/demo/weight/"
-    val path = "/home/zhangli/CodeSpace/forTrain/coco-2017/maskrcnn-original/"
+    val path = "/home/zhangli/workspace/framework/detectron2/weights-dir/"
     for(i <- keys) {
       // for weight
       var p = params.get[Table](i).get.get[Tensor[Float]]("weight").get
@@ -100,12 +99,20 @@ object MaskTmpUtils {
         val bias = MaskTmpUtils.loadWeight(name, size)
         p.set(bias)
       }
-
       println(s"${i} done")
     }
+    mask
 
-    val modelPath = "/home/zhangli/CodeSpace/forTrain/coco-2017/maskrcnn-state.model"
-    mask.saveModule(modelPath)
-    Module.loadModule[Float](modelPath)
+//    val modelPath = "/home/zhangli/CodeSpace/forTrain/coco-2017/maskrcnn-state.model"
+//    mask.saveModule(modelPath)
+//    Module.loadModule[Float](modelPath)
+  }
+}
+
+object GenerateModel {
+  def main(args: Array[String]): Unit = {
+   val m = MaskTmpUtils.loadMaskModel()
+
+    println("done")
   }
 }

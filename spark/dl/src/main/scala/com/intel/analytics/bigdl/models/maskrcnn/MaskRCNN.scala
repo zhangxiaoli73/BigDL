@@ -45,7 +45,7 @@ case class MaskRCNNParams(
   boxResolution: Int = 7,
   maskResolution: Int = 14,
   scales: Array[Float] = Array[Float](0.25f, 0.125f, 0.0625f, 0.03125f),
-  samplingRatio: Int = 2,
+  samplingRatio: Int = 0,
   boxScoreThresh: Float = 0.05f,
   boxNmsThread: Float = 0.5f,
   maxPerImage: Int = 100,
@@ -97,8 +97,8 @@ class MaskRCNN(val inChannels: Int,
                  useConv: Boolean = false, preName: String = ""): Module[Float] = {
       if (useConv) {
         Sequential()
-          .add(convolution(nInputPlane, nOutputPlane, 1, 1, stride, stride).setName(preName + ".downsample.0"))
-          .add(sbn(nOutputPlane).setName(preName + ".downsample.1"))
+          .add(convolution(nInputPlane, nOutputPlane, 1, 1, stride, stride).setName(preName + ".shortcut"))
+          .add(sbn(nOutputPlane).setName(preName + ".shortcut.norm"))
       } else {
         Identity()
       }
@@ -110,17 +110,17 @@ class MaskRCNN(val inChannels: Int,
         .add(convolution(nInputPlane, internalPlane, 1, 1, stride, stride, 0, 0)
           .setName(preName + ".conv1"))
         .add(sbn(internalPlane)
-          .setName(preName + ".bn1"))
+          .setName(preName + ".conv1.norm"))
         .add(ReLU(true))
         .add(convolution(internalPlane, internalPlane, 3, 3, 1, 1, 1, 1)
           .setName(preName + ".conv2"))
         .add(sbn(internalPlane)
-          .setName(preName + ".bn2"))
+          .setName(preName + ".conv2.norm"))
         .add(ReLU(true))
         .add(convolution(internalPlane, nOutputPlane, 1, 1, 1, 1, 0, 0)
           .setName(preName + ".conv3"))
         .add(sbn(nOutputPlane)
-          .setName(preName + ".bn3"))
+          .setName(preName + ".conv3.norm"))
 
       val m = Sequential()
         .add(ConcatTable()
@@ -145,8 +145,8 @@ class MaskRCNN(val inChannels: Int,
 
     val model = Sequential[Float]()
       .add(convolution(3, 64, 7, 7, 2, 2, 3, 3, propagateBack = false)
-        .setName("conv1"))
-      .add(sbn(64).setName("bn1"))
+        .setName("backbone.bottom_up.stem.conv1"))
+      .add(sbn(64).setName("backbone.bottom_up.stem.conv1.norm"))
       .add(ReLU(true))
       .add(SpatialMaxPooling(3, 3, 2, 2, 1, 1))
 
@@ -154,10 +154,10 @@ class MaskRCNN(val inChannels: Int,
     val node0 = model.inputs(input)
 
     val startChannels = 64
-    val node1 = layer(3, startChannels, 64, inChannels, 1, "layer1").inputs(node0)
-    val node2 = layer(4, inChannels, 128, inChannels * 2, 2, "layer2").inputs(node1)
-    val node3 = layer(6, inChannels * 2, 256, inChannels * 4, 2, "layer3").inputs(node2)
-    val node4 = layer(3, inChannels * 4, 512, inChannels * 8, 2, "layer4").inputs(node3)
+    val node1 = layer(3, startChannels, 64, inChannels, 1, "backbone.bottom_up.res2").inputs(node0)
+    val node2 = layer(4, inChannels, 128, inChannels * 2, 2, "backbone.bottom_up.res3").inputs(node1)
+    val node3 = layer(6, inChannels * 2, 256, inChannels * 4, 2, "backbone.bottom_up.res4").inputs(node2)
+    val node4 = layer(3, inChannels * 4, 512, inChannels * 8, 2, "backbone.bottom_up.res5").inputs(node3)
 
     Graph(input, Array(node1, node2, node3, node4))
   }
