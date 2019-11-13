@@ -15,10 +15,11 @@
  */
 package com.intel.analytics.bigdl.nn
 
-import breeze.linalg.dim
+import breeze.linalg.Axis._1
+import breeze.linalg.{*, dim}
 import com.intel.analytics.bigdl.Module
 import com.intel.analytics.bigdl.nn.abstractnn.{AbstractModule, Activity}
-import com.intel.analytics.bigdl.tensor.Tensor
+import com.intel.analytics.bigdl.tensor.{Storage, Tensor}
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
 import com.intel.analytics.bigdl.transform.vision.image.label.roi.RoiLabel
 import com.intel.analytics.bigdl.transform.vision.image.util.BboxUtil
@@ -55,13 +56,33 @@ class BoxHead(
     val proposals = Input()
     val imageInfo = Input()
 
-    val boxFeatures = featureExtractor.inputs(features, proposals)
+    val boxFeatures = featureExtractor.setName("boxFeatures").inputs(features, proposals)
     val classLogits = clsPredictor.inputs(boxFeatures)
     val boxRegression = bboxPredictor.inputs(boxFeatures)
-    val result = postProcessor.inputs(classLogits, boxRegression, proposals, imageInfo)
+    val result = postProcessor.setName("result").inputs(classLogits, boxRegression, proposals, imageInfo)
 
     Graph(Array(features, proposals, imageInfo), Array(boxFeatures, result))
   }
+
+//  override def updateOutput(input: Activity): Activity = {
+//    val features = input.toTable[Table](1)
+//    val proposals = input.toTable[Table](2)
+//    val imageInfo = input.toTable[Tensor[Float]](3)
+//
+//
+//    val boxFeatures = model.apply("boxFeatures").get
+//    val classLogits = model.apply("roi_heads.box_predictor.cls_score").get
+//    val boxRegression = model.apply("roi_heads.box_predictor.bbox_pred").get
+//    val result = model.apply("result").get
+//
+//    val out1 = boxFeatures.forward(T(features, proposals))
+//    val out2 = classLogits.forward(out1)
+//    val out3 = boxRegression.forward(out1)
+//    val out4 = result.forward(T(out2, out3, proposals, imageInfo))
+//
+//    output = out4 // model.updateOutput(input)
+//    output
+//  }
 
   private[nn] def clsPredictor(numClass: Int,
                                inChannels: Int): Module[Float] = {
@@ -124,155 +145,79 @@ private[nn] class BoxPostProcessor(
    * Returns bounding-box detection results by thresholding on scores and
    * applying non-maximum suppression (NMS).
    */
-  private[nn] def filterResults(boxes: Tensor[Float], scores: Tensor[Float],
-                                numOfClasses: Int): Array[RoiLabel] = {
-    val dim = numOfClasses * 4
+  // return labels, scores & bbox
+//  output.toTable(1) = Tensor[Float]() // for labels
+//  output.toTable(2) = T() // for bbox, use table in case of batch
+//  output.toTable(3) = Tensor[Float]() // for scores
+
+  private[nn] def filterResults(boxes: Tensor[Float], scores: Tensor[Float], numOfClasses: Int,
+    outLables: Tensor[Float], outBoxes: Tensor[Float], outScores: Tensor[Float]): Unit = {
+
+    val dim = (numOfClasses - 1) * 4
     boxes.resize(Array(boxes.nElement() / dim, dim))
     scores.resize(Array(scores.nElement() / numOfClasses, numOfClasses))
 
-    val results = new Array[RoiLabel](numOfClasses)
-    // skip clsInd = 0, because it's the background class
-    var clsInd = 1
-    while (clsInd < numOfClasses) {
-      results(clsInd) = postProcessOneClass(scores, boxes, clsInd)
-      clsInd += 1
+    val scoresNew = scores.narrow(2, 1, 80).clone()
+    val arr = scoresNew.storage().array()
+    val filter_mask = Tensor[Float]().resizeAs(scoresNew)
+    val arr_filter = filter_mask.storage().array()
+
+    val res = new ArrayBuffer[Table]
+    val clsBBox = new ArrayBuffer[Float]
+    val clsScore = new ArrayBuffer[Float]
+
+    var num = 0
+    for (i <- 1 to scoresNew.size(1)) {
+      val singleScore = scoresNew.select(1, i) // one dim
+      val singleBbox = boxes.select(1, i).resize(80, 4) // two dims
+
+      val scoreArr = singleScore.storage().array()
+      val scoreOffset = singleScore.storageOffset() - 1
+      val inds = (1 to scoresNew.size(2)).filter(
+        ind => scoreArr(ind - 1 + scoreOffset) > scoreThresh).toArray
+
+      for (j <- 1 to inds.length) {
+        res.append(T(i - 1, inds(j - 1)))
+
+        val bboxArr = singleBbox.select(1, inds(j - 1)).storage().array()
+        val bboxOffset = singleBbox.select(1, inds(j - 1)).storageOffset() - 1
+
+        clsBBox.append(bboxArr(bboxOffset))
+        clsBBox.append(bboxArr(bboxOffset + 1))
+        clsBBox.append(bboxArr(bboxOffset + 2))
+        clsBBox.append(bboxArr(bboxOffset + 3))
+
+        clsScore.append(singleScore.valueAt(inds(j -1)))
+
+        num += 1
+      }
     }
-    // Limit to max_per_image detections *over all classes*
-    if (maxPerImage > 0) {
-      limitMaxPerImage(results)
+
+    val tScore = Tensor[Float](clsScore.toArray, Array(num))
+    val tBbox = Tensor[Float](clsBBox.toArray, Array(num, 4))
+    val tBboxBackUp = tBbox.clone()
+
+    val maxValue = tBbox.max()
+
+    // real bbox
+    val resArr = res.toArray
+    for (i <- 0 until res.length) {
+      val label = resArr(i).get[Int](2).get -1
+      tBbox.select(1, i + 1).add(label * (maxValue + 1))
     }
-    results
-  }
 
-  private def postProcessOneClass(scores: Tensor[Float], boxes: Tensor[Float],
-                                  clsInd: Int): RoiLabel = {
-    val inds = (1 to scores.size(1)).filter(ind =>
-      scores.valueAt(ind, clsInd + 1) > scoreThresh).toArray
-    if (inds.length == 0) return null
-    val clsScores = selectTensor(scores.select(2, clsInd + 1), inds, 1)
-    val clsBoxes = selectTensor(boxes.narrow(2, clsInd * 4 + 1, 4), inds, 1)
+    val clsIndex = new Array[Int](1000)
+    var keepN = nmsTool.nms(tScore, tBbox, nmsThresh, clsIndex, orderWithBBox = false)
+    if (maxPerImage > 0 &&  keepN > maxPerImage) keepN = maxPerImage
 
-    val keepN = nmsTool.nms(clsScores, clsBoxes, nmsThresh, inds, orderWithBBox = true)
+    outScores.resize(keepN)
+    outLables.resize(keepN)
+    outBoxes.resize(keepN, 4)
 
-    val bboxNms = selectTensor(clsBoxes, inds, 1, keepN)
-    val scoresNms = selectTensor(clsScores, inds, 1, keepN)
-
-    RoiLabel(scoresNms, bboxNms)
-  }
-
-  private def selectTensor(matrix: Tensor[Float], indices: Array[Int],
-    dim: Int, indiceLen: Int = -1, out: Tensor[Float] = null): Tensor[Float] = {
-    require(dim == 1 || dim == 2, s"dim should be 1 or 2, but get ${dim}")
-    var i = 1
-    val n = if (indiceLen == -1) indices.length else indiceLen
-    if (matrix.nDimension() == 1) {
-      val res = if (out == null) {
-        Tensor[Float](n)
-      } else {
-        out.resize(n)
-      }
-      while (i <= n) {
-        res.update(i, matrix.valueAt(indices(i - 1)))
-        i += 1
-      }
-      return res
-    }
-    // select rows
-    if (dim == 1) {
-      val res = if (out == null) {
-        Tensor[Float](n, matrix.size(2))
-      } else {
-        out.resize(n, matrix.size(2))
-      }
-      while (i <= n) {
-        res.update(i, matrix(indices(i - 1)))
-        i += 1
-      }
-      res
-    } else {
-      val res = if (out == null) {
-        Tensor[Float](matrix.size(1), n)
-      } else {
-        out.resize(matrix.size(1), n)
-      }
-      while (i <= n) {
-        var rid = 1
-        val value = matrix.select(2, indices(i - 1))
-        while (rid <= res.size(1)) {
-          res.setValue(rid, i, value.valueAt(rid))
-          rid += 1
-        }
-        i += 1
-      }
-      res
-    }
-  }
-
-  private def resultToTensor(results: Array[RoiLabel],
-                             labels: Array[Float], labelsOffset: Int,
-                             bbox: Array[Float], bboxOffset : Int,
-                             scores: Array[Float], scoresOffset: Int)
-    : Unit = {
-    var bboxPos = bboxOffset
-    var labelsPos = labelsOffset
-    var scoresPos = scoresOffset
-
-    (0 until nClasses).foreach(c => {
-      val label = results(c)
-      if (null != label) {
-        (1 to label.size()).foreach(j => {
-          labels(labelsPos) = c
-          scores(scoresPos) = label.classes.valueAt(j)
-          bbox(bboxPos) = label.bboxes.valueAt(j, 1)
-          bbox(bboxPos + 1) = label.bboxes.valueAt(j, 2)
-          bbox(bboxPos + 2) = label.bboxes.valueAt(j, 3)
-          bbox(bboxPos + 3) = label.bboxes.valueAt(j, 4)
-
-          bboxPos += 4
-          scoresPos += 1
-          labelsPos += 1
-        })
-      }
-    })
-  }
-
-  private def limitMaxPerImage(results: Array[RoiLabel]): Unit = {
-    val nImageScores = (1 until nClasses).map(j => if (results(j) == null) 0
-    else results(j).classes.size(1)).sum
-    if (nImageScores > maxPerImage) {
-      val imageScores = ArrayBuffer[Float]()
-      var j = 1
-      while (j < nClasses) {
-        if (results(j) != null) {
-          val res = results(j).classes
-          if (res.nElement() > 0) {
-            res.apply1(x => {
-              imageScores.append(x)
-              x
-            })
-          }
-        }
-        j += 1
-      }
-      val imageThresh = imageScores.sortWith(_ < _)(imageScores.length - maxPerImage)
-      j = 1
-      while (j < nClasses) {
-        if (results(j) != null) {
-          val box = results(j).classes
-          val keep = (1 to box.size(1)).filter(x =>
-            box.valueAt(x) >= imageThresh).toArray
-          val selectedScores = selectTensor(results(j).classes, keep, 1)
-          val selectedBoxes = selectTensor(results(j).bboxes, keep, 1)
-          if (selectedScores.nElement() == 0) {
-            results(j).classes.set()
-            results(j).bboxes.set()
-          } else {
-            results(j).classes.resizeAs(selectedScores).copy(selectedScores)
-            results(j).bboxes.resizeAs(selectedBoxes).copy(selectedBoxes)
-          }
-        }
-        j += 1
-      }
+    for (i <- 0 until keepN) {
+      outScores.setValue(i + 1, tScore.valueAt(clsIndex(i)))
+      outLables.setValue(i + 1, resArr(clsIndex(i) - 1).get[Int](2).get)
+      outBoxes.select(1, i + 1).copy(tBboxBackUp.select(1, clsIndex(i)))
     }
   }
 
@@ -321,58 +266,19 @@ private[nn] class BoxPostProcessor(
       output.toTable(3) = Tensor[Float]() // for scores
     }
 
-    val outLabels = output.toTable[Tensor[Float]](1)
-    val outBBoxs = output.toTable[Table](2)
-    val outScores = output.toTable[Tensor[Float]](3)
-
     val totalROILables = T()
     var totalDetections = 0
     start = 1
     for (i <- 0 to boxesInImage.length - 1) {
-      val boxNum = boxesInImage(i)
+      val boxNum = boxesInImage(0)
       val proposalNarrow = boxesBuf.narrow(1, start, boxNum)
       val classProbNarrow = classProb.narrow(1, start, boxNum)
-      start += boxNum
-      val roilabels = filterResults(proposalNarrow, classProbNarrow, nClasses)
-      if (outBBoxs.getOrElse[Tensor[Float]](i + 1, null) == null) {
-        outBBoxs(i + 1) = Tensor[Float]()
-      }
-      var maxDetection = 0
-      roilabels.foreach(res => {
-        if (null != res) {
-          maxDetection += res.size()
-        }
-      })
-      totalDetections += maxDetection
-      outBBoxs[Tensor[Float]](i + 1).resize(maxDetection, 4)
-      totalROILables(i + 1) = roilabels
-      boxesInImage(i) = maxDetection
+      val bbox = output[Table](2)
+      bbox(1) = Tensor[Float]()
+      filterResults(proposalNarrow, classProbNarrow, nClasses,
+        outBoxes = bbox[Tensor[Float]](1), outLables = output[Tensor[Float]](1),
+        outScores = output[Tensor[Float]](3))
     }
-    // clear others tensors in output
-    for (i <- (boxesInImage.length + 1) to outBBoxs.length()) {
-      outBBoxs.remove[Tensor[Float]](i)
-    }
-
-    // resize labels and scores
-    outLabels.resize(totalDetections)
-    outScores.resize(totalDetections)
-
-    val labels = outLabels.storage().array()
-    val scores = outScores.storage().array()
-    var labelsOffset = outLabels.storageOffset() - 1
-    var scoresOffset = outScores.storageOffset() - 1
-    for (i <- 0 to boxesInImage.length - 1) {
-      if (boxesInImage(i) > 0) {
-        val roilabels = totalROILables[Array[RoiLabel]](i + 1)
-        val bbox = outBBoxs[Tensor[Float]](i + 1).storage().array()
-        val bboxOffset = outBBoxs[Tensor[Float]](i + 1).storageOffset() - 1
-
-        resultToTensor(roilabels, labels, labelsOffset, bbox, bboxOffset, scores, scoresOffset)
-        labelsOffset += outBBoxs[Tensor[Float]](i + 1).size(1)
-        scoresOffset += outBBoxs[Tensor[Float]](i + 1).size(1)
-      }
-    }
-
     output
   }
 

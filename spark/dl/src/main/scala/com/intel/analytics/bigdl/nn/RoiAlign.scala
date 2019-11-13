@@ -129,13 +129,15 @@ class RoiAlign[T: ClassTag] (
       var offset_rois = n * roi_cols
       val roi_batch_ind = 0 // bbox has 4 elements
 
-      val roi_start_w = roisFloat(offset_rois) * spatialScale
-      val roi_start_h = roisFloat(offset_rois + 1) * spatialScale
-      val roi_end_w = roisFloat(offset_rois + 2) * spatialScale
-      val roi_end_h = roisFloat(offset_rois + 3) * spatialScale
+      // todo: for aligned
+      val offset = 0.5
+      val roi_start_w = roisFloat(offset_rois) * spatialScale  - offset
+      val roi_start_h = roisFloat(offset_rois + 1) * spatialScale - offset
+      val roi_end_w = roisFloat(offset_rois + 2) * spatialScale - offset
+      val roi_end_h = roisFloat(offset_rois + 3) * spatialScale - offset
 
-      val roi_width = Math.max(roi_end_w - roi_start_w, 1.0f)
-      val roi_height = Math.max(roi_end_h - roi_start_h, 1.0f)
+      val roi_width = roi_end_w - roi_start_w // Math.max(roi_end_w - roi_start_w, 1.0f)
+      val roi_height = roi_end_h - roi_start_h // Math.max(roi_end_h - roi_start_h, 1.0f)
       val bin_size_h = roi_height/ pooledH
       val bin_size_w = roi_width / pooledW
 
@@ -161,10 +163,10 @@ class RoiAlign[T: ClassTag] (
         width,
         roi_bin_grid_h,
         roi_bin_grid_w,
-        roi_start_h,
-        roi_start_w,
-        bin_size_h,
-        bin_size_w,
+        roi_start_h.toFloat,
+        roi_start_w.toFloat,
+        bin_size_h.toFloat,
+        bin_size_w.toFloat,
         roi_bin_grid_h,
         roi_bin_grid_w,
         pre_cal

@@ -488,7 +488,7 @@ object BboxUtil {
     require(encodeBox.nElement() == decodeBox.nElement(), s"element number of encode tensor" +
       s" and decode tensor should be same, but get ${encodeBox.nElement()} ${decodeBox.nElement()}")
 
-    val TO_REMOVE = 1 // refer to pytorch, maybe it will be removed in future
+    val TO_REMOVE = 0 // refer to pytorch, maybe it will be removed in future
     val x1 = bbox.valueAt(1)
     val y1 = bbox.valueAt(2)
     val x2 = bbox.valueAt(3)

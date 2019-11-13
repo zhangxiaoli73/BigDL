@@ -16,6 +16,7 @@
 
 package com.intel.analytics.bigdl.transform.vision.image.augmentation
 
+import breeze.linalg.*
 import com.intel.analytics.bigdl.dataset.segmentation.PolyMasks
 import com.intel.analytics.bigdl.transform.vision.image.{FeatureTransformer, ImageFeature}
 import com.intel.analytics.bigdl.transform.vision.image.label.roi.RoiLabel
@@ -45,14 +46,16 @@ class ScaleResize(minSize: Int, maxSize: Int = -1, resizeROI: Boolean = false)
     if (maxSize > 0) {
       val (minOrigSize, maxOrigSize) = if (sizeW > sizeH) (sizeH, sizeW) else (sizeW, sizeH)
       val thread = maxOrigSize.toFloat / minOrigSize * size
-      if (thread > maxSize) size = math.round(maxSize * minOrigSize / maxOrigSize)
+      if (thread > maxSize) size = math.round(maxSize.toFloat * minOrigSize / maxOrigSize)
     }
+
+    // todo: check
     if ((sizeW <= sizeH && sizeW == size) || (sizeH <= sizeW && sizeH == size)) {
       (sizeH, sizeW)
     } else if (sizeW < sizeH) {
-      (size * sizeH / sizeW, size)
+      (math.round(size * sizeH / sizeW), size)
     } else {
-      (size, size * sizeW / sizeH)
+      (size, math.round(size.toFloat * sizeW / sizeH))
     }
   }
 

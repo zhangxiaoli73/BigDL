@@ -51,9 +51,9 @@ class MaskHead(
     val proposals = Input()
     val labels = Input()
 
-    val maskFeatures = featureExtractor.inputs(features, proposals)
-    val maskLogits = predictor.inputs(maskFeatures)
-    val result = postProcessor.inputs(maskLogits, labels)
+    val maskFeatures = featureExtractor.setName("featureExtractor").inputs(features, proposals)
+    val maskLogits = predictor.setName("predictor").inputs(maskFeatures)
+    val result = postProcessor.setName("postProcessor").inputs(maskLogits, labels)
 
     Graph(Array(features, proposals, labels), Array(maskFeatures, result))
   }
@@ -149,7 +149,7 @@ private[nn] class MaskPostProcessor()(implicit ev: TensorNumeric[Float])
     while (i <= rangeBuffer.nElement()) {
       val dim = rangeBuffer.valueAt(i).toInt + 1
       val index = labels.valueAt(i).toInt // start from 1
-      output.narrow(1, i, 1).copy(mask_prob.narrow(1, i, 1).narrow(2, index + 1, 1))
+      output.narrow(1, i, 1).copy(mask_prob.narrow(1, i, 1).narrow(2, index, 1))
       i += 1
     }
     output

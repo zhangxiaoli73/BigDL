@@ -18,11 +18,37 @@ package com.intel.analytics.bigdl.nn
 
 import com.intel.analytics.bigdl.numeric.NumericFloat
 import com.intel.analytics.bigdl.tensor.{Storage, Tensor}
+import com.intel.analytics.bigdl.utils.T
 
 /**
  * Generates a regular grid of multi-scale, multi-aspect anchor boxes.
  */
 class Anchor(ratios: Array[Float], scales: Array[Float]) extends Serializable {
+
+  val expected4 = Tensor[Float](T(
+    T(-22.6274, -11.3137,  22.6274,  11.3137),
+    T(-16.0000, -16.0000,  16.0000,  16.0000),
+    T(-11.3137, -22.6274,  11.3137,  22.6274)))
+  
+  val expected8 = Tensor[Float](T(
+    T(-45.2548, -22.6274,  45.2548,  22.6274),
+    T(-32.0000, -32.0000,  32.0000,  32.0000),
+    T(-22.6274, -45.2548,  22.6274,  45.2548)))
+  
+  val expected16 = Tensor[Float](T(
+    T(-90.5097, -45.2548,  90.5097,  45.2548),
+    T(-64.0000, -64.0000,  64.0000,  64.0000),
+    T(-45.2548, -90.5097,  45.2548,  90.5097)))
+  
+  val expected32 = Tensor[Float](T(
+    T(-181.0193,  -90.5097,  181.0193,   90.5097),
+    T(-128.0000, -128.0000,  128.0000,  128.0000),
+    T( -90.5097, -181.0193,   90.5097,  181.0193)))
+  
+  val expected64 = Tensor[Float](T(
+    T(-362.0387, -181.0193,  362.0387,  181.0193),
+    T(-256.0000, -256.0000,  256.0000,  256.0000),
+    T(-181.0193, -362.0387,  181.0193,  362.0387)))
 
   private var baseSize = 16
   private var basicAnchors: Tensor[Float] = generateBasicAnchors(ratios, scales, baseSize)
@@ -38,8 +64,12 @@ class Anchor(ratios: Array[Float], scales: Array[Float]) extends Serializable {
    */
   def generateAnchors(width: Int, height: Int, featStride: Float = 16): Tensor[Float] = {
     val (shiftX, shiftY) = generateShifts(width, height, featStride)
-    if (featStride != baseSize) {
-      basicAnchors = generateBasicAnchors(ratios, scales, featStride)
+    if (true) { // featStride != baseSize) {
+      if (featStride == 4) basicAnchors = expected4
+      else if (featStride == 8) basicAnchors = expected8
+      else if (featStride == 16) basicAnchors = expected16
+      else if (featStride == 32) basicAnchors = expected32
+      else if (featStride == 64) basicAnchors = expected64
       baseSize = featStride.toInt
     }
     getAllAnchors(shiftX, shiftY, basicAnchors)

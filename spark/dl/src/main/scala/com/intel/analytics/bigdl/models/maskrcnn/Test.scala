@@ -72,7 +72,7 @@ object Test {
         transformer =
           PixelBytesToMat() ->
             ScaleResize(minSize = 800, maxSize = 1333) ->
-            ChannelNormalize(122.7717f, 115.9465f, 102.9801f) ->
+            ChannelNormalize(123.6750f, 116.2800f, 103.5300f) ->
             MatToTensor[Float](),
             toRGB = false
         )
