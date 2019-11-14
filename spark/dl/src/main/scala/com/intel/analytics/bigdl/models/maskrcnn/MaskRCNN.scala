@@ -183,6 +183,7 @@ class MaskRCNN(val inChannels: Int,
     // contains all images info (height, width, original height, original width)
     val imageInfo = input.toTable[Tensor[Float]](2)
 
+    println(s"batchSize11 ${inputFeatures.size(1)}")
     // get each layer from modules
     val backbone = modules(0)
     val rpn = modules(1)

@@ -297,32 +297,33 @@ private[nn] class BoxPostProcessor(
     }
 
     // resize labels and scores
-    outLabels.resize(totalDetections)
-    outScores.resize(totalDetections)
+    if (totalDetections > 0) {
+      outLabels.resize(totalDetections)
+      outScores.resize(totalDetections)
 
-    val arroutLabels = outLabels.storage().array()
-    var offsetOutLabels = outLabels.storageOffset() - 1
+      val arroutLabels = outLabels.storage().array()
+      var offsetOutLabels = outLabels.storageOffset() - 1
 
-    val arroutScores = outScores.storage().array()
-    var offsetOutScores = outScores.storageOffset() - 1
+      val arroutScores = outScores.storage().array()
+      var offsetOutScores = outScores.storageOffset() - 1
 
-    for (i <- 0 until batchSize) {
-      val arrTempLabels = outLablesBuf(i).storage().array()
-      val arrTempScores = outScoresBuf(i).storage().array()
+      for (i <- 0 until batchSize) {
+        val arrTempLabels = outLablesBuf(i).storage().array()
+        val arrTempScores = outScoresBuf(i).storage().array()
 
-      val offsetTempLabels = outLablesBuf(i).storageOffset() - 1
-      val offsetTempScores = outScoresBuf(i).storageOffset() - 1
+        val offsetTempLabels = outLablesBuf(i).storageOffset() - 1
+        val offsetTempScores = outScoresBuf(i).storageOffset() - 1
 
-      // system copy
-      System.arraycopy( arrTempLabels, offsetTempLabels, arroutLabels,
-        offsetOutLabels, arrTempLabels.length)
-      System.arraycopy(arrTempScores, offsetTempScores, arroutScores,
-        offsetOutScores, arrTempScores.length)
+        // system copy
+        System.arraycopy( arrTempLabels, offsetTempLabels, arroutLabels,
+          offsetOutLabels, arrTempLabels.length)
+        System.arraycopy(arrTempScores, offsetTempScores, arroutScores,
+          offsetOutScores, arrTempScores.length)
 
-      offsetOutLabels += outBBoxs[Tensor[Float]](i + 1).size(1)
-      offsetOutScores += outBBoxs[Tensor[Float]](i + 1).size(1)
+        offsetOutLabels += outBBoxs[Tensor[Float]](i + 1).size(1)
+        offsetOutScores += outBBoxs[Tensor[Float]](i + 1).size(1)
+      }
     }
-
     output
   }
 

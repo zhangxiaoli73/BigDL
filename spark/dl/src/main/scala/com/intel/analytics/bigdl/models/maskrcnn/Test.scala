@@ -66,9 +66,11 @@ object Test {
         sc, Some(partitionNum))
         .toDistributed().data(train = false)
 
+      println(s"rddData ${rddData.partitions.length}")
+
       val transformer = MTImageFeatureToBatchWithResize(
         sizeDivisible = 32,
-        batchSize = param.batchSize / Engine.nodeNumber(),
+        batchSize = param.batchSize,
         transformer =
           PixelBytesToMat() ->
             ScaleResize(minSize = 800, maxSize = 1333) ->
