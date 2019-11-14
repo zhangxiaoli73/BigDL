@@ -138,20 +138,20 @@ private[nn] class BoxPostProcessor(
 
   private val softMax = SoftMax[Float]()
   private val nmsTool: Nms = new Nms
+  private val maxBBoxPerImage = 1000
   @transient  private var boxesBuf: Tensor[Float] = null
   @transient  private var concatBoxes: Tensor[Float] = null
+
+  private var outScoresBuf = new ArrayBuffer[Tensor[Float]]
+  private var outLablesBuf = new ArrayBuffer[Tensor[Float]]
+
 
   /**
    * Returns bounding-box detection results by thresholding on scores and
    * applying non-maximum suppression (NMS).
    */
-  // return labels, scores & bbox
-//  output.toTable(1) = Tensor[Float]() // for labels
-//  output.toTable(2) = T() // for bbox, use table in case of batch
-//  output.toTable(3) = Tensor[Float]() // for scores
-
   private[nn] def filterResults(boxes: Tensor[Float], scores: Tensor[Float], numOfClasses: Int,
-    outLables: Tensor[Float], outBoxes: Tensor[Float], outScores: Tensor[Float]): Unit = {
+    outLables: Tensor[Float], outBoxes: Tensor[Float], outScores: Tensor[Float]): Int = {
 
     val dim = (numOfClasses - 1) * 4
     boxes.resize(Array(boxes.nElement() / dim, dim))
@@ -162,7 +162,7 @@ private[nn] class BoxPostProcessor(
     val filter_mask = Tensor[Float]().resizeAs(scoresNew)
     val arr_filter = filter_mask.storage().array()
 
-    val res = new ArrayBuffer[Table]
+    val clsLabel = new ArrayBuffer[Float] // for index and labels
     val clsBBox = new ArrayBuffer[Float]
     val clsScore = new ArrayBuffer[Float]
 
@@ -177,17 +177,15 @@ private[nn] class BoxPostProcessor(
         ind => scoreArr(ind - 1 + scoreOffset) > scoreThresh).toArray
 
       for (j <- 1 to inds.length) {
-        res.append(T(i - 1, inds(j - 1)))
+        clsLabel.append(inds(j - 1))
+        clsScore.append(singleScore.valueAt(inds(j -1)))
 
         val bboxArr = singleBbox.select(1, inds(j - 1)).storage().array()
         val bboxOffset = singleBbox.select(1, inds(j - 1)).storageOffset() - 1
-
         clsBBox.append(bboxArr(bboxOffset))
         clsBBox.append(bboxArr(bboxOffset + 1))
         clsBBox.append(bboxArr(bboxOffset + 2))
         clsBBox.append(bboxArr(bboxOffset + 3))
-
-        clsScore.append(singleScore.valueAt(inds(j -1)))
 
         num += 1
       }
@@ -200,13 +198,12 @@ private[nn] class BoxPostProcessor(
     val maxValue = tBbox.max()
 
     // real bbox
-    val resArr = res.toArray
-    for (i <- 0 until res.length) {
-      val label = resArr(i).get[Int](2).get -1
+    for (i <- 0 until clsLabel.length) {
+      val label = clsLabel(i) -1
       tBbox.select(1, i + 1).add(label * (maxValue + 1))
     }
 
-    val clsIndex = new Array[Int](1000)
+    val clsIndex = new Array[Int](maxBBoxPerImage)
     var keepN = nmsTool.nms(tScore, tBbox, nmsThresh, clsIndex, orderWithBBox = false)
     if (maxPerImage > 0 &&  keepN > maxPerImage) keepN = maxPerImage
 
@@ -216,9 +213,11 @@ private[nn] class BoxPostProcessor(
 
     for (i <- 0 until keepN) {
       outScores.setValue(i + 1, tScore.valueAt(clsIndex(i)))
-      outLables.setValue(i + 1, resArr(clsIndex(i) - 1).get[Int](2).get)
+      outLables.setValue(i + 1, clsLabel(clsIndex(i) - 1))
       outBoxes.select(1, i + 1).copy(tBboxBackUp.select(1, clsIndex(i)))
     }
+
+    keepN
   }
 
   /**
@@ -238,6 +237,8 @@ private[nn] class BoxPostProcessor(
       T(input[Tensor[Float]](3))
     } else input[Table](3)
     val imageInfo = input[Tensor[Float]](4) // height & width
+
+    val batchSize = bbox.length()
 
     val boxesInImage = new Array[Int](bbox.length())
     for (i <- 0 to boxesInImage.length - 1) {
@@ -266,19 +267,62 @@ private[nn] class BoxPostProcessor(
       output.toTable(3) = Tensor[Float]() // for scores
     }
 
-    val totalROILables = T()
+    val outLabels = output.toTable[Tensor[Float]](1)
+    val outBBoxs = output.toTable[Table](2)
+    val outScores = output.toTable[Tensor[Float]](3)
+
     var totalDetections = 0
     start = 1
+    outLablesBuf.clear()
+    outScoresBuf.clear()
+
     for (i <- 0 to boxesInImage.length - 1) {
       val boxNum = boxesInImage(0)
       val proposalNarrow = boxesBuf.narrow(1, start, boxNum)
       val classProbNarrow = classProb.narrow(1, start, boxNum)
-      val bbox = output[Table](2)
-      bbox(1) = Tensor[Float]()
-      filterResults(proposalNarrow, classProbNarrow, nClasses,
-        outBoxes = bbox[Tensor[Float]](1), outLables = output[Tensor[Float]](1),
-        outScores = output[Tensor[Float]](3))
+      start += boxNum
+
+      if (outBBoxs.getOrElse(i + 1, null) == null) outBBoxs(i + 1) = Tensor[Float]()
+
+      val tempLabels = Tensor[Float]()
+      val tempScores = Tensor[Float]()
+
+      totalDetections += filterResults(proposalNarrow, classProbNarrow, nClasses,
+        outBoxes = outBBoxs[Tensor[Float]](i + 1),
+        outLables = tempLabels,
+        outScores = tempScores)
+
+      outLablesBuf.append(tempLabels)
+      outScoresBuf.append(tempScores)
     }
+
+    // resize labels and scores
+    outLabels.resize(totalDetections)
+    outScores.resize(totalDetections)
+
+    val arroutLabels = outLabels.storage().array()
+    var offsetOutLabels = outLabels.storageOffset() - 1
+
+    val arroutScores = outScores.storage().array()
+    var offsetOutScores = outScores.storageOffset() - 1
+
+    for (i <- 0 until batchSize) {
+      val arrTempLabels = outLablesBuf(i).storage().array()
+      val arrTempScores = outScoresBuf(i).storage().array()
+
+      val offsetTempLabels = outLablesBuf(i).storageOffset() - 1
+      val offsetTempScores = outScoresBuf(i).storageOffset() - 1
+
+      // system copy
+      System.arraycopy( arrTempLabels, offsetTempLabels, arroutLabels,
+        offsetOutLabels, arrTempLabels.length)
+      System.arraycopy(arrTempScores, offsetTempScores, arroutScores,
+        offsetOutScores, arrTempScores.length)
+
+      offsetOutLabels += outBBoxs[Tensor[Float]](i + 1).size(1)
+      offsetOutScores += outBBoxs[Tensor[Float]](i + 1).size(1)
+    }
+
     output
   }
 
