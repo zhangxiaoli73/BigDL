@@ -132,27 +132,34 @@ private[nn] class MaskPostProcessor()(implicit ev: TensorNumeric[Float])
     val labels = input[Tensor[Float]](2)
 
     val num_masks = maskLogits.size(1)
-    if (rangeBuffer == null || rangeBuffer.nElement() != num_masks) {
-      rangeBuffer = Tensor[Float](num_masks)
-      rangeBuffer.range(0, num_masks - 1, 1)
+
+    println(s"ddddddddddd ${num_masks} ${labels.size(1)}")
+    if (num_masks == 0) {
+      output = Tensor[Float]()
+      output
+    } else {
+      if (rangeBuffer == null || rangeBuffer.nElement() != num_masks) {
+        rangeBuffer = Tensor[Float](num_masks)
+        rangeBuffer.range(0, num_masks - 1, 1)
+      }
+
+      val mask_prob = sigmoid.forward(maskLogits)
+      require(labels.nDimension() == 1, s"Labels should be tensor with one dimension," +
+        s"but get ${labels.nDimension()}")
+      require(rangeBuffer.nElement() == labels.nElement(), s"number of masks should be same" +
+        s"with labels, but get ${rangeBuffer.nElement()} ${labels.nElement()}")
+
+      output.resize(rangeBuffer.nElement(), 1, mask_prob.size(3), mask_prob.size(4))
+
+      var i = 1
+      while (i <= rangeBuffer.nElement()) {
+        val dim = rangeBuffer.valueAt(i).toInt + 1
+        val index = labels.valueAt(i).toInt // start from 1
+        output.narrow(1, i, 1).copy(mask_prob.narrow(1, i, 1).narrow(2, index, 1))
+        i += 1
+      }
+      output
     }
-
-    val mask_prob = sigmoid.forward(maskLogits)
-    require(labels.nDimension() == 1, s"Labels should be tensor with one dimension," +
-      s"but get ${labels.nDimension()}")
-    require(rangeBuffer.nElement() == labels.nElement(), s"number of masks should be same" +
-      s"with labels, but get ${rangeBuffer.nElement()} ${labels.nElement()}")
-
-    output.resize(rangeBuffer.nElement(), 1, mask_prob.size(3), mask_prob.size(4))
-
-    var i = 1
-    while (i <= rangeBuffer.nElement()) {
-      val dim = rangeBuffer.valueAt(i).toInt + 1
-      val index = labels.valueAt(i).toInt // start from 1
-      output.narrow(1, i, 1).copy(mask_prob.narrow(1, i, 1).narrow(2, index, 1))
-      i += 1
-    }
-    output
   }
 
   override def updateGradInput(input: Table, gradOutput: Tensor[Float]): Table = {

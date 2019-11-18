@@ -138,7 +138,7 @@ private[nn] class BoxPostProcessor(
 
   private val softMax = SoftMax[Float]()
   private val nmsTool: Nms = new Nms
-  private val maxBBoxPerImage = 1000
+  private val maxBBoxPerImage = 10000
   @transient  private var boxesBuf: Tensor[Float] = null
   @transient  private var concatBoxes: Tensor[Float] = null
 
@@ -294,6 +294,11 @@ private[nn] class BoxPostProcessor(
 
       outLablesBuf.append(tempLabels)
       outScoresBuf.append(tempScores)
+    }
+
+    // clear others tensors in output
+    for (i <- (boxesInImage.length + 1) to outBBoxs.length()) {
+      outBBoxs.remove[Tensor[Float]](i)
     }
 
     // resize labels and scores

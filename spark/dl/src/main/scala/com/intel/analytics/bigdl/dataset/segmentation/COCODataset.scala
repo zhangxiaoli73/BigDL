@@ -312,7 +312,7 @@ object COCODataset {
       require(rawBbox.size() == 4, "The bbox in the COCO annotation data should have 4 elements")
       val (x1, y1, w, h) = (rawBbox.get(0).getAsFloat, rawBbox.get(1).getAsFloat,
         rawBbox.get(2).getAsFloat, rawBbox.get(3).getAsFloat)
-      val bbox = (x1, y1, x1 + w - 1, y1 + h - 1)
+      val bbox = (x1, y1, x1 + w, y1 + h)
       val isCrowd = if (obj.get("iscrowd").getAsInt == 1) true else false
       val seg = if (isCrowd) {
         val segJson = obj.getAsJsonObject("segmentation")
