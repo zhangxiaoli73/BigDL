@@ -1343,12 +1343,6 @@ class UtilsSpec extends FlatSpec with Matchers {
     val arr = binaryMask.storage().array()
     val expected = m.storage().array()
 
-    for (i <- 0 until  binaryMask.nElement()) {
-      if (expected(i) != arr(i)) {
-        val tmp = 0
-      }
-    }
-
     val outRLE = MaskUtils.binaryToRLE(binaryMask)
     val expectedRLE = MaskUtils.binaryToRLE(m)
     outRLE.counts should be(expectedRLE.counts)

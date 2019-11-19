@@ -22,6 +22,7 @@ import breeze.numerics.{floor, round}
 import com.intel.analytics.bigdl.nn.{Bilinear, ResizeBilinear}
 import com.intel.analytics.bigdl.nn.abstractnn.DataFormat
 import com.intel.analytics.bigdl.tensor.Tensor
+import com.intel.analytics.bigdl.utils.T
 import com.sun.xml.internal.bind.v2.TODO
 
 import scala.collection.mutable.ArrayBuffer
@@ -138,208 +139,180 @@ private[bigdl] object Utils {
   }
 
   // mask and box should be one by one
-//  def pasteMaskInImage(mask: Tensor[Float], box: Tensor[Float], binaryMask: Tensor[Float],
-//                        thresh: Float = 0.5f, padding : Int = 1): Unit = {
+  def decodeMaskInImage2(mask: Tensor[Float], box: Tensor[Float],
+    binaryMask: Tensor[Float], thresh: Float = 0.5f): Unit = {
+
+    val height = binaryMask.size(1)
+    val width = binaryMask.size(2)
+
+    // do paste mask
+    val x0 = box.valueAt(1)
+    val y0 = box.valueAt(2)
+    val x1 = box.valueAt(3)
+    val y1 = box.valueAt(4)
+
+    val x0_int = math.max(math.floor(x0) - 1, 0).toInt
+    val y0_int = math.max(math.floor(y0) - 1, 0).toInt
+
+    val x1_int = math.min(math.ceil(x1) + 1, width).toInt
+    val y1_int = math.min(math.ceil(y1) + 1, height).toInt
+
+    val img_y = (y0_int until y1_int).map(v => {
+      val t = v + 0.5
+      val t2 = (t - y0) / (y1 - y0) * 2 - 1
+      t2
+    }).toArray
+    val img_x = (x0_int until x1_int).map(v => {
+      val t = v + 0.5
+      (t - x0) / (x1 - x0) * 2 - 1
+    }).toArray
+
+    val N = mask.size(1)
+    // val grid = Tensor[Float](N, img_y.length, img_x.length, 2)
+    val grid = Tensor[Float](img_y.length, img_x.length, 2)
+
+    val gridArray = grid.storage().array()
+    val gridOffset = grid.storageOffset() - 1
+    var yOffset = 0
+    var i = 0
+    while (i < grid.nElement()) {
+      for (j <- 0 until img_x.length) {
+        gridArray(gridOffset + i) = img_x(j).toFloat
+        gridArray(gridOffset + i + 1) = img_y(yOffset).toFloat
+        i += 2
+      }
+      yOffset += 1
+    }
+
+    val output = Tensor[Float]()
+
+    gridSamplerWithBilinear(mask, grid, output)
+
+    if (thresh >= 0) {
+      output.apply1(m => if (m > thresh) 1 else 0)
+    } else {
+      output.mul(255.0f)
+    }
+
+    binaryMask.narrow(1, y0_int + 1, y1_int - y0_int)
+      .narrow(2, x0_int + 1, x1_int - x0_int).copy(output)
+  }
+
+  def gridSamplerWithBilinear(input: Tensor[Float], grid: Tensor[Float],
+                              output: Tensor[Float]): Tensor[Float] = {
+    val C = input.size(1)
+    val IH = input.size(2)
+    val IW = input.size(3)
+    val H = grid.size(1)
+    val W = grid.size(2)
+
+    output.resize(C, H, W)
+    for (h <- 0 until H) {
+      for (w <- 0 until W) {
+        // get the corresponding input x, y co-ordinates from grid
+        var ix = grid.valueAt(h + 1, w + 1, 1)
+        var iy = grid.valueAt(h + 1, w + 1, 2)
+
+        // normalize ix, iy from [-1, 1] to [0, IH-1] & [0, IW-1]
+        ix = ((ix + 1) / 2) * (IW-1)
+        iy = ((iy + 1) / 2) * (IH-1)
+
+        // get NE, NW, SE, SW pixel values from (x, y)
+        val ix_nw: Int = ix.toInt
+        val iy_nw: Int = iy.toInt
+        val ix_ne: Int = ix_nw + 1
+        val iy_ne: Int = iy_nw
+        val ix_sw: Int = ix_nw
+        val iy_sw: Int = iy_nw + 1
+        val ix_se: Int = ix_nw + 1
+        val iy_se: Int = iy_nw + 1
+
+        // get surfaces to each neighbor:
+        val nw = (ix_se - ix) * (iy_se - iy)
+        val ne = (ix    - ix_sw) * (iy_sw - iy)
+        val sw = (ix_ne - ix) * (iy    - iy_ne)
+        val se = (ix    - ix_nw) * (iy    - iy_nw)
+
+        // calculate bilinear weighted pixel value and set output pixel
+        for (c <- 0 until C) {
+          val nw_val = safeGet(input, c, iy_nw, ix_nw)
+          val ne_val = safeGet(input, c, iy_ne, ix_ne)
+          val sw_val = safeGet(input, c, iy_sw, ix_sw)
+          val se_val = safeGet(input, c, iy_se, ix_se)
+          val out_val = nw_val * nw + ne_val * ne + sw_val * sw + se_val * se
+          output.setValue(c + 1, h + 1, w + 1, out_val)
+        }
+      }
+    }
+
+    output
+  }
 //
-//    val height = binaryMask.size(1)
-//    val width = binaryMask.size(2)
+//  // input shape (C, H', W'), grid shape (H, W, 2), output shape (C, H, W)
+//  def gridSamplerWithBilinear(input: Tensor[Float], grid: Tensor[Float],
+//                              output: Tensor[Float]): Tensor[Float] = {
+//    val N = input.size(1)
+//    val C = input.size(2)
+//    val IH = input.size(3)
+//    val IW = input.size(4)
+//    val H = grid.size(2)
+//    val W = grid.size(3)
 //
-//    // do paste mask
-//    val x0 = box.valueAt(1)
-//    val y0 = box.valueAt(2)
-//    val x1 = box.valueAt(3)
-//    val y1 = box.valueAt(4)
-//
-//    val x0_int = math.max(math.floor(x0) - 1, 0).toInt
-//    val y0_int = math.max(math.floor(y0) - 1, 0).toInt
-//
-//    val x1_int = math.min(math.ceil(x1) + 1, height).toInt
-//    val y1_int = math.min(math.ceil(y1) + 1, width).toInt
-//
-//    val img_y = (0 until (y1_int - y0_int)).map(v => {
-//      val t = v + 0.5
-//      (t - y0) / (y1 - y0) * 2 - 1
-//    }).toArray
-//    val img_x = (0 until (x1_int - x0_int)).map(v => {
-//      val t = v + 0.5
-//      (t - x0) / (x1 - x0) * 2 - 1
-//    }).toArray
-//
-//    val graid
-//
-//    gx = img_x[:, None, :].expand(N, img_y.size(1), img_x.size(1))
-//    gy = img_y[:, :, None].expand(N, img_y.size(1), img_x.size(1))
-//    grid = torch.stack([gx, gy], dim=3)
-//
-//
-//    val (paddedMask, scale) = expandMasks(mask, padding)
-//    val boxExpand = Tensor[Float]().resizeAs(box)
-//    expandBoxes(box, boxExpand, scale)
-//
-//    val w = math.max(boxExpand.valueAt(3).toInt - boxExpand.valueAt(1).toInt + 1, 1)
-//    val h = math.max(boxExpand.valueAt(4).toInt - boxExpand.valueAt(2).toInt + 1, 1)
-//
-//    paddedMask.resize(1, paddedMask.size(2), paddedMask.size(3))
-//    val interpMask = Tensor[Float](1, h, w)
-//    bilinear(paddedMask, interpMask)
-//
-//    if (thresh >= 0) {
-//      interpMask.apply1(m => if (m > thresh) 1 else 0)
-//    } else {
-//      interpMask.mul(255.0f)
-//    }
-//
-//    val imgHeight = binaryMask.size(1)
-//    val imgWide = binaryMask.size(2)
-//
-//    val x_0 = math.max(boxExpand.valueAt(1).toInt, 0)
-//    val x_1 = math.min(boxExpand.valueAt(3).toInt + 1, imgWide)
-//    val y_0 = math.max(boxExpand.valueAt(2).toInt, 0)
-//    val y_1 = math.min(boxExpand.valueAt(4).toInt + 1, imgHeight)
-//
-//    val maskX0 = y_0 - boxExpand.valueAt(2).toInt
-//    val maskX1 = y_1 - boxExpand.valueAt(2).toInt
-//    val maskY0 = x_0 - boxExpand.valueAt(1).toInt
-//    val maskY1 = x_1 - boxExpand.valueAt(1).toInt
-//
-//    binaryMask.narrow(1, y_0 + 1, y_1 - y_0).narrow(2, x_0 + 1, x_1 - x_0).copy(
-//      interpMask.narrow(2, maskX0 + 1, maskX1 - maskX0).narrow(3, maskY0 + 1, maskY1 - maskY0))
-//  }
-//
-//  def grid_sampler_3d_cpu_impl(input: Tensor[Float], grid: Tensor[Float],
-//    interpolation_mode: String = "bilinear", padding_mode: String = "zero",
-//    align_corners: Boolean = false) {
-//    val N = input.size(0)
-//    val C = input.size(1)
-//    val inp_D = input.size(2)
-//    val inp_H = input.size(3)
-//    val inp_W = input.size(4)
-//    val out_D = grid.size(1)
-//    val out_H = grid.size(2)
-//    val out_W = grid.size(3)
-//    val output = Tensor[Float](N, C, out_D, out_H, out_W)
-//
-//    val inp_sN = input.stride(0)
-//    val inp_sC = input.stride(1)
-//    val inp_sD = input.stride(2)
-//    val inp_sH = input.stride(3)
-//    val inp_sW = input.stride(4)
-//    val grid_sN = grid.stride(0)
-//    val grid_sD = grid.stride(1)
-//    val grid_sH = grid.stride(2)
-//    val grid_sW = grid.stride(3)
-//    val grid_sCoor = grid.stride(4)
-//    val out_sN = output.stride(0)
-//    val out_sC = output.stride(1)
-//    val out_sD = output.stride(2)
-//    val out_sH = output.stride(3)
-//    val out_sW = output.stride(4)
-//
-//    val inp_ptr = input.storage().array()
-//    val out_ptr = output.storage().array()
-//    val grid_ptr = grid.storage().array()
-//
+//    output.resize(N, C, H, W)
 //    for (n <- 0 until N) {
-//      val grid_ptr_N = n * grid_sN // grid_ptr(n * grid_sN)
-//      val inp_ptr_N = n * inp_sN // inp_ptr(n * inp_sN)
-//      for (d <- 0 until out_D) {
-//        for (h <- 0 until out_H) {
-//          for (w <- 0 until out_W) {
-//            // get the corresponding input x, y, z co-ordinates from grid
-//            val grid_ptr_NDHW = grid_ptr_N + d * grid_sD + h * grid_sH + w * grid_sW;
-//            val ix = grid_ptr(grid_ptr_NDHW)
-//            val iy = grid_ptr(grid_ptr_NDHW + grid_sCoor)
-//            val iz = grid_ptr(grid_ptr_NDHW + 2 * grid_sCoor)
+//      for (h <- 0 until H) {
+//        for (w <- 0 until W) {
+//          // get the corresponding input x, y co-ordinates from grid
+//          var ix = grid.valueAt(n + 1, h + 1, w + 1, 1)
+//          var iy = grid.valueAt(n + 1, h + 1, w + 1, 2)
 //
-//            ix = grid_sampler_compute_source_index(ix, inp_W, padding_mode, align_corners);
-//            iy = grid_sampler_compute_source_index(iy, inp_H, padding_mode, align_corners);
-//            iz = grid_sampler_compute_source_index(iz, inp_D, padding_mode, align_corners);
+//          // normalize ix, iy from [-1, 1] to [0, IH-1] & [0, IW-1]
+//          ix = ((ix + 1) / 2) * (IW-1)
+//          iy = ((iy + 1) / 2) * (IH-1)
 //
-//            if (interpolation_mode == "bilinear") {
-//              // get corner pixel values from (x, y, z)
-//              // for 4d, we used north-east-south-west
-//              // for 5d, we add top-bottom
-//              val ix_tnw = math.floor(ix).toInt
-//              val iy_tnw = math.floor(iy).toInt
-//              val iz_tnw = math.floor(iz).toInt
+//          // get NE, NW, SE, SW pixel values from (x, y)
+//          val ix_nw: Int = ix.toInt
+//          val iy_nw: Int = iy.toInt
+//          val ix_ne: Int = ix_nw + 1
+//          val iy_ne: Int = iy_nw
+//          val ix_sw: Int = ix_nw
+//          val iy_sw: Int = iy_nw + 1
+//          val ix_se: Int = ix_nw + 1
+//          val iy_se: Int = iy_nw + 1
 //
-//              val ix_tne: Int = ix_tnw + 1
-//              val iy_tne: Int = iy_tnw
-//              val iz_tne: Int = iz_tnw
+//          // get surfaces to each neighbor:
+//          val nw = (ix_se - ix) * (iy_se - iy)
+//          val ne = (ix    - ix_sw) * (iy_sw - iy)
+//          val sw = (ix_ne - ix) * (iy    - iy_ne)
+//          val se = (ix    - ix_nw) * (iy    - iy_nw)
 //
-//              val ix_tsw: Int = ix_tnw
-//              val iy_tsw: Int = iy_tnw + 1
-//              val iz_tsw: Int = iz_tnw
-//
-//              val ix_tse: Int = ix_tnw + 1
-//              val iy_tse: Int = iy_tnw + 1
-//              val iz_tse: Int = iz_tnw
-//
-//              val ix_bnw: Int = ix_tnw
-//              val iy_bnw: Int = iy_tnw
-//              val iz_bnw: Int = iz_tnw + 1
-//
-//              val ix_bne: Int = ix_tnw + 1
-//              val iy_bne: Int = iy_tnw
-//              val iz_bne: Int = iz_tnw + 1
-//
-//              val ix_bsw: Int = ix_tnw
-//              val iy_bsw: Int = iy_tnw + 1
-//              val iz_bsw: Int = iz_tnw + 1
-//
-//              val ix_bse: Int = ix_tnw + 1
-//              val iy_bse: Int = iy_tnw + 1
-//              val iz_bse: Int = iz_tnw + 1
-//
-//              // get surfaces to each neighbor:
-//              val tnw = (ix_bse - ix) * (iy_bse - iy) * (iz_bse - iz);
-//              val tne = (ix - ix_bsw) * (iy_bsw - iy) * (iz_bsw - iz);
-//              val tsw = (ix_bne - ix) * (iy - iy_bne) * (iz_bne - iz);
-//              val tse = (ix - ix_bnw) * (iy - iy_bnw) * (iz_bnw - iz);
-//              val bnw = (ix_tse - ix) * (iy_tse - iy) * (iz - iz_tse);
-//              val bne = (ix - ix_tsw) * (iy_tsw - iy) * (iz - iz_tsw);
-//              val bsw = (ix_tne - ix) * (iy - iy_tne) * (iz - iz_tne);
-//              val bse = (ix - ix_tnw) * (iy - iy_tnw) * (iz - iz_tnw);
-//
-//              // calculate bilinear weighted pixel value and set output pixel
-//              var out_ptr_NCDHW = n * out_sN + d * out_sD + h * out_sH + w * out_sW // out_ptr
-//              var inp_ptr_NC = inp_ptr_N
-//              for (c <- 0 until C) {
-//                out_ptr_NCDHW += out_sC
-//                inp_ptr_NC += inp_sC
-//
-//                if (within_bounds_3d(iz_tnw, iy_tnw, ix_tnw, inp_D, inp_H, inp_W)) {
-//                  out_ptr(out_ptr_NCDHW) += inp_ptr(inp_ptr_NC + iz_tnw * inp_sD + iy_tnw * inp_sH + ix_tnw * inp_sW) * tnw
-//                }
-//                if (within_bounds_3d(iz_tne, iy_tne, ix_tne, inp_D, inp_H, inp_W)) {
-//                  out_ptr(out_ptr_NCDHW) += inp_ptr(inp_ptr_NC + iz_tne * inp_sD + iy_tne * inp_sH + ix_tne * inp_sW) * tne
-//                }
-//                if (within_bounds_3d(iz_tsw, iy_tsw, ix_tsw, inp_D, inp_H, inp_W)) {
-//                  out_ptr(out_ptr_NCDHW) += inp_ptr(inp_ptr_NC + iz_tsw * inp_sD + iy_tsw * inp_sH + ix_tsw * inp_sW) * tsw
-//                }
-//                if (within_bounds_3d(iz_tse, iy_tse, ix_tse, inp_D, inp_H, inp_W)) {
-//                  out_ptr(out_ptr_NCDHW) += inp_ptr(inp_ptr_NC + iz_tse * inp_sD + iy_tse * inp_sH + ix_tse * inp_sW) * tse
-//                }
-//                if (within_bounds_3d(iz_bnw, iy_bnw, ix_bnw, inp_D, inp_H, inp_W)) {
-//                  out_ptr(out_ptr_NCDHW) += inp_ptr(inp_ptr_NC + iz_bnw * inp_sD + iy_bnw * inp_sH + ix_bnw * inp_sW) * bnw
-//                }
-//                if (within_bounds_3d(iz_bne, iy_bne, ix_bne, inp_D, inp_H, inp_W)) {
-//                  out_ptr(out_ptr_NCDHW) += inp_ptr(inp_ptr_NC + iz_bne * inp_sD + iy_bne * inp_sH + ix_bne * inp_sW) * bne
-//                }
-//                if (within_bounds_3d(iz_bsw, iy_bsw, ix_bsw, inp_D, inp_H, inp_W)) {
-//                  out_ptr(out_ptr_NCDHW) += inp_ptr(inp_ptr_NC + iz_bsw * inp_sD + iy_bsw * inp_sH + ix_bsw * inp_sW) * bsw
-//                }
-//                if (within_bounds_3d(iz_bse, iy_bse, ix_bse, inp_D, inp_H, inp_W)) {
-//                  out_ptr(out_ptr_NCDHW) += inp_ptr(inp_ptr_NC + iz_bse * inp_sD + iy_bse * inp_sH + ix_bse * inp_sW) * bse
-//                }
-//              }
-//            }
+//          // calculate bilinear weighted pixel value and set output pixel
+//          for (c <- 0 until C) {
+//            val nw_val = safeGet(input, n, c, iy_nw, ix_nw)
+//            val ne_val = safeGet(input, n, c, iy_ne, ix_ne)
+//            val sw_val = safeGet(input, n, c, iy_sw, ix_sw)
+//            val se_val = safeGet(input, n, c, iy_se, ix_se)
+//            val out_val = nw_val * nw + ne_val * ne + sw_val * sw + se_val * se
+//            output.setValue(n + 1, c + 1, h + 1, w + 1, out_val)
 //          }
 //        }
 //      }
-//    return output
+//    }
+//
+//    output
 //  }
 
+//  def safeGet(input: Tensor[Float], c: Int, h: Int, w: Int) : Float = {
+//    if (h < input.size(3) && h >= 0 && w < input.size(4) && w >= 0) {
+//      input.valueAt(c + 1, h + 1, w + 1)
+//    } else 0
+//  }
+
+  def safeGet(input: Tensor[Float], c: Int, h: Int, w: Int) : Float = {
+    if (h < input.size(2) && h >= 0 && w < input.size(3) && w >= 0) {
+      input.valueAt(c + 1, h + 1, w + 1)
+    } else 0
+  }
 
   // input & output should be 3 dims with (n, height, width)
   def bilinear(input: Tensor[Float], output: Tensor[Float],
