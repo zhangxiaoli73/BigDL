@@ -64,25 +64,24 @@ class BoxHead(
     Graph(Array(features, proposals, imageInfo), Array(boxFeatures, result))
   }
 
-//  override def updateOutput(input: Activity): Activity = {
-//    val features = input.toTable[Table](1)
-//    val proposals = input.toTable[Table](2)
-//    val imageInfo = input.toTable[Tensor[Float]](3)
-//
-//
-//    val boxFeatures = model.apply("boxFeatures").get
-//    val classLogits = model.apply("roi_heads.box_predictor.cls_score").get
-//    val boxRegression = model.apply("roi_heads.box_predictor.bbox_pred").get
-//    val result = model.apply("result").get
-//
-//    val out1 = boxFeatures.forward(T(features, proposals))
-//    val out2 = classLogits.forward(out1)
-//    val out3 = boxRegression.forward(out1)
-//    val out4 = result.forward(T(out2, out3, proposals, imageInfo))
-//
-//    output = out4 // model.updateOutput(input)
-//    output
-//  }
+  override def updateOutput(input: Activity): Activity = {
+    val features = input.toTable[Table](1)
+    val proposals = input.toTable[Table](2)
+    val imageInfo = input.toTable[Tensor[Float]](3)
+
+    val boxFeatures = model.apply("boxFeatures").get
+    val classLogits = model.apply("roi_heads.box_predictor.cls_score").get
+    val boxRegression = model.apply("roi_heads.box_predictor.bbox_pred").get
+    val result = model.apply("result").get
+
+    val out1 = boxFeatures.forward(T(features, proposals))
+    val out2 = classLogits.forward(out1)
+    val out3 = boxRegression.forward(out1)
+    val out4 = result.forward(T(out2, out3, proposals, imageInfo))
+
+    output = T(boxFeatures, out4) // model.updateOutput(input)
+    output
+  }
 
   private[nn] def clsPredictor(numClass: Int,
                                inChannels: Int): Module[Float] = {

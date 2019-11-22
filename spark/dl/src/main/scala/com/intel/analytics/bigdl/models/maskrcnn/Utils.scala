@@ -22,7 +22,7 @@ import breeze.numerics.{floor, round}
 import com.intel.analytics.bigdl.nn.{Bilinear, ResizeBilinear}
 import com.intel.analytics.bigdl.nn.abstractnn.DataFormat
 import com.intel.analytics.bigdl.tensor.Tensor
-import com.intel.analytics.bigdl.utils.T
+import com.intel.analytics.bigdl.utils.{T, Table}
 import com.sun.xml.internal.bind.v2.TODO
 
 import scala.collection.mutable.ArrayBuffer
@@ -100,7 +100,7 @@ private[bigdl] object Utils {
   }
 
   // mask and box should be one by one
-  def decodeMaskInImage(mask: Tensor[Float], box: Tensor[Float], binaryMask: Tensor[Float],
+  def decodeMaskInImageOld(mask: Tensor[Float], box: Tensor[Float], binaryMask: Tensor[Float],
     thresh: Float = 0.5f, padding : Int = 1): Unit = {
 
     val (paddedMask, scale) = expandMasks(mask, padding)
@@ -136,10 +136,12 @@ private[bigdl] object Utils {
 
     binaryMask.narrow(1, y_0 + 1, y_1 - y_0).narrow(2, x_0 + 1, x_1 - x_0).copy(
       interpMask.narrow(2, maskX0 + 1, maskX1 - maskX0).narrow(3, maskY0 + 1, maskY1 - maskY0))
+
+    println(interpMask.narrow(2, maskX0 + 1, maskX1 - maskX0).narrow(3, maskY0 + 1, maskY1 - maskY0))
   }
 
   // mask and box should be one by one
-  def decodeMaskInImage2(mask: Tensor[Float], box: Tensor[Float],
+  def decodeMaskInImage(mask: Tensor[Float], box: Tensor[Float],
     binaryMask: Tensor[Float], thresh: Float = 0.5f): Unit = {
 
     val height = binaryMask.size(1)
@@ -185,8 +187,10 @@ private[bigdl] object Utils {
     }
 
     val output = Tensor[Float]()
+    val output2 = Tensor[Float]()
 
     gridSamplerWithBilinear(mask, grid, output)
+    gridSamplerWithBilinearWithCorners(mask, grid, output2, alignCorners = true)
 
     if (thresh >= 0) {
       output.apply1(m => if (m > thresh) 1 else 0)
@@ -196,6 +200,116 @@ private[bigdl] object Utils {
 
     binaryMask.narrow(1, y0_int + 1, y1_int - y0_int)
       .narrow(2, x0_int + 1, x1_int - x0_int).copy(output)
+  }
+
+  def computeInterpParams(x: Float, y: Float, inp_W: Int, inp_H: Int): Table = {
+    // get NE, NW, SE, SW pixel values from (x, y)
+    // assuming we get exact integer representation and just use scalar_t
+    // if we don't, the weights will be garbage anyways.
+    val x_w: Int = x.toInt
+    val y_n: Int = y.toInt
+
+    // get distances to each side
+    val w: Float = x - x_w
+    val e: Float = 1.0f - w
+    val n: Float = y - y_n
+    val s: Float = 1.0f - n
+
+    // get interpolation weights for each neighbor
+    // e.g., for the nw corder, the weight is `dist_to_south * dist_to_east`.
+    val nw = s * e
+    val ne = s * w
+    val sw = n * e
+    val se = n * w
+
+    val i_x_w = x_w.toInt
+    val i_y_n = y_n.toInt
+    val i_x_e = i_x_w + 1
+    val i_y_s = i_y_n + 1
+
+    // Use int comparison because it is much faster than float comp with AVX2
+    // (latency 1 cyc vs. 4 cyc on skylake)
+    // Avoid using the le and ge because those are not implemented in AVX2 and
+    // are actually simulated using multiple instructions.
+    //  must_in_bound = padding != GridSamplerPadding::Zeros, so here it is false
+    val w_mask = if ((i_x_w > -1) & (i_x_w < inp_W)) 1 else 0
+    val n_mask = if ((i_y_n > -1) & (i_y_n < inp_H)) 1 else 0
+    val e_mask = if ((i_x_e > -1) & (i_x_e < inp_W)) 1 else 0
+    val s_mask = if ((i_y_s > -1) & (i_y_s < inp_H)) 1 else 0
+    val nw_mask = w_mask & n_mask
+    val ne_mask = e_mask & n_mask
+    val sw_mask = w_mask & s_mask
+    val se_mask = e_mask & s_mask
+
+    T(n, s, w, e, // distances to 4 sides
+      nw, ne, sw, se,  // interpolation weights wrt 4 corners
+      nw_mask, ne_mask, sw_mask, se_mask,  // in_bound masks
+      i_y_n, i_x_w) // y_n and x_w
+  }
+
+  def computeLocation(size: Int, in: Float, alignCorners: Boolean = false): Float = {
+    val max_val = size - 1
+    val scaling_factor = if (alignCorners) (size - 1).toFloat / 2 else size.toFloat / 2
+    val low = if (alignCorners) 0f else -0.5f
+    val twice_span = if (alignCorners) (size - 1) * 2 else size * 2
+    val empty = size <= 0
+
+    if (alignCorners) {
+      (in + 1) * scaling_factor
+    } else (in + 1) * scaling_factor - 0.5f
+  }
+
+  def gridSamplerWithBilinearWithCorners(input: Tensor[Float], grid: Tensor[Float],
+    output: Tensor[Float], alignCorners: Boolean = false): Unit = {
+
+    val C = input.size(1)
+    val IH = input.size(2)
+    val IW = input.size(3)
+    val H = grid.size(1)
+    val W = grid.size(2)
+
+    output.resize(C, H, W)
+
+    for (h <- 0 until H) {
+      for (w <- 0 until W) {
+        // get the corresponding input x, y co-ordinates from grid
+        val x = grid.valueAt(h + 1, w + 1, 1)
+        val y = grid.valueAt(h + 1, w + 1, 2)
+
+        val compute_x = computeLocation(IW, x, alignCorners)
+        val compute_y = computeLocation(IH, y, alignCorners)
+
+        val interp_params = computeInterpParams(compute_x, compute_y, IW, IH)
+
+        val nw = interp_params.get[Float](5).get
+        val ne = interp_params.get[Float](6).get
+        val sw = interp_params.get[Float](7).get
+        val se = interp_params.get[Float](8).get
+
+        val nw_mask = interp_params.get[Int](9).get
+        val ne_mask = interp_params.get[Int](10).get
+        val sw_mask = interp_params.get[Int](11).get
+        val se_mask = interp_params.get[Int](12).get
+
+        val i_y_n = interp_params.get[Int](13).get
+        val i_x_w = interp_params.get[Int](14).get
+
+        val i_nw_offset = i_y_n * IH + i_x_w * IW
+        val i_ne_offset = i_nw_offset + IW
+        val i_sw_offset = i_nw_offset + IH
+        val i_se_offset = i_sw_offset + IW
+
+
+        for (c <- 0 until C) {
+          val nw_val = safeGet(input, c, i_nw_offset.toInt, nw_mask) // i_nw, nw_mask
+          val ne_val = safeGet(input, c, i_ne_offset.toInt, ne_mask)
+          val sw_val = safeGet(input, c, i_ne_offset.toInt, sw_mask)
+          val se_val = safeGet(input, c, i_se_offset.toInt, se_mask)
+          val out_val = nw_val * nw + ne_val * ne + sw_val * sw + se_val * se
+          output.setValue(c + 1, h + 1, w + 1, out_val)
+        }
+      }
+    }
   }
 
   def gridSamplerWithBilinear(input: Tensor[Float], grid: Tensor[Float],
@@ -216,6 +330,10 @@ private[bigdl] object Utils {
         // normalize ix, iy from [-1, 1] to [0, IH-1] & [0, IW-1]
         ix = ((ix + 1) / 2) * (IW-1)
         iy = ((iy + 1) / 2) * (IH-1)
+
+        // for align corners
+//        ix = ((ix + 1) / 2) * IW - 0.5f
+//        iy = ((iy + 1) / 2) * IH - 0.5f
 
         // get NE, NW, SE, SW pixel values from (x, y)
         val ix_nw: Int = ix.toInt

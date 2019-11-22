@@ -16,7 +16,6 @@
 
 package com.intel.analytics.bigdl.transform.vision.image.augmentation
 
-import breeze.linalg.*
 import com.intel.analytics.bigdl.dataset.segmentation.PolyMasks
 import com.intel.analytics.bigdl.transform.vision.image.{FeatureTransformer, ImageFeature}
 import com.intel.analytics.bigdl.transform.vision.image.label.roi.RoiLabel
@@ -42,21 +41,20 @@ object ScaleResize {
 class ScaleResize(minSize: Int, maxSize: Int = -1, resizeROI: Boolean = false)
   extends FeatureTransformer {
   private def getSize(sizeH: Int, sizeW: Int): (Int, Int) = {
-    var size = minSize
-    if (maxSize > 0) {
-      val (minOrigSize, maxOrigSize) = if (sizeW > sizeH) (sizeH, sizeW) else (sizeW, sizeH)
-      val thread = maxOrigSize.toFloat / minOrigSize * size
-      if (thread > maxSize) size = math.round(maxSize.toFloat * minOrigSize / maxOrigSize)
+    val scale = minSize.toFloat / math.min(sizeH, sizeW)
+    var (newH, newW) = if (sizeH < sizeW) {
+      (minSize.toFloat, scale * sizeW)
+    } else (scale * sizeH, minSize.toFloat)
+
+    if (math.max(newH.toDouble, newW.toDouble) > maxSize) {
+      val scale = maxSize.toFloat / math.max(sizeH, sizeW)
+      newH = newH * scale
+      newW = newW * scale
     }
 
-    // todo: check
-    if ((sizeW <= sizeH && sizeW == size) || (sizeH <= sizeW && sizeH == size)) {
-      (sizeH, sizeW)
-    } else if (sizeW < sizeH) {
-      (math.round(size * sizeH / sizeW), size)
-    } else {
-      (size, math.round(size.toFloat * sizeW / sizeH))
-    }
+    newW = (newW + 0.5).toInt
+    newH = (newH + 0.5).toInt
+    (newH.toInt, newW.toInt)
   }
 
   override def transformMat(feature: ImageFeature): Unit = {

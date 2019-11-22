@@ -177,7 +177,21 @@ class MaskRCNN(val inChannels: Int,
     model
   }
 
+  def debugTests(): Table = {
+    val postOutput = T()
+    postOutput.update(RoiImageInfo.MASKS, GroudTrue.getMasks())
+    postOutput.update(RoiImageInfo.BBOXES, GroudTrue.bbox)
+    postOutput.update(RoiImageInfo.CLASSES, GroudTrue.labels)
+    postOutput.update(RoiImageInfo.SCORES, GroudTrue.scores)
+
+    T(postOutput)
+  }
+
+  val expected = Tensor[Float]()
   override def updateOutput(input: Activity): Activity = {
+//    output = debugTests()
+//    return output
+
     val inputFeatures = input.toTable[Tensor[Float]](1)
     // image info with shape (batchSize, 4)
     // contains all images info (height, width, original height, original width)
@@ -200,8 +214,8 @@ class MaskRCNN(val inChannels: Int,
     val labelsBox = postProcessorBox[Tensor[Float]](1)
     val proposalsBox = postProcessorBox[Table](2)
     val scores = postProcessorBox[Tensor[Float]](3)
-    if (labelsBox.size(1) > 0) {
-      val masks = maskHead.forward(T(features, proposalsBox, labelsBox)).toTable
+    if (labelsBox.isEmpty || labelsBox.size(1) > 0) {
+      val masks =  maskHead.forward(T(features, proposalsBox, labelsBox)).toTable
       if (this.isTraining()) {
         output = T(proposalsBox, labelsBox, masks, scores)
       } else {
@@ -260,12 +274,19 @@ class MaskRCNN(val inChannels: Int,
         val masksRLE = new Array[RLEMasks](boxNumber)
         for (j <- 0 to boxNumber - 1) {
           binaryMask.fill(0.0f)
-          Utils.decodeMaskInImage(maskPerImg.select(1, j + 1), bboxPerImg.select(1, j + 1),
+          val t1 = maskPerImg.select(1, j + 1).clone()
+          val t2 = bboxPerImg.select(1, j + 1).clone()
+          val binaryTemp = Tensor[Float]().resizeAs(binaryMask)
+          Utils.decodeMaskInImageOld(maskPerImg.select(1, j + 1), bboxPerImg.select(1, j + 1),
             binaryMask = binaryMask)
+
+          Utils.decodeMaskInImage(t1, t2, binaryMask = binaryTemp)
+
           masksRLE(j) = MaskUtils.binaryToRLE(binaryMask)
         }
         start += boxNumber
 
+        println(s"bbbbbbbbb ${boxNumber}")
         postOutput.update(RoiImageInfo.MASKS, masksRLE)
         postOutput.update(RoiImageInfo.BBOXES, bboxPerImg)
         postOutput.update(RoiImageInfo.CLASSES, classPerImg)

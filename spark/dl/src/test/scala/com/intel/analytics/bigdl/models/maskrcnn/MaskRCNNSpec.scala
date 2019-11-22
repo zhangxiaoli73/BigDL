@@ -834,7 +834,7 @@ class MaskRCNNSpec extends FlatSpec with Matchers {
         1.6208e-02, 1.6369e-02, 1.8532e-02, 2.4577e-02, 2.7273e-02,
         3.5908e-02, 7.6555e-02, 8.2874e-02)))))
 
-    val bbox = Tensor[Float](T(400., 280., 401., 282.))
+    val bbox = Tensor[Float](T(400.0f, 280.0f, 401.0f, 282.0f))
 
     val imageHeight = 426
     val imageWidth = 640
