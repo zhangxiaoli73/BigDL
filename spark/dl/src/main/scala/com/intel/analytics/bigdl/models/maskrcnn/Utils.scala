@@ -262,26 +262,26 @@ private[bigdl] object Utils {
     v
   }
 
-  def maskGather(src: Array[Float], base_addr: Array[Float],
-                 mask: Array[Float], offset: Int, index: Int): Unit = {
-    val size = 8
-    val scale = 4
-    val buffer = new ArrayBuffer[Float]()
-    for (i <- 0 until size) {
-      if (mask(i + offset) & 0x01) {
-        // check highest bit
-        buffer.append(base_addr[index_arr[i] * scale / sizeof(T)])
-      } else {
-        buffer.append(src(i))
-      }
-    }
-    mask = Vec256 < T > (); // "zero out" mask
-    return Vec256 < T >:: loadu(static_cast < void *> (buffer));
-  }
+//  def maskGather(src: Array[Float], base_addr: Array[Float],
+//                 mask: Int, offset: Int, index: Int): Unit = {
+//    val size = 8
+//    val scale = 4
+//    val buffer = new ArrayBuffer[Float]()
+//    for (i <- 0 until size) {
+//      if (mask & 0x01) {
+//        // check highest bit
+//        buffer.append(base_addr[index_arr[i] * scale / sizeof(T)])
+//      } else {
+//        buffer.append(src(i))
+//      }
+//    }
+//    mask = Vec256 < T > (); // "zero out" mask
+//    return Vec256 < T >:: loadu(static_cast < void *> (buffer));
+//  }
 
-  def maskGather(input: Array[Float], index: Int) : Float = {
-    if (index > 0 && index <= input.length) {
-      input(index - 1)
+  def maskGather(input: Tensor[Float], c: Int, index: Int, index2: Int, height: Int, width: Int) : Float = {
+    if (index >= 0 && index < height && index2 > 0 && index2 <= width) {
+      input.valueAt(c + 1, index + 1, index2)
     } else 0
   }
 
@@ -311,22 +311,6 @@ private[bigdl] object Utils {
 
         val interp_params = computeInterpParams(compute_x, compute_y, IW, IH)
 
-        // debug
-//        val nw = 0.000000f
-//        val ne = 0.000000f
-//        val sw = 0.000000f
-//        val se = 0.000000f
-//        val nw_mask = 0.000031f
-//        val ne_mask = 0.000000f
-//        val sw_mask = 0.000031f
-//        val se_mask = 0.007813f
-//        val i_y_n = 0.000000f
-//        val i_x_w = 0.000031f
-//        val i_nw_offset = 0.000031f
-//        val i_ne_offset = 0.000031f
-//        val i_sw_offset = 0.000000f
-//        val i_se_offset = 0.000031f
-
         val nw = interp_params.get[Float](5).get
         val ne = interp_params.get[Float](6).get
         val sw = interp_params.get[Float](7).get
@@ -347,10 +331,16 @@ private[bigdl] object Utils {
 
 
         for (c <- 0 until C) {
-          val nw_val = maskGather(inputArr, i_nw_offset.toInt + nw_mask) // i_nw, nw_mask
-          val ne_val = maskGather(inputArr, i_ne_offset.toInt + ne_mask)
-          val sw_val = maskGather(inputArr, i_sw_offset.toInt + sw_mask)
-          val se_val = maskGather(inputArr, i_se_offset.toInt + se_mask)
+//          val nw_val = maskGather(inputArr, i_nw_offset.toInt, nw_mask) // i_nw, nw_mask
+//          val ne_val = maskGather(inputArr, i_ne_offset.toInt, ne_mask)
+//          val sw_val = maskGather(inputArr, i_sw_offset.toInt, sw_mask)
+//          val se_val = maskGather(inputArr, i_se_offset.toInt, se_mask)
+
+          val nw_val = maskGather(input, c, i_nw_offset.toInt, nw_mask, IH, IW) // i_nw, nw_mask
+          val ne_val = maskGather(input, c, i_ne_offset.toInt, ne_mask, IH, IW)
+          val sw_val = maskGather(input, c, i_sw_offset.toInt, sw_mask, IH, IW)
+          val se_val = maskGather(input, c, i_se_offset.toInt, se_mask, IH, IW)
+
           val out_val = nw_val * nw + ne_val * ne + sw_val * sw + se_val * se
           output.setValue(c + 1, h + 1, w + 1, out_val)
         }
