@@ -175,6 +175,10 @@ class RoiAlignSpec extends FlatSpec with Matchers {
       assert(Math.abs(res.storage().array()(i) - expectedRes(i)) < 1e-6)
     }
   }
+
+  "backward" should "work correctly" in {
+
+  }
 }
 
 class RoiAlignSerialTest extends ModuleSerializationTest {

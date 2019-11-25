@@ -1536,4 +1536,20 @@ class UtilsSpec extends FlatSpec with Matchers {
 
     println("done")
   }
+
+  "uuu" should "be ok" in {
+    val mask = Tensor[Float](T(T(T(1.0, 2.0))))
+    val grid=Tensor[Float](T(T(
+      T(-2.0000, -1.0000),
+      T(0.0000, -1.0000),
+      T(2.0000, -1.0000))))
+
+    val out = Tensor[Float]()
+    val out2 = Tensor[Float]()
+
+    Utils.gridSamplerWithBilinearWithCorners(mask, grid, out, alignCorners = false)
+    // Utils.gridSamplerWithBilinear(mask, grid, out2)
+
+    println("done")
+  }
 }

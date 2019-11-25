@@ -206,8 +206,8 @@ private[bigdl] object Utils {
     // get NE, NW, SE, SW pixel values from (x, y)
     // assuming we get exact integer representation and just use scalar_t
     // if we don't, the weights will be garbage anyways.
-    val x_w: Int = x.toInt
-    val y_n: Int = y.toInt
+    val x_w: Int = math.floor(x.toDouble).toInt
+    val y_n: Int = math.floor(y.toDouble).toInt
 
     // get distances to each side
     val w: Float = x - x_w
@@ -254,9 +254,35 @@ private[bigdl] object Utils {
     val twice_span = if (alignCorners) (size - 1) * 2 else size * 2
     val empty = size <= 0
 
-    if (alignCorners) {
+    val v = if (alignCorners) {
       (in + 1) * scaling_factor
     } else (in + 1) * scaling_factor - 0.5f
+
+    print(s"location location ${v}")
+    v
+  }
+
+  def maskGather(src: Array[Float], base_addr: Array[Float],
+                 mask: Array[Float], offset: Int, index: Int): Unit = {
+    val size = 8
+    val scale = 4
+    val buffer = new ArrayBuffer[Float]()
+    for (i <- 0 until size) {
+      if (mask(i + offset) & 0x01) {
+        // check highest bit
+        buffer.append(base_addr[index_arr[i] * scale / sizeof(T)])
+      } else {
+        buffer.append(src(i))
+      }
+    }
+    mask = Vec256 < T > (); // "zero out" mask
+    return Vec256 < T >:: loadu(static_cast < void *> (buffer));
+  }
+
+  def maskGather(input: Array[Float], index: Int) : Float = {
+    if (index > 0 && index <= input.length) {
+      input(index - 1)
+    } else 0
   }
 
   def gridSamplerWithBilinearWithCorners(input: Tensor[Float], grid: Tensor[Float],
@@ -267,6 +293,10 @@ private[bigdl] object Utils {
     val IW = input.size(3)
     val H = grid.size(1)
     val W = grid.size(2)
+    val inp_sH = input.stride(2)
+    val inp_sW = input.stride(3)
+    val inputArr = input.storage().array()
+    val inputOffset = input.storageOffset() - 1
 
     output.resize(C, H, W)
 
@@ -281,6 +311,22 @@ private[bigdl] object Utils {
 
         val interp_params = computeInterpParams(compute_x, compute_y, IW, IH)
 
+        // debug
+//        val nw = 0.000000f
+//        val ne = 0.000000f
+//        val sw = 0.000000f
+//        val se = 0.000000f
+//        val nw_mask = 0.000031f
+//        val ne_mask = 0.000000f
+//        val sw_mask = 0.000031f
+//        val se_mask = 0.007813f
+//        val i_y_n = 0.000000f
+//        val i_x_w = 0.000031f
+//        val i_nw_offset = 0.000031f
+//        val i_ne_offset = 0.000031f
+//        val i_sw_offset = 0.000000f
+//        val i_se_offset = 0.000031f
+
         val nw = interp_params.get[Float](5).get
         val ne = interp_params.get[Float](6).get
         val sw = interp_params.get[Float](7).get
@@ -294,17 +340,17 @@ private[bigdl] object Utils {
         val i_y_n = interp_params.get[Int](13).get
         val i_x_w = interp_params.get[Int](14).get
 
-        val i_nw_offset = i_y_n * IH + i_x_w * IW
-        val i_ne_offset = i_nw_offset + IW
-        val i_sw_offset = i_nw_offset + IH
-        val i_se_offset = i_sw_offset + IW
+        val i_nw_offset = i_y_n * inp_sH + i_x_w * inp_sW
+        val i_ne_offset = i_nw_offset + inp_sW
+        val i_sw_offset = i_nw_offset + inp_sH
+        val i_se_offset = i_sw_offset + inp_sW
 
 
         for (c <- 0 until C) {
-          val nw_val = safeGet(input, c, i_nw_offset.toInt, nw_mask) // i_nw, nw_mask
-          val ne_val = safeGet(input, c, i_ne_offset.toInt, ne_mask)
-          val sw_val = safeGet(input, c, i_ne_offset.toInt, sw_mask)
-          val se_val = safeGet(input, c, i_se_offset.toInt, se_mask)
+          val nw_val = maskGather(inputArr, i_nw_offset.toInt + nw_mask) // i_nw, nw_mask
+          val ne_val = maskGather(inputArr, i_ne_offset.toInt + ne_mask)
+          val sw_val = maskGather(inputArr, i_sw_offset.toInt + sw_mask)
+          val se_val = maskGather(inputArr, i_se_offset.toInt + se_mask)
           val out_val = nw_val * nw + ne_val * ne + sw_val * sw + se_val * se
           output.setValue(c + 1, h + 1, w + 1, out_val)
         }
@@ -346,10 +392,26 @@ private[bigdl] object Utils {
         val iy_se: Int = iy_nw + 1
 
         // get surfaces to each neighbor:
-        val nw = (ix_se - ix) * (iy_se - iy)
-        val ne = (ix    - ix_sw) * (iy_sw - iy)
-        val sw = (ix_ne - ix) * (iy    - iy_ne)
-        val se = (ix    - ix_nw) * (iy    - iy_nw)
+//        val nw = (ix_se - ix) * (iy_se - iy)
+//        val ne = (ix    - ix_sw) * (iy_sw - iy)
+//        val sw = (ix_ne - ix) * (iy    - iy_ne)
+//        val se = (ix    - ix_nw) * (iy    - iy_nw)
+
+        // debug 0.000000 0.000000 0.000000 0.000000 // 0.000000 0.000000 0.007813 0.007813 // 0.000031 0.000031 // 0.000031 0.000031 0.000031 0.000031
+        val nw = 0.000000f
+        val ne = 0.000000f
+        val sw = 0.000000f
+        val se = 0.000000f
+        val nw_mask = 0.000031f
+        val ne_mask = 0.000000f
+        val sw_mask = 0.000031f
+        val se_mask = 0.007813f
+        val i_y_n = 0.000000f
+        val i_x_w = 0.000031f
+        val i_nw_offset = 0.000031f
+        val i_ne_offset = 0.000031f
+        val i_sw_offset = 0.000000f
+        val i_se_offset = 0.000031f
 
         // calculate bilinear weighted pixel value and set output pixel
         for (c <- 0 until C) {
@@ -427,8 +489,8 @@ private[bigdl] object Utils {
 //  }
 
   def safeGet(input: Tensor[Float], c: Int, h: Int, w: Int) : Float = {
-    if (h < input.size(2) && h >= 0 && w < input.size(3) && w >= 0) {
-      input.valueAt(c + 1, h + 1, w + 1)
+    if (h < input.size(2) && h >= 0 && w <= input.size(3) && w > 0) {
+      input.valueAt(c + 1, h + 1, w)
     } else 0
   }
 
