@@ -136,8 +136,6 @@ private[bigdl] object Utils {
 
     binaryMask.narrow(1, y_0 + 1, y_1 - y_0).narrow(2, x_0 + 1, x_1 - x_0).copy(
       interpMask.narrow(2, maskX0 + 1, maskX1 - maskX0).narrow(3, maskY0 + 1, maskY1 - maskY0))
-
-    println(interpMask.narrow(2, maskX0 + 1, maskX1 - maskX0).narrow(3, maskY0 + 1, maskY1 - maskY0))
   }
 
   // mask and box should be one by one
@@ -187,10 +185,7 @@ private[bigdl] object Utils {
     }
 
     val output = Tensor[Float]()
-    val output2 = Tensor[Float]()
-
-    gridSamplerWithBilinear(mask, grid, output)
-    gridSamplerWithBilinearWithCorners(mask, grid, output2, alignCorners = true)
+    gridSamplerWithBilinearWithCorners(mask, grid, output, alignCorners = false)
 
     if (thresh >= 0) {
       output.apply1(m => if (m > thresh) 1 else 0)
@@ -257,8 +252,6 @@ private[bigdl] object Utils {
     val v = if (alignCorners) {
       (in + 1) * scaling_factor
     } else (in + 1) * scaling_factor - 0.5f
-
-    print(s"location location ${v}")
     v
   }
 
@@ -279,24 +272,24 @@ private[bigdl] object Utils {
 //    return Vec256 < T >:: loadu(static_cast < void *> (buffer));
 //  }
 
-  def maskGather(input: Tensor[Float], c: Int, index: Int, index2: Int, height: Int, width: Int) : Float = {
-    if (index >= 0 && index < height && index2 > 0 && index2 <= width) {
-      input.valueAt(c + 1, index + 1, index2)
+  def maskGather(input: Array[Float], c: Int, index: Int, index2: Int) : Float = {
+    val t = index2 & 0x01
+    if (index >= 0 && index < input.length && t != 0) {
+      input(c + index)
     } else 0
   }
 
-  def gridSamplerWithBilinearWithCorners(input: Tensor[Float], grid: Tensor[Float],
+  def gridSamplerWithBilinearWithCorners(mask: Tensor[Float], grid: Tensor[Float],
     output: Tensor[Float], alignCorners: Boolean = false): Unit = {
-
-    val C = input.size(1)
-    val IH = input.size(2)
-    val IW = input.size(3)
+    val C = mask.size(1)
+    val IH = mask.size(2)
+    val IW = mask.size(3)
     val H = grid.size(1)
     val W = grid.size(2)
-    val inp_sH = input.stride(2)
-    val inp_sW = input.stride(3)
-    val inputArr = input.storage().array()
-    val inputOffset = input.storageOffset() - 1
+    val inp_sH = mask.stride(2)
+    val inp_sW = mask.stride(3)
+    val inputArr = mask.storage().array()
+    val inputOffset = mask.storageOffset() - 1
 
     output.resize(C, H, W)
 
@@ -324,22 +317,16 @@ private[bigdl] object Utils {
         val i_y_n = interp_params.get[Int](13).get
         val i_x_w = interp_params.get[Int](14).get
 
-        val i_nw_offset = i_y_n * inp_sH + i_x_w * inp_sW
+        val i_nw_offset = i_y_n * inp_sH + i_x_w * inp_sW + inputOffset
         val i_ne_offset = i_nw_offset + inp_sW
         val i_sw_offset = i_nw_offset + inp_sH
         val i_se_offset = i_sw_offset + inp_sW
 
-
         for (c <- 0 until C) {
-//          val nw_val = maskGather(inputArr, i_nw_offset.toInt, nw_mask) // i_nw, nw_mask
-//          val ne_val = maskGather(inputArr, i_ne_offset.toInt, ne_mask)
-//          val sw_val = maskGather(inputArr, i_sw_offset.toInt, sw_mask)
-//          val se_val = maskGather(inputArr, i_se_offset.toInt, se_mask)
-
-          val nw_val = maskGather(input, c, i_nw_offset.toInt, nw_mask, IH, IW) // i_nw, nw_mask
-          val ne_val = maskGather(input, c, i_ne_offset.toInt, ne_mask, IH, IW)
-          val sw_val = maskGather(input, c, i_sw_offset.toInt, sw_mask, IH, IW)
-          val se_val = maskGather(input, c, i_se_offset.toInt, se_mask, IH, IW)
+          val nw_val = maskGather(inputArr, c, i_nw_offset.toInt, nw_mask)
+          val ne_val = maskGather(inputArr, c, i_ne_offset.toInt, ne_mask)
+          val sw_val = maskGather(inputArr, c, i_sw_offset.toInt, sw_mask)
+          val se_val = maskGather(inputArr, c, i_se_offset.toInt, se_mask)
 
           val out_val = nw_val * nw + ne_val * ne + sw_val * sw + se_val * se
           output.setValue(c + 1, h + 1, w + 1, out_val)
@@ -382,26 +369,10 @@ private[bigdl] object Utils {
         val iy_se: Int = iy_nw + 1
 
         // get surfaces to each neighbor:
-//        val nw = (ix_se - ix) * (iy_se - iy)
-//        val ne = (ix    - ix_sw) * (iy_sw - iy)
-//        val sw = (ix_ne - ix) * (iy    - iy_ne)
-//        val se = (ix    - ix_nw) * (iy    - iy_nw)
-
-        // debug 0.000000 0.000000 0.000000 0.000000 // 0.000000 0.000000 0.007813 0.007813 // 0.000031 0.000031 // 0.000031 0.000031 0.000031 0.000031
-        val nw = 0.000000f
-        val ne = 0.000000f
-        val sw = 0.000000f
-        val se = 0.000000f
-        val nw_mask = 0.000031f
-        val ne_mask = 0.000000f
-        val sw_mask = 0.000031f
-        val se_mask = 0.007813f
-        val i_y_n = 0.000000f
-        val i_x_w = 0.000031f
-        val i_nw_offset = 0.000031f
-        val i_ne_offset = 0.000031f
-        val i_sw_offset = 0.000000f
-        val i_se_offset = 0.000031f
+        val nw = (ix_se - ix) * (iy_se - iy)
+        val ne = (ix    - ix_sw) * (iy_sw - iy)
+        val sw = (ix_ne - ix) * (iy    - iy_ne)
+        val se = (ix    - ix_nw) * (iy    - iy_nw)
 
         // calculate bilinear weighted pixel value and set output pixel
         for (c <- 0 until C) {
@@ -479,8 +450,8 @@ private[bigdl] object Utils {
 //  }
 
   def safeGet(input: Tensor[Float], c: Int, h: Int, w: Int) : Float = {
-    if (h < input.size(2) && h >= 0 && w <= input.size(3) && w > 0) {
-      input.valueAt(c + 1, h + 1, w)
+    if (h < input.size(2) && h >= 0 && w < input.size(3) && w >= 0) {
+      input.valueAt(c + 1, h + 1, w + 1)
     } else 0
   }
 

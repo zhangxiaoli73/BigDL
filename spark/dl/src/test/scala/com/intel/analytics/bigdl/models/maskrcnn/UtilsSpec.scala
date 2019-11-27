@@ -1520,8 +1520,6 @@ class UtilsSpec extends FlatSpec with Matchers {
         7.1030e-01, 7.1306e-01, 7.4957e-01, 7.7792e-01, 7.7198e-01,
         6.7963e-01, 6.2604e-01, 4.8368e-01))))
 
-    mask.fill(0.5f)
-
     val bbox = Tensor[Float](T(1.9018, 62.7829, 576.7942, 640.0000))
     val binaryMask = Tensor[Float](640, 586)
     Utils.decodeMaskInImage(mask, bbox, binaryMask = binaryMask)
@@ -1532,7 +1530,7 @@ class UtilsSpec extends FlatSpec with Matchers {
     val out1 = MaskUtils.binaryToRLE(m).counts
     val out2 = GroudTrue.getMasks(height = 640, wide = 586)(0).counts
     require(out1.length == out2.length)
-    for (i <- 0 to out1.length - 1) require(out1(i) == out2(i))
+    for (i <- 0 to out1.length - 1) require(out1(i) == outRLE(i))
 
     println("done")
   }
@@ -1548,8 +1546,11 @@ class UtilsSpec extends FlatSpec with Matchers {
     val out2 = Tensor[Float]()
 
     Utils.gridSamplerWithBilinearWithCorners(mask, grid, out, alignCorners = false)
+    Utils.gridSamplerWithBilinearWithCorners(mask, grid, out2, alignCorners = true)
     // Utils.gridSamplerWithBilinear(mask, grid, out2)
 
+    print(out)
+    print(out2)
     println("done")
   }
 }

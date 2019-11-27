@@ -29,9 +29,6 @@ import com.intel.analytics.bigdl.transform.vision.image.util.BboxUtil
 import com.intel.analytics.bigdl.utils.serializer._
 import com.intel.analytics.bigdl.utils.serializer.converters.DataConverter
 import com.intel.analytics.bigdl.utils.{T, Table}
-import spire.syntax.module
-
-import scala.collection.JavaConverters._
 import scala.reflect.ClassTag
 import scala.reflect.runtime._
 
@@ -189,7 +186,7 @@ class MaskRCNN(val inChannels: Int,
 
   val expected = Tensor[Float]()
   override def updateOutput(input: Activity): Activity = {
-//    output = debugTests()
+//    output = debugTests
 //    return output
 
     val inputFeatures = input.toTable[Tensor[Float]](1)
@@ -214,6 +211,93 @@ class MaskRCNN(val inChannels: Int,
     val labelsBox = postProcessorBox[Tensor[Float]](1)
     val proposalsBox = postProcessorBox[Table](2)
     val scores = postProcessorBox[Tensor[Float]](3)
+
+//    val proposalsBox = T(Tensor[Float](T(
+//      T(2.7671e+02, 1.8681e+02, 4.1434e+02, 3.9764e+02),
+//      T(3.9497e+02, 2.6825e+02, 4.8354e+02, 3.1071e+02),
+//      T(5.9488e+02, 2.7918e+01, 6.3970e+02, 2.5170e+02),
+//      T(3.0060e+02, 8.7962e+01, 3.9379e+02, 2.2026e+02),
+//      T(4.9795e+02, 0.0000e+00, 5.5702e+02, 1.4416e+01),
+//      T(4.1971e+02, 1.2460e-01, 4.6864e+02, 1.3768e+01),
+//      T(1.8132e+02, 0.0000e+00, 2.5347e+02, 1.1476e+01),
+//      T(2.6109e+02, 0.0000e+00, 3.3091e+02, 1.2007e+01),
+//      T(5.4183e+02, 0.0000e+00, 6.0753e+02, 1.5087e+01),
+//      T(3.5663e+02, 0.0000e+00, 3.9615e+02, 1.2099e+01),
+//      T(1.1122e+02, 0.0000e+00, 1.7353e+02, 1.0241e+01),
+//      T(5.2678e+01, 2.9813e-01, 1.2661e+02, 9.1792e+00),
+//      T(1.2347e+01, 0.0000e+00, 5.5106e+01, 7.6769e+00),
+//      T(2.9343e+02, 1.8680e+02, 3.2595e+02, 2.3129e+02),
+//      T(5.7435e+02, 2.2459e-01, 6.1081e+02, 1.5237e+01),
+//      T(4.5480e+02, 0.0000e+00, 5.0539e+02, 1.3854e+01),
+//      T(5.2677e+02, 4.1409e-01, 5.7820e+02, 1.5827e+01),
+//      T(6.2021e+02, 2.4268e-01, 6.4000e+02, 1.4627e+01),
+//      T(1.0472e+02, 2.2304e-01, 1.4137e+02, 9.2909e+00),
+//      T(1.3045e+02, 1.2613e-01, 1.7103e+02, 7.7234e+00),
+//      T(5.9362e+02, 0.0000e+00, 6.3642e+02, 1.6144e+01),
+//      T(1.1240e+00, 0.0000e+00, 1.4177e+01, 7.2199e+00),
+//      T(2.4598e+02, 2.0285e+02, 2.8386e+02, 2.3946e+02),
+//      T(4.0319e+02, 7.8811e-02, 5.0200e+02, 1.4211e+01),
+//      T(9.3303e-01, 0.0000e+00, 3.7506e+01, 7.4055e+00),
+//      T(1.2915e+02, 1.2419e+00, 1.7278e+02, 1.0354e+01),
+//      T(3.7341e+02, 1.8630e+00, 3.9634e+02, 1.2259e+01),
+//      T(3.4623e+02, 0.0000e+00, 3.7484e+02, 1.0556e+01),
+//      T(2.9265e+02, 0.0000e+00, 3.3517e+02, 1.0797e+01),
+//      T(5.3991e+02, 6.7314e+00, 5.7600e+02, 1.5891e+01),
+//      T(3.4741e+02, 7.2838e-02, 4.7991e+02, 1.3621e+01),
+//      T(5.5931e+01, 1.2811e+00, 1.0946e+02, 9.4318e+00),
+//      T(7.8640e+00, 0.0000e+00, 9.3605e+01, 8.5584e+00),
+//      T(5.9713e+02, 6.2347e+01, 6.3830e+02, 1.2057e+02),
+//      T(6.0933e+02, 6.4455e+01, 6.3941e+02, 1.0485e+02),
+//      T(3.3672e+01, 3.6494e-01, 1.8292e+02, 1.0487e+01))))
+
+//    val proposalsBox = T(
+//      Tensor[Float](T(T(5.1839e+02, 3.4999e+02, 7.7625e+02, 7.4500e+02),
+//      T(7.3996e+02, 5.0258e+02, 9.0587e+02, 5.8212e+02),
+//      T(1.1145e+03, 5.2305e+01, 1.1984e+03, 4.7157e+02),
+//      T(5.6315e+02, 1.6480e+02, 7.3774e+02, 4.1266e+02),
+//      T(9.3288e+02, 0.0000e+00, 1.0435e+03, 2.7010e+01),
+//      T(7.8629e+02, 2.3343e-01, 8.7798e+02, 2.5796e+01),
+//      T(3.3969e+02, 0.0000e+00, 4.7486e+02, 2.1501e+01),
+//      T(4.8914e+02, 0.0000e+00, 6.1993e+02, 2.2495e+01),
+//      T(1.0151e+03, 0.0000e+00, 1.1382e+03, 2.8266e+01),
+//      T(6.6812e+02, 0.0000e+00, 7.4217e+02, 2.2667e+01),
+//      T(2.0836e+02, 0.0000e+00, 3.2510e+02, 1.9186e+01),
+//      T(9.8689e+01, 5.5856e-01, 2.3720e+02, 1.7198e+01),
+//      T(2.3131e+01, 0.0000e+00, 1.0324e+02, 1.4383e+01),
+//      T(5.4972e+02, 3.4998e+02, 6.1065e+02, 4.3333e+02),
+//      T(1.0760e+03, 4.2077e-01, 1.1443e+03, 2.8547e+01),
+//      T(8.5204e+02, 0.0000e+00, 9.4681e+02, 2.5957e+01),
+//      T(9.8687e+02, 7.7581e-01, 1.0832e+03, 2.9652e+01),
+//      T(1.1619e+03, 4.5467e-01, 1.1990e+03, 2.7405e+01),
+//      T(1.9618e+02, 4.1787e-01, 2.6485e+02, 1.7407e+01),
+//      T(2.4438e+02, 2.3631e-01, 3.2042e+02, 1.4470e+01),
+//      T(1.1121e+03, 0.0000e+00, 1.1923e+03, 3.0247e+01),
+//      T(2.1058e+00, 0.0000e+00, 2.6560e+01, 1.3527e+01),
+//      T(4.6084e+02, 3.8005e+02, 5.3180e+02, 4.4863e+02),
+//      T(7.5535e+02, 1.4765e-01, 9.4047e+02, 2.6624e+01),
+//      T(1.7480e+00, 0.0000e+00, 7.0265e+01, 1.3874e+01),
+//      T(2.4195e+02, 2.3268e+00, 3.2368e+02, 1.9398e+01),
+//      T(6.9956e+02, 3.4903e+00, 7.4251e+02, 2.2968e+01),
+//      T(6.4863e+02, 0.0000e+00, 7.0225e+02, 1.9777e+01),
+//      T(5.4827e+02, 0.0000e+00, 6.2792e+02, 2.0229e+01),
+//      T(1.0115e+03, 1.2612e+01, 1.0791e+03, 2.9772e+01),
+//      T(6.5084e+02, 1.3646e-01, 8.9908e+02, 2.5519e+01),
+//      T(1.0478e+02, 2.4001e+00, 2.0507e+02, 1.7671e+01),
+//      T(1.4733e+01, 0.0000e+00, 1.7536e+02, 1.6034e+01),
+//      T(1.1187e+03, 1.1681e+02, 1.1958e+03, 2.2589e+02),
+//      T(1.1415e+03, 1.2076e+02, 1.1979e+03, 1.9645e+02),
+//      T(6.3083e+01, 6.8372e-01, 3.4269e+02, 1.9648e+01))))
+//
+//    val scores = Tensor[Float](
+//      T(0.9990, 0.9977, 0.9969, 0.9880, 0.9439, 0.9381, 0.9042, 0.8925, 0.8095,
+//      0.8014, 0.7383, 0.6898, 0.5677, 0.5594, 0.3627, 0.3293, 0.2337, 0.2194,
+//      0.2026, 0.1576, 0.1575, 0.1527, 0.1490, 0.1449, 0.0969, 0.0893, 0.0824,
+//      0.0783, 0.0670, 0.0625, 0.0623, 0.0620, 0.0594, 0.0593, 0.0561, 0.0512))
+//
+//    val labelsBox = Tensor[Float](
+//      T(0, 38,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, 34,  0,  0,  0,  0,
+//      0,  0,  0,  0, 32,  0,  0, 56,  0,  0,  0,  0,  0, 56,  0, 24, 24,  0)).add(1.0f)
+
     if (labelsBox.isEmpty || labelsBox.size(1) > 0) {
       val masks =  maskHead.forward(T(features, proposalsBox, labelsBox)).toTable
       if (this.isTraining()) {
@@ -274,19 +358,30 @@ class MaskRCNN(val inChannels: Int,
         val masksRLE = new Array[RLEMasks](boxNumber)
         for (j <- 0 to boxNumber - 1) {
           binaryMask.fill(0.0f)
-          val t1 = maskPerImg.select(1, j + 1).clone()
-          val t2 = bboxPerImg.select(1, j + 1).clone()
-          val binaryTemp = Tensor[Float]().resizeAs(binaryMask)
-          Utils.decodeMaskInImageOld(maskPerImg.select(1, j + 1), bboxPerImg.select(1, j + 1),
-            binaryMask = binaryMask)
-
-          Utils.decodeMaskInImage(t1, t2, binaryMask = binaryTemp)
-
+          Utils.decodeMaskInImage(maskPerImg.select(1, j + 1).clone(),
+            bboxPerImg.select(1, j + 1), binaryMask = binaryMask)
           masksRLE(j) = MaskUtils.binaryToRLE(binaryMask)
         }
         start += boxNumber
 
-        println(s"bbbbbbbbb ${boxNumber}")
+        println(s"bbbbbbbbbbbbbbbbb ${boxNumber}")
+
+//        val expected = GroudTrue.getMasks(height = originalHeight, wide = originalWidth)
+//        // check
+//        require(expected.length == masksRLE.length)
+//        for (m <- 0 to expected.length - 1) {
+//          val t1 = expected(m).counts
+//          val t2 = masksRLE(m).counts
+//          if (t1.length != t2.length) {
+//            val tmp1 = 0
+//          } else {
+//            (t1, t2).zipped.map { case (tt1, tt2) =>
+//                if (math.abs(tt1-tt2) > 2) {
+//                  val tmp2 = 0
+//                }
+//            }
+//          }
+//        }
         postOutput.update(RoiImageInfo.MASKS, masksRLE)
         postOutput.update(RoiImageInfo.BBOXES, bboxPerImg)
         postOutput.update(RoiImageInfo.CLASSES, classPerImg)
