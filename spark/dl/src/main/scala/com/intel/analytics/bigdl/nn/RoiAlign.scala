@@ -17,10 +17,9 @@
 package com.intel.analytics.bigdl.nn
 
 import breeze.linalg.{*, max}
-import breeze.numerics.{cos, sin}
 import com.intel.analytics.bigdl.tensor.Tensor
 import com.intel.analytics.bigdl.utils.{T, Table}
-import com.intel.analytics.bigdl.nn.abstractnn.AbstractModule
+import com.intel.analytics.bigdl.nn.abstractnn.{AbstractModule, Activity}
 import com.intel.analytics.bigdl.tensor.TensorNumericMath.TensorNumeric
 
 import scala.reflect._
@@ -50,12 +49,12 @@ class RoiAlign[T: ClassTag] (
   val pooledH: Int,
   val pooledW: Int,
   val mode: String = "avg",
-  val aligned: Boolean = false
-)(implicit ev: TensorNumeric[T]) extends AbstractModule[Table, Tensor[T], T]{
-  override def updateOutput(input: Table): Tensor[T] = {
+  val aligned: Boolean = true
+)(implicit ev: TensorNumeric[T]) extends AbstractModule[Activity, Tensor[T], T]{
+  override def updateOutput(input: Activity): Tensor[T] = {
     if (classTag[T] == classTag[Float]) {
-      val data = input[Tensor[Float]](1)
-      val rois = input[Tensor[Float]](2)
+      val data = input.toTable[Tensor[Float]](1)
+      val rois = input.toTable[Tensor[Float]](2)
 
       val num_rois = rois.size(1)
       val channels = data.size(2)
@@ -80,8 +79,8 @@ class RoiAlign[T: ClassTag] (
         width,
         spatialScale)
     } else if (classTag[T] == classTag[Double]) {
-      val data = input[Tensor[Double]](1)
-      val rois = input[Tensor[Double]](2)
+      val data = input.toTable[Tensor[Double]](1)
+      val rois = input.toTable[Tensor[Double]](2)
 
       val num_rois = rois.size(1)
       val channels = data.size(2)
@@ -113,157 +112,183 @@ class RoiAlign[T: ClassTag] (
   }
 
 
-//  def bilinear_interpolate_gradient(
-//    height: Int,
-//    width: Int,
-//    y: Float,
-//    x: Float): (Float, Float, Float, Float, Int, Int, Int, Int)  = {
-//    var w1: Float = 0.0f
-//    var w2: Float = 0.0f
-//    var w3: Float = 0.0f
-//    var w4: Float = 0.0f
-//    var x_low : Int = -1
-//    var x_high: Int = -1
-//    var y_low: Int = -1
-//    var y_high: Int = -1
-//
-//    // deal with cases that inverse elements are out of feature map boundary
-//    if (y < -1.0 || y > height || x < -1.0 || x > width) {
-//      // empty
-//      return (w1, w2, w3, w4, x_low, x_high, y_low, y_high)
-//    }
-//
-//    var realY = if (y < 0) 0 else y
-//    var realX = if (x < 0) 0 else x
-//
-//    y_low = realY.toInt
-//    x_low = realX.toInt
-//
-//    if (y_low >= height - 1) {
-//      y_high = height - 1
-//      y_low = height - 1
-//      realY = y_low
-//    } else {
-//      y_high = y_low + 1
-//    }
-//
-//    if (x_low >= width - 1) {
-//      x_high = width - 1
-//      x_low = width - 1
-//      realX = x_low
-//    } else {
-//      x_high = x_low + 1
-//    }
-//
-//    val ly = y - y_low
-//    val lx = x - x_low
-//    val hy = 1. - ly
-//    val hx = 1. - lx
-//
-//    // reference in forward
-//    // T v1 = input[y_low * width + x_low];
-//    // T v2 = input[y_low * width + x_high];
-//    // T v3 = input[y_high * width + x_low];
-//    // T v4 = input[y_high * width + x_high];
-//    // T val = (w1 * v1 + w2 * v2 + w3 * v3 + w4 * v4);
-//
-//    w1 = (hy * hx).toFloat
-//    w2 = (hy * lx).toFloat
-//    w3 = (ly * hx).toFloat
-//    w4 = (ly * lx).toFloat
-//
-//    return (w1, w2, w3, w4, x_low, x_high, y_low, y_high)
-//  }
-//
-//  def ROIAlignRotatedBackward(
-//    nthreads: Int,
-//    gradOutput: Array[Float],
-//    gradInputArr: Array[Float],
-//    rois: Array[Float],
-//    channels: Int,
-//    height: Int,
-//    width: Int,
-//    pooled_height: Int,
-//    pooled_width: Int,
-//    sampling_ratio : Int,
-//    n_stride : Int,
-//    c_stride : Int,
-//    h_stride : Int,
-//    w_stride : Int,
-//    spatial_scale: Float)
-//  {
-//    for (index <- 0 until nthreads) {
-//      // (n, c, ph, pw) is an element in the pooled output
-//      val pw = index % pooled_width;
-//      val ph = (index / pooled_width) % pooled_height;
-//      val c = (index / pooled_width / pooled_height) % channels;
-//      val n = index / pooled_width / pooled_height / channels;
-//      rois.foreach(_ + n * 5)
-//
-//      val roi_batch_ind = rois(0)
-//
-//      // Do not use rounding; this implementation detail is critical
-//      // ROIAlignRotated supports align == true, i.e., continuous coordinate
-//      // by default, thus the 0.5 offset
-//      val offset = if (aligned) 0.5f else 0.0f
-//      val roi_start_w = rois(1) * spatial_scale - offset
-//      val roi_start_h = rois(2) * spatial_scale - offset
-//      val roi_end_w = rois(3) * spatial_scale - offset
-//      val roi_end_h = rois(4) * spatial_scale - offset
-//
-//      var roi_width = roi_end_w - roi_start_w
-//      var roi_height = roi_end_h - roi_start_h
-//
-//      if (aligned) {
-//        require(roi_width >= 0 && roi_height >= 0,
-//          s"ROIs in ROIAlignRotated do not have non-negative size! But get ${roi_height} ${roi_width}")
-//      } else {
-//        roi_width = math.max(roi_width, 1.0)
-//        roi_height = math.max(roi_height, 1.0)
-//      }
-//
-//      val bin_size_h = roi_height / pooled_height
-//      val bin_size_w = roi_width / pooled_width
-//
-//      val offset_grad_input = (roi_batch_ind * channels + c) * height * width
-//
-//      val output_offset = n * n_stride + c * c_stride
-//      val grad_output_this_bin = output_offset + ph * h_stride + pw * w_stride
-//
-//      // We use roi_bin_grid to sample the grid and mimic integral
-//      val roi_bin_grid_h = if (sampling_ratio > 0) sampling_ratio else math.ceil(roi_height / pooled_height)
-//      val roi_bin_grid_w = if (sampling_ratio > 0) sampling_ratio else math.ceil(roi_width / pooled_width)
-//
-//      // We do average (integral) pooling inside a bin
-//      val count = roi_bin_grid_h * roi_bin_grid_w
-//
-//      for (iy <- 0 until roi_bin_grid_h) {
-//        val y = roi_start_h + ph * bin_size_h + (iy + 0.5f) * bin_size_h / roi_bin_grid_h
-//        for (ix <- 0 until roi_bin_grid_w) {
-//          val x = roi_start_w + pw * bin_size_w + (ix + 0.5f) * bin_size_w / roi_bin_grid_w
-//
-//          val (w1, w2, w3, w4, x_low, x_high, y_low, y_high) =
-//            bilinear_interpolate_gradient(height, width, y.toFloat, x.toFloat)
-//
-//          val g1 = grad_output_this_bin * w1 / count
-//          val g2 = grad_output_this_bin * w2 / count
-//          val g3 = grad_output_this_bin * w3 / count
-//          val g4 = grad_output_this_bin * w4 / count
-//
-//          if (x_low >= 0 && x_high >= 0 && y_low >= 0 && y_high >= 0) {
-//            // atomic add is not needed for now since it is single threaded
-//            gradInputArr(offset_grad_input + y_low * width + x_low) += g1.toFloat
-//            gradInputArr(offset_grad_input + y_low * width + x_high) += g2.toFloat
-//            gradInputArr(offset_grad_input + y_high * width + x_low) += g3.toFloat
-//            gradInputArr(offset_grad_input + y_high * width + x_high) += g4.toFloat
-//          } // if
-//        } // ix
-//      } // iy
-//    } // for
-//  }
+  def bilinearInterpolateGradient(
+    height: Int,
+    width: Int,
+    y: Float,
+    x: Float): (Float, Float, Float, Float, Int, Int, Int, Int)  = {
+    var w1: Float = 0.0f
+    var w2: Float = 0.0f
+    var w3: Float = 0.0f
+    var w4: Float = 0.0f
+    var x_low : Int = -1
+    var x_high: Int = -1
+    var y_low: Int = -1
+    var y_high: Int = -1
 
-  override def updateGradInput(input: Table, gradOutput: Tensor[T]): Table = {
-    throw new UnsupportedOperationException("Not support backward propagation")
+    // deal with cases that inverse elements are out of feature map boundary
+    if (y < -1.0 || y > height || x < -1.0 || x > width) {
+      // empty
+      return (w1, w2, w3, w4, x_low, x_high, y_low, y_high)
+    }
+
+    var realY = if (y <= 0) 0 else y
+    var realX = if (x <= 0) 0 else x
+
+    y_low = realY.toInt
+    x_low = realX.toInt
+
+    if (y_low >= height - 1) {
+      y_high = height - 1
+      y_low = height - 1
+      realY = y_low
+    } else {
+      y_high = y_low + 1
+    }
+
+    if (x_low >= width - 1) {
+      x_high = width - 1
+      x_low = width - 1
+      realX = x_low
+    } else {
+      x_high = x_low + 1
+    }
+
+    val ly = realY - y_low
+    val lx = realX - x_low
+    val hy = 1.0 - ly
+    val hx = 1.0 - lx
+
+    w1 = (hy * hx).toFloat
+    w2 = (hy * lx).toFloat
+    w3 = (ly * hx).toFloat
+    w4 = (ly * lx).toFloat
+
+    return (w1, w2, w3, w4, x_low, x_high, y_low, y_high)
+  }
+
+  def roiAlignBackward(
+    nums: Int,
+    gradOutputArr: Array[Float],
+    gradInputArr: Array[Float],
+    gradInputOffset: Int,
+    rois: Array[Float],
+    channels: Int,
+    height: Int,
+    width: Int,
+    pooled_height: Int,
+    pooled_width: Int,
+    sampling_ratio : Int,
+    n_stride : Int,
+    c_stride : Int,
+    h_stride : Int,
+    w_stride : Int,
+    spatial_scale: Float) {
+    val roi_cols = 4
+    for (index <- 0 until nums) {
+      val pw = index % pooled_width
+      val ph = (index / pooled_width) % pooled_height
+      val c = (index / pooled_width / pooled_height) % channels
+      val n = index / pooled_width / pooled_height / channels
+      val offset_rois = n * roi_cols
+
+      val offset = if (aligned) 0.5f else 0.0f
+      val roi_start_w = rois(offset_rois) * spatial_scale - offset
+      val roi_start_h = rois(offset_rois + 1) * spatial_scale - offset
+      val roi_end_w = rois(offset_rois + 2) * spatial_scale - offset
+      val roi_end_h = rois(offset_rois + 3) * spatial_scale - offset
+
+      var roi_width = roi_end_w - roi_start_w
+      var roi_height = roi_end_h - roi_start_h
+
+      if (aligned) {
+        require(roi_width >= 0 && roi_height >= 0,
+          s"ROIs in ROIAlignRotated do not have non-negative size!" +
+            s"But get ${roi_height} ${roi_width}")
+      } else {
+        roi_width = math.max(roi_width, 1.0f)
+        roi_height = math.max(roi_height, 1.0f)
+      }
+
+      val bin_size_h = roi_height / pooled_height
+      val bin_size_w = roi_width / pooled_width
+      val output_offset = n * n_stride + c * c_stride
+      val grad_output_this_bin = gradOutputArr(output_offset + ph * h_stride + pw * w_stride)
+
+      // We use roi_bin_grid to sample the grid and mimic integral
+      val roi_bin_grid_h =
+        if (sampling_ratio > 0) sampling_ratio else math.ceil(roi_height / pooled_height).toInt
+      val roi_bin_grid_w =
+        if (sampling_ratio > 0) sampling_ratio else math.ceil(roi_width / pooled_width).toInt
+
+      // We do average (integral) pooling inside a bin
+      val count = roi_bin_grid_h * roi_bin_grid_w
+
+      for (iy <- 0 until roi_bin_grid_h) {
+        val y = roi_start_h + ph * bin_size_h + (iy + 0.5) * bin_size_h / roi_bin_grid_h
+        for (ix <- 0 until roi_bin_grid_w) {
+          val x = roi_start_w + pw * bin_size_w + (ix + 0.5) * bin_size_w / roi_bin_grid_w
+
+          val (w1, w2, w3, w4, x_low, x_high, y_low, y_high) =
+            bilinearInterpolateGradient(height, width, y.toFloat, x.toFloat)
+
+          val g1 = grad_output_this_bin * w1 / count
+          val g2 = grad_output_this_bin * w2 / count
+          val g3 = grad_output_this_bin * w3 / count
+          val g4 = grad_output_this_bin * w4 / count
+
+          if (x_low >= 0 && x_high >= 0 && y_low >= 0 && y_high >= 0) {
+            gradInputArr(gradInputOffset + y_low * width + x_low) += g1.toFloat
+            gradInputArr(gradInputOffset + y_low * width + x_high) += g2.toFloat
+            gradInputArr(gradInputOffset + y_high * width + x_low) += g3.toFloat
+            gradInputArr(gradInputOffset + y_high * width + x_high) += g4.toFloat
+          } // if
+        } // ix
+      } // iy
+    } // for
+  }
+
+  override def updateGradInput(input: Activity, gradOutput: Tensor[T]): Activity = {
+    val data = input.toTable[Tensor[Float]](1)
+    val rois = input.toTable[Tensor[Float]](2)
+    val num_rois = rois.size(1)
+    val channels = data.size(2)
+    val height = data.size(3)
+    val width = data.size(4)
+
+    require(gradOutput.isContiguous(), "gradOutput should be contiguous")
+    require(gradOutput.dim() == 4, s"gradOutput should be with 4 dims, but get ${gradOutput.dim()}")
+
+    val n_stride = gradOutput.stride(1)
+    val c_stride = gradOutput.stride(2)
+    val h_stride = gradOutput.stride(3)
+    val w_stride = gradOutput.stride(4)
+
+    if (gradInput == null) gradInput = Tensor[Float]()
+    gradInput.toTensor[Float].resize(channels, height, width)
+    val gradInputArr = gradInput.toTensor[Float].storage().array()
+    val gradInputOffset = gradInput.toTensor[Float].storageOffset() - 1
+
+    roiAlignBackward(
+      gradOutput.nElement(),
+      gradOutputArr = gradOutput.asInstanceOf[Tensor[Float]].storage().array(),
+      gradInputArr = gradInputArr,
+      gradInputOffset = 0,
+      rois = rois.storage().array(),
+      channels = channels,
+      height = height,
+      width = width,
+      pooled_height = pooledH,
+      pooled_width = pooledW,
+      sampling_ratio = samplingRatio,
+      n_stride = n_stride,
+      c_stride = c_stride,
+      h_stride = h_stride,
+      w_stride = w_stride,
+      spatial_scale = spatialScale)
+
+    gradInput = Tensor[Float](gradInputArr, Array[Int](channels, height, width))
+    gradInput
   }
 
   private def poolOneRoiFloat(
@@ -280,18 +305,24 @@ class RoiAlign[T: ClassTag] (
 
     for (n <- 0 until num_rois) {
       val index_n = n * channels * pooledW * pooledH
-      var offset_rois = n * roi_cols
+      val offset_rois = n * roi_cols
       val roi_batch_ind = 0 // bbox has 4 elements
+      val alignedOffset = if (aligned) 0.5f else 0.0f
+      val roi_start_w = roisFloat(offset_rois) * spatialScale  - alignedOffset
+      val roi_start_h = roisFloat(offset_rois + 1) * spatialScale - alignedOffset
+      val roi_end_w = roisFloat(offset_rois + 2) * spatialScale - alignedOffset
+      val roi_end_h = roisFloat(offset_rois + 3) * spatialScale - alignedOffset
+      var roi_width = roi_end_w - roi_start_w
+      var roi_height = roi_end_h - roi_start_h
 
-      // todo: for aligned
-      val offset = 0.5
-      val roi_start_w = roisFloat(offset_rois) * spatialScale  - offset
-      val roi_start_h = roisFloat(offset_rois + 1) * spatialScale - offset
-      val roi_end_w = roisFloat(offset_rois + 2) * spatialScale - offset
-      val roi_end_h = roisFloat(offset_rois + 3) * spatialScale - offset
+      if (aligned) {
+        require(roi_width >= 0 && roi_height >= 0,
+          "ROIs in ROIAlign cannot have non-negative size!")
+      } else {
+        roi_width = math.max(roi_width, 1.0f)
+        roi_height = math.max(roi_height, 1.0f)
+      }
 
-      val roi_width = roi_end_w - roi_start_w // Math.max(roi_end_w - roi_start_w, 1.0f)
-      val roi_height = roi_end_h - roi_start_h // Math.max(roi_end_h - roi_start_h, 1.0f)
       val bin_size_h = roi_height/ pooledH
       val bin_size_w = roi_width / pooledW
 
@@ -307,7 +338,7 @@ class RoiAlign[T: ClassTag] (
         Math.ceil(roi_width / pooledW).toInt
       }
 
-      val count: Float = roi_bin_grid_h * roi_bin_grid_w
+      val count: Float = math.max(roi_bin_grid_h * roi_bin_grid_w, 1.0f)
 
       val pre_cal = Tensor[Float](
         Array(pooledH * pooledW * roi_bin_grid_h * roi_bin_grid_w, 8))
@@ -317,10 +348,10 @@ class RoiAlign[T: ClassTag] (
         width,
         roi_bin_grid_h,
         roi_bin_grid_w,
-        roi_start_h.toFloat,
-        roi_start_w.toFloat,
-        bin_size_h.toFloat,
-        bin_size_w.toFloat,
+        roi_start_h,
+        roi_start_w,
+        bin_size_h,
+        bin_size_w,
         roi_bin_grid_h,
         roi_bin_grid_w,
         pre_cal
@@ -398,9 +429,7 @@ class RoiAlign[T: ClassTag] (
               pre_cal.setValue(pre_calc_index, 7, 0.0f) // w3
               pre_cal.setValue(pre_calc_index, 8, 0.0f) // w4
               pre_calc_index += 1
-            }
-
-            else {
+            } else {
               if (y <= 0) {
                 y = 0
               }
@@ -467,18 +496,26 @@ class RoiAlign[T: ClassTag] (
 
     for (n <- 0 until num_rois) {
       val index_n = n * channels * pooledW * pooledH
-      var offset_rois = n * roi_cols
+      val offset_rois = n * roi_cols
       val roi_batch_ind = 0
+      val alignedOffset = if (aligned) 0.5f else 0.0f
+      val roi_start_w = roisDouble(offset_rois) * spatialScale  - alignedOffset
+      val roi_start_h = roisDouble(offset_rois + 1) * spatialScale - alignedOffset
+      val roi_end_w = roisDouble(offset_rois + 2) * spatialScale - alignedOffset
+      val roi_end_h = roisDouble(offset_rois + 3) * spatialScale - alignedOffset
 
-      val roi_start_w = roisDouble(offset_rois) * spatialScale.toDouble
-      val roi_start_h = roisDouble(offset_rois + 1) * spatialScale.toDouble
-      val roi_end_w = roisDouble(offset_rois + 2) * spatialScale.toDouble
-      val roi_end_h = roisDouble(offset_rois + 3) * spatialScale.toDouble
-
-      val roi_width = Math.max(roi_end_w - roi_start_w, 1.0)
-      val roi_height = Math.max(roi_end_h - roi_start_h, 1.0)
+      var roi_width = roi_end_w - roi_start_w
+      var roi_height = roi_end_h - roi_start_h
       val bin_size_h = roi_height/ pooledH
       val bin_size_w = roi_width / pooledW
+
+      if (aligned) {
+        require(roi_width >= 0 && roi_height >= 0,
+          "ROIs in ROIAlign cannot have non-negative size!")
+      } else {
+        roi_width = math.max(roi_width, 1.0f)
+        roi_height = math.max(roi_height, 1.0f)
+      }
 
       val roi_bin_grid_h = if (samplingRatio > 0) {
         samplingRatio
@@ -492,8 +529,7 @@ class RoiAlign[T: ClassTag] (
         Math.ceil(roi_width / pooledW).toInt
       }
 
-      val count: Double = roi_bin_grid_h * roi_bin_grid_w
-
+      val count: Double = math.max(roi_bin_grid_h * roi_bin_grid_w, 1.0f)
       val pre_cal = Tensor[Double](
         Array(pooledH * pooledW * roi_bin_grid_h * roi_bin_grid_w, 8))
 
@@ -651,6 +687,9 @@ object RoiAlign {
     spatialScale: Float,
     samplingRatio: Int,
     pooledH: Int,
-    pooledW: Int) (implicit ev: TensorNumeric[T]): RoiAlign[T] =
-    new RoiAlign[T](spatialScale, samplingRatio, pooledH, pooledW)
+    pooledW: Int,
+    mode: String = "avg",
+    aligned: Boolean = true
+  ) (implicit ev: TensorNumeric[T]): RoiAlign[T] =
+    new RoiAlign[T](spatialScale, samplingRatio, pooledH, pooledW, mode, aligned)
 }
